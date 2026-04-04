@@ -1,0 +1,346 @@
+# TablePlus-inspired Wails Desktop UI Rules
+
+## 1. 产品定位
+这是一个 macOS 优先的轻量级 HTTP API 调试工具。
+UI 风格参考 TablePlus 的“视觉气质”和“桌面工具感”，不是照搬 TablePlus 的具体布局。
+关键词：
+- native-like
+- compact
+- precise
+- subtle
+- calm
+- professional
+- developer-tool
+- low-noise
+- lightweight
+
+---
+
+## 2. 版本与窗口规则
+优先按 Wails v2 稳定生产方案实现。
+窗口必须按“自定义桌面标题栏”方案实现：
+
+- 使用 frameless/custom titlebar 思路
+- 顶部必须存在一个 fixed 的 titlebar 层
+- titlebar 高度固定为 52px
+- titlebar 位于 body 顶部
+- titlebar 层级最高
+- titlebar 背景为透明或半透明，不得厚重
+- titlebar 必须支持 Wails 拖拽区域
+- titlebar 内可交互元素必须显式设为 no-drag
+- 双击 titlebar 空白区域时，触发窗口最大化/还原
+- 隐藏原生 macOS 红绿灯，改为自绘制窗口控制按钮
+- 自绘按钮必须保留 macOS 风格的克制感，不做夸张拟物
+
+---
+
+## 3. 严格的 CSS Token 规则
+所有尺寸、圆角、间距、字号必须来自 globals.css 的 CSS 变量。
+严禁在组件内硬编码以下值：
+- width
+- height
+- padding
+- margin
+- gap
+- border-radius
+- font-size
+- line-height
+- icon-size
+- toolbar-height
+- sidebar-width
+- panel-header-height
+- row-height
+
+只能使用 CSS 变量和基于变量的 calc()。
+Tailwind class 可以使用，但不得直接写死尺寸值；必须通过 CSS 变量桥接。
+
+例如：
+- 允许：h-[var(--titlebar-height)]
+- 允许：rounded-[var(--radius-btn)]
+- 允许：px-[var(--space-3)]
+- 禁止：h-[52px]
+- 禁止：rounded-[8px]
+- 禁止：px-3
+
+---
+
+## 4. 全局设计令牌规则
+必须在 globals.css 中集中声明并管理所有设计令牌。
+至少包含以下变量：
+
+### 圆角
+--radius-window: 12px
+--radius-panel: 12px
+--radius-btn: 7px
+--radius-input: 8px
+--radius-menu: 8px
+--radius-sm: 4px
+
+### 高度
+--titlebar-height: 52px
+--toolbar-height: 40px
+--control-height-sm
+--control-height-md
+--input-height
+--sidebar-header-height
+--panel-header-height
+--row-height
+--row-height-compact
+
+### 间距
+--space-1
+--space-2
+--space-3
+--space-4
+--space-5
+--space-6
+--space-8
+--space-10
+
+### 字号
+--font-size-xs
+--font-size-sm
+--font-size-md
+--font-size-lg
+--line-height-xs
+--line-height-sm
+--line-height-md
+--line-height-lg
+
+### 图标尺寸
+--icon-xs
+--icon-sm
+--icon-md
+--icon-lg
+
+### 边框与分隔
+--border-color
+--border-color-strong
+--separator-color
+--focus-ring-color
+
+### 背景与前景
+--bg-app
+--bg-elevated
+--bg-sidebar
+--bg-panel
+--bg-hover
+--bg-active
+--bg-input
+--bg-menu
+--fg-primary
+--fg-secondary
+--fg-muted
+--fg-accent
+
+### 阴影
+--shadow-sm
+--shadow-panel
+--shadow-menu
+
+---
+
+## 5. 圆角规则
+必须严格使用以下圆角令牌：
+
+- 窗口整体：var(--radius-window)
+- 面板、卡片、弹窗：var(--radius-panel)
+- 按钮：var(--radius-btn)
+- 输入框、搜索框、下拉框：var(--radius-input)
+- 菜单、右键菜单、popover：var(--radius-menu)
+- badge/tag/小标签：var(--radius-sm)
+
+禁止出现“大圆角网页感”。
+整体是小圆角、克制、精密，不是 fluffy 风格。
+
+---
+
+## 6. TablePlus 风格视觉规则
+UI 必须体现以下风格：
+
+### 视觉总体
+- 不做花哨渐变
+- 不做厚重投影
+- 不做大面积品牌色铺底
+- 不做明显 SaaS 后台风格
+- 不做夸张卡片化
+- 不做强拟物
+
+### 颜色
+- 以中性灰阶为主
+- 强调色只用于焦点、选中、主操作、小范围状态反馈
+- 边框颜色轻，分隔线明确但存在感低
+- hover 很轻
+- active 比 hover 稍强，但仍克制
+- dark mode 下不能一片死黑，要保持层次
+
+### 层次
+- 靠背景层级、细边框、微妙状态色区分层次
+- 阴影只用于菜单、popover、浮层
+- 常规面板尽量不用大阴影
+
+### 控件质感
+- 按钮像桌面工具按钮，不像营销站按钮
+- 输入框是“干净、紧凑、专业”的开发工具输入框
+- tabs/segmented control 要精致、薄、轻
+- 表格/列表/树节点要密度合理，适合长期使用
+
+---
+
+## 7. 布局与标题栏规则
+### 顶部 titlebar
+必须实现：
+- 一个 fixed 顶部层
+- 高度固定为 var(--titlebar-height)
+- 宽度 100%
+- z-index 为最高层
+- 支持拖拽
+- 背景透明或轻微磨砂感
+- 顶部层下方内容必须自动避让，不允许被遮挡
+
+titlebar 内部建议分为：
+- 左侧：自绘 macOS 窗口控制按钮
+- 中间：当前项目名 / 页面标题 / 空白拖拽区
+- 右侧：全局搜索、环境切换、快捷入口
+
+双击 titlebar 空白区域：
+- 调用 Wails 的窗口最大化/还原 API
+- 双击按钮区、输入区、菜单区时禁止触发
+
+---
+
+## 8. Wails 拖拽规则
+拖拽区必须按 Wails 官方拖拽机制实现。
+要求：
+- titlebar 根节点使用 drag 区域
+- 所有 button、input、select、search、tabs、dropdown trigger 都必须设为 no-drag
+- 不允许出现点击按钮导致窗口拖动的问题
+- 不允许出现输入框无法选中文本的问题
+- 组件封装时必须内置 drag / no-drag 规则
+
+---
+
+## 9. macOS 窗口控制按钮规则
+原生 traffic lights 不使用，改为自绘。
+要求：
+- 左上角布局
+- 默认显示 close / minimize / maximize 三个按钮
+- 尺寸小巧，位置克制
+- 与 titlebar 垂直居中
+- hover 时才显示更明确的状态
+- 不要做强拟物高光
+- 不要做过度扁平导致失去识别性
+- 保持 macOS 风格暗示，但不要求 1:1 复刻
+
+建议按钮状态：
+- default: 低对比度
+- hover: 提升色彩与图标可见度
+- pressed: 略微变深
+- inactive window: 整体降低对比度
+
+---
+
+## 10. 组件规则
+所有组件必须遵守统一 token 体系。
+
+### Button
+- 高度、padding、radius、font-size 全部来自 token
+- 默认按钮轻背景
+- 主按钮仅轻微强调
+- destructive 按钮仅在危险操作出现
+- toolbar 按钮应更紧凑
+
+### Input / Search / Select
+- 高度统一
+- radius 使用 var(--radius-input)
+- 背景微微抬起，但不厚重
+- focus 态使用细 ring，不用粗蓝边
+- placeholder 低对比度
+
+### Sidebar
+- 背景与主面板有轻微层次差
+- 项目树、文件夹树、请求树都要适合高频操作
+- 选中态清楚但不能过蓝
+- hover 轻
+- 支持紧凑模式
+
+### Tabs / Segmented control
+- 更像桌面工具，不像网页 tab
+- 高度小
+- 边界清晰
+- 状态变化克制
+
+### Context Menu / Dropdown / Popover
+- radius 使用 var(--radius-menu)
+- 浮层可用轻阴影
+- 内边距紧凑
+- 菜单项 hover 明确但克制
+- 支持键盘导航
+
+### Panels / Cards / Modals
+- radius 使用 var(--radius-panel)
+- 轻边框
+- 少阴影
+- 不要大白卡片堆叠感
+
+---
+
+## 11. 字体与排版规则
+所有字号与行高必须来源于全局 CSS 变量。
+
+建议基调：
+- 默认正文：sm / md 之间的紧凑工具型字号
+- 次级说明：xs / sm
+- 面板标题：sm medium
+- 页面标题：md semibold
+- 不允许出现过大的 hero 风格标题
+- 不允许出现网页化过强的字重层级
+
+---
+
+## 12. 交互规则
+- 高频操作优先少点击
+- 所有发送请求、保存、导入导出都要有明确反馈
+- 有未保存修改时，必须显示 dirty 状态
+- destructive 操作必须确认
+- keyboard-first 优先
+- 常用快捷键必须支持
+- titlebar 区域与业务区交互不能冲突
+
+---
+
+## 13. 工程规则
+- 所有 UI 封装必须优先读取 token
+- 所有 shadcn/ui 组件需要二次封装成 desktop 风格
+- 不允许直接拿默认 shadcn/ui 外观就上线
+- 组件要区分：基础组件 / 桌面风格组件 / 业务组件
+- 每个组件都要支持暗色模式
+- 样式实现优先统一，不允许局部“越写越偏”
+
+---
+
+## 14. 禁止事项
+禁止：
+- 硬编码 px 尺寸
+- 大圆角网页风格
+- 厚重阴影
+- 大面积高饱和蓝色
+- 营销站式按钮
+- 过度动画
+- 复杂玻璃拟态
+- 花哨渐变边框
+- 强卡片化后台风格
+- 默认原生红绿灯与自绘按钮共存
+- 拖拽区覆盖按钮导致误拖拽
+
+---
+
+## 15. 输出代码时的要求
+每次输出代码时必须：
+1. 先列出新增/修改的文件
+2. 明确哪些 token 需要加入 globals.css
+3. 任何尺寸相关实现都必须使用 CSS 变量
+4. 若出现硬编码尺寸，视为不合格
+5. titlebar、拖拽区、按钮 no-drag 必须完整实现
+6. 双击 titlebar 最大化必须实现
+7. 所有代码要可直接落地，不给伪代码
