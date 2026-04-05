@@ -1,9 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { createPortal } from "react-dom"
-import {
-  Plus, FolderPlus, Search, X, Folder, FolderOpen, ChevronRight,
-  Trash2, Pencil, Copy, MoreHorizontal,
-} from "lucide-react"
+import { AppIcon } from "@/components/ui/icon"
 import { cn } from "@/lib/utils"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { useProjectStore } from "@/stores/projectStore"
@@ -65,9 +62,9 @@ function convertRequestToData(request: model.RequestItem) {
 export function Sidebar() {
   const { sidebarWidth, setSidebarWidth, sidebarCollapsed } = useUIStore()
   const {
-    currentProjectId, projects, folders, requests,
+    currentProjectId, folders, requests,
     createFolder, createRequest, deleteFolder, deleteRequest, renameFolder,
-    selectProject, loadProjects, createProject,
+    loadProjects,
   } = useProjectStore()
   const { openRequestTab, tabs, activeTabId } = useTabStore()
   const [activeTab, setActiveTab] = useState<SidebarTab>("requests")
@@ -76,8 +73,6 @@ export function Sidebar() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState("")
-  const [showNewProject, setShowNewProject] = useState(false)
-  const [newProjectName, setNewProjectName] = useState("")
   const menuRef = useRef<HTMLDivElement>(null)
   const resizingRef = useRef(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -160,16 +155,6 @@ export function Sidebar() {
     await createFolder("", "New Folder")
   }
 
-  const handleCreateProject = async () => {
-    if (!newProjectName.trim()) return
-    await createProject(newProjectName.trim())
-    setNewProjectName("")
-    setShowNewProject(false)
-    const { projects: updatedProjects } = useProjectStore.getState()
-    const newP = updatedProjects[updatedProjects.length - 1]
-    if (newP) await selectProject(newP.id)
-  }
-
   const startRename = (id: string, currentName: string) => {
     setRenamingId(id)
     setRenameValue(currentName)
@@ -211,16 +196,19 @@ export function Sidebar() {
           onClick={() => toggleFolder(folder.id)}
           onContextMenu={(e) => handleContextMenu(e, "folder", folder.id, folder.name)}
         >
-          <ChevronRight
-            className={cn(
-              "h-3 w-3 mr-1 flex-shrink-0 transition-transform text-[var(--fg-muted)]",
-              isExpanded && "rotate-90"
-            )}
-          />
+            <AppIcon
+              name="arrowRight"
+              size={12}
+              strokeWidth={1.9}
+              className={cn(
+                "mr-1 flex-shrink-0 transition-transform text-[var(--fg-muted)]",
+                isExpanded && "rotate-90"
+              )}
+            />
           {isExpanded ? (
-            <FolderOpen className="h-3.5 w-3.5 mr-1.5 flex-shrink-0 text-[var(--fg-muted)]" />
+            <AppIcon name="folderOpen" size={14} className="mr-1.5 flex-shrink-0 text-[var(--fg-muted)]" />
           ) : (
-            <Folder className="h-3.5 w-3.5 mr-1.5 flex-shrink-0 text-[var(--fg-muted)]" />
+            <AppIcon name="folder" size={14} className="mr-1.5 flex-shrink-0 text-[var(--fg-muted)]" />
           )}
           {renamingId === folder.id ? (
             <input
@@ -239,7 +227,7 @@ export function Sidebar() {
             onClick={(e) => { e.stopPropagation(); handleNewRequest(folder.id) }}
             title="在此文件夹新建请求"
           >
-            <Plus className="h-3 w-3 text-[var(--fg-muted)]" />
+            <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
           </button>
         </div>
         {isExpanded && (
@@ -300,35 +288,6 @@ export function Sidebar() {
         <div className="absolute inset-y-0 right-1/2 translate-x-1/2 w-px bg-transparent group-hover:bg-[var(--accent)]/40 transition-colors duration-200" />
       </div>
 
-      {/* 项目选择区 */}
-      <div className="flex items-center h-[28px] px-2 gap-1 border-b border-[var(--sidebar-border)] flex-shrink-0">
-        <Select
-          currentProjectId={currentProjectId}
-          projects={projects}
-          onSelect={(id) => selectProject(id)}
-        />
-        <button
-          className="h-5 w-5 flex items-center justify-center rounded-[var(--radius-sm)] hover:bg-[var(--sidebar-hover)] transition-colors flex-shrink-0"
-          onClick={() => setShowNewProject(true)}
-          title="新建项目"
-        >
-          <Plus className="h-3 w-3 text-[var(--fg-muted)]" />
-        </button>
-      </div>
-
-      {showNewProject && (
-        <div className="px-2 py-1.5 border-b border-[var(--sidebar-border)] flex-shrink-0">
-          <input
-            className="w-full h-[var(--size-btn-sm)] px-2 text-[length:var(--size-font-2xs)] rounded-[var(--radius-input)] border border-[var(--border-color)] bg-[var(--surface)] text-[var(--fg)] outline-none focus:border-[var(--accent)]"
-            placeholder="项目名称..."
-            value={newProjectName}
-            onChange={(e) => setNewProjectName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleCreateProject(); if (e.key === "Escape") setShowNewProject(false) }}
-            autoFocus
-          />
-        </div>
-      )}
-
       {/* Tab 切换栏 */}
       {currentProjectId && (
         <div className="flex items-center border-b border-[var(--sidebar-border)] flex-shrink-0">
@@ -354,7 +313,7 @@ export function Sidebar() {
       {currentProjectId && activeTab === "requests" && (
         <div className="px-2 pt-1.5 pb-1 flex items-center gap-1 flex-shrink-0">
           <div className="relative flex-1">
-            <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-[var(--fg-muted)]" />
+            <AppIcon name="search" size={12} className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[var(--fg-muted)]" />
             <input
               ref={searchInputRef}
               type="text"
@@ -372,7 +331,7 @@ export function Sidebar() {
                 className="absolute right-1 top-1/2 -translate-y-1/2 h-4 w-4 flex items-center justify-center"
                 onClick={() => setSearchQuery("")}
               >
-                <X className="h-2.5 w-2.5 text-[var(--fg-muted)]" />
+                <AppIcon name="clear" size={10} className="text-[var(--fg-muted)]" />
               </button>
             )}
           </div>
@@ -381,14 +340,14 @@ export function Sidebar() {
             onClick={handleNewFolder}
             title="新建文件夹"
           >
-            <FolderPlus className="h-3.5 w-3.5 text-[var(--fg-secondary)]" />
+            <AppIcon name="folderOpen" size={14} className="text-[var(--fg-secondary)]" />
           </button>
           <button
             className="h-[var(--size-btn-sm)] w-[var(--size-btn-sm)] flex items-center justify-center rounded-[var(--radius-btn)] hover:bg-[var(--sidebar-hover)] transition-colors flex-shrink-0"
             onClick={() => handleNewRequest()}
             title="新建请求 (⌘N)"
           >
-            <Plus className="h-3.5 w-3.5 text-[var(--fg-secondary)]" />
+            <AppIcon name="add" size={14} className="text-[var(--fg-secondary)]" />
           </button>
         </div>
       )}
@@ -399,13 +358,7 @@ export function Sidebar() {
           <div className="flex items-center justify-center h-full">
             <div className="text-center px-4">
               <p className="text-[length:var(--size-font-xs)] text-[var(--fg-secondary)] font-medium">无项目</p>
-              <p className="text-2xs text-[var(--fg-muted)] mt-1">创建一个项目开始使用</p>
-              <button
-                className="mt-3 px-3 py-1 text-[length:var(--size-font-2xs)] rounded-[var(--radius-btn)] bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)] transition-colors"
-                onClick={() => setShowNewProject(true)}
-              >
-                新建项目
-              </button>
+              <p className="text-2xs text-[var(--fg-muted)] mt-1">请在顶部左侧创建或选择项目</p>
             </div>
           </div>
         ) : activeTab === "requests" ? (
@@ -441,14 +394,14 @@ export function Sidebar() {
             className="w-full px-2.5 py-1 text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] flex items-center gap-2"
             onClick={() => startRename(contextMenu.id, contextMenu.name)}
           >
-            <Pencil className="h-3 w-3" /> 重命名
+            <AppIcon name="pencil" size={12} /> 重命名
           </button>
           {contextMenu.type === "folder" && (
             <button
               className="w-full px-2.5 py-1 text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] flex items-center gap-2"
               onClick={() => { handleNewRequest(contextMenu.id); setContextMenu(null) }}
             >
-              <Plus className="h-3 w-3" /> 在此新建请求
+              <AppIcon name="add" size={12} /> 在此新建请求
             </button>
           )}
           <div className="h-px bg-[var(--border-subtle)] my-0.5" />
@@ -460,7 +413,7 @@ export function Sidebar() {
               setContextMenu(null)
             }}
           >
-            <Trash2 className="h-3 w-3" /> 删除
+            <AppIcon name="delete" size={12} /> 删除
           </button>
         </div>,
         document.body
@@ -474,51 +427,5 @@ function Select({ currentProjectId, projects, onSelect }: {
   projects: model.Project[]
   onSelect: (id: string) => void
 }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const current = projects.find((p) => p.id === currentProjectId)
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener("mousedown", handler)
-    return () => document.removeEventListener("mousedown", handler)
-  }, [open])
-
-  return (
-    <div className="relative flex-1" ref={ref}>
-      <button
-        className="w-full h-5 flex items-center px-1.5 rounded-[var(--radius-sm)] hover:bg-[var(--sidebar-hover)] transition-colors text-left"
-        onClick={() => setOpen(!open)}
-      >
-        <span className="text-[length:var(--size-font-2xs)] font-medium text-[var(--fg)] truncate flex-1">
-          {current?.name || "选择项目"}
-        </span>
-        <ChevronRight className={cn("h-2.5 w-2.5 text-[var(--fg-muted)] transition-transform", open && "rotate-90")} />
-      </button>
-      {open && projects.length > 0 && (
-        <div className={cn(
-          "absolute left-0 top-full mt-0.5 z-50 min-w-[160px] py-0.5 rounded-[var(--radius-menu)] shadow-lg border",
-          "bg-[var(--surface-elevated)] border-[var(--border-color)]"
-        )}>
-          {projects.map((p) => (
-            <button
-              key={p.id}
-              className={cn(
-                "w-full px-2.5 py-1 text-[length:var(--size-font-2xs)] text-left transition-colors",
-                p.id === currentProjectId
-                  ? "bg-[var(--sidebar-active)] text-[var(--accent)] font-medium"
-                  : "text-[var(--fg)] hover:bg-[var(--sidebar-hover)]"
-              )}
-              onClick={() => { onSelect(p.id); setOpen(false) }}
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+  return null
 }
