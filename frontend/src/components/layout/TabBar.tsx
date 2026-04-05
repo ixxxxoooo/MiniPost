@@ -248,7 +248,7 @@ export function TabBar() {
                 <button
                   className={cn(
                     DROPDOWN_ITEM_CLASS,
-                    !activeEnvironmentId ? "bg-[rgb(237,237,237)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
+                    !activeEnvironmentId ? "bg-[var(--selected-bg)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
                   )}
                   onClick={() => { setActiveEnvironment(null); setShowEnvDropdown(false) }}
                 >
@@ -268,7 +268,7 @@ export function TabBar() {
                     <button
                       className={cn(
                         "w-full whitespace-nowrap px-3 pr-8 py-1.5 rounded-[7px] text-[11px] text-left transition-colors flex items-center gap-2 hover:bg-[var(--sidebar-hover)]",
-                        activeEnvironmentId === env.id ? "bg-[rgb(237,237,237)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
+                        activeEnvironmentId === env.id ? "bg-[var(--selected-bg)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
                       )}
                       onClick={() => { setActiveEnvironment(env.id); setShowEnvDropdown(false) }}
                     >
@@ -487,7 +487,7 @@ export function TabBar() {
                   key={`list-env-${environmentTab.id}`}
                   className={cn(
                     DROPDOWN_ITEM_CLASS,
-                    editingEnvironmentId === environmentTab.id ? "bg-[rgb(237,237,237)]" : ""
+                    editingEnvironmentId === environmentTab.id ? "bg-[var(--selected-bg)]" : ""
                   )}
                   onClick={() => {
                     setEditingEnvironmentId(environmentTab.id)
@@ -510,7 +510,7 @@ export function TabBar() {
                   key={tab.id}
                   className={cn(
                     DROPDOWN_ITEM_CLASS,
-                    !editingEnvironmentId && tab.id === activeTabId ? "bg-[rgb(237,237,237)]" : ""
+                    !editingEnvironmentId && tab.id === activeTabId ? "bg-[var(--selected-bg)]" : ""
                   )}
                   onClick={() => {
                     setEditingEnvironmentId(null)
@@ -558,7 +558,7 @@ export function TabBar() {
               <button
                 className={cn(
                   DROPDOWN_ITEM_CLASS,
-                  !activeEnvironmentId ? "bg-[rgb(237,237,237)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
+                  !activeEnvironmentId ? "bg-[var(--selected-bg)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
                 )}
                 onClick={() => { setActiveEnvironment(null); setShowEnvDropdown(false) }}
               >
@@ -578,7 +578,7 @@ export function TabBar() {
                   <button
                     className={cn(
                       "w-full whitespace-nowrap px-3 pr-8 py-1.5 rounded-[7px] text-[11px] text-left transition-colors flex items-center gap-2 hover:bg-[var(--sidebar-hover)]",
-                      activeEnvironmentId === env.id ? "bg-[rgb(237,237,237)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
+                      activeEnvironmentId === env.id ? "bg-[var(--selected-bg)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
                     )}
                     onClick={() => { setActiveEnvironment(env.id); setShowEnvDropdown(false) }}
                   >

@@ -22,6 +22,12 @@ interface DropdownMenuState {
   name: string
 }
 
+interface SelectedNodeState {
+  type: "folder" | "request"
+  id: string
+  name: string
+}
+
 interface DraggingState {
   id: string
   type: CollectionNodeType
@@ -123,6 +129,7 @@ function convertRequestToData(request: model.RequestItem) {
 
 const MENU_BTN = "h-5 w-5 flex items-center justify-center rounded-[var(--radius-sm)] hover:bg-[var(--sidebar-hover)] transition-all"
 const MENU_ITEM = "w-full whitespace-nowrap px-2.5 py-1.5 rounded-[7px] text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] flex items-center gap-2"
+const MENU_ITEM_HOTKEY = "text-[10px] text-[var(--fg-muted)] font-mono ml-4"
 
 export function Sidebar() {
   const { sidebarWidth, setSidebarWidth, sidebarCollapsed, editingEnvironmentId, setEditingEnvironmentId } = useUIStore()
@@ -150,6 +157,7 @@ export function Sidebar() {
   const [searchQuery, setSearchQuery] = useState("")
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
   const [dropdownMenu, setDropdownMenu] = useState<DropdownMenuState | null>(null)
+  const [selectedNode, setSelectedNode] = useState<SelectedNodeState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renamingType, setRenamingType] = useState<"folder" | "request">("folder")
   const [renameValue, setRenameValue] = useState("")
@@ -280,6 +288,7 @@ export function Sidebar() {
   }
 
   const startRename = (id: string, type: "folder" | "request", currentName: string) => {
+    setSelectedNode({ id, type, name: currentName })
     setRenamingId(id)
     setRenamingType(type)
     setRenameValue(currentName)
@@ -351,8 +360,62 @@ export function Sidebar() {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     const x = Math.min(rect.right, window.innerWidth - 180)
     const y = rect.bottom + 2
+    setSelectedNode({ type, id, name })
     setDropdownMenu({ x, y, type, id, name })
   }
+
+  useEffect(() => {
+    const handleKeydown = (event: KeyboardEvent) => {
+      if (activeTab !== "requests") return
+      if (renamingId) return
+      const target = event.target as HTMLElement | null
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return
+      }
+
+      let node = selectedNode
+      if (!node && activeTabRequestId) {
+        const activeReq = requestMap.get(activeTabRequestId)
+        if (activeReq) {
+          node = { type: "request", id: activeReq.id, name: activeReq.name }
+        }
+      }
+      if (!node) return
+
+      const withMeta = event.metaKey || event.ctrlKey
+      const key = event.key.toLowerCase()
+
+      if (withMeta && key === "e") {
+        event.preventDefault()
+        startRename(node.id, node.type, node.name)
+        return
+      }
+
+      if (withMeta && key === "c") {
+        event.preventDefault()
+        void handleDuplicate(node.type, node.id)
+        return
+      }
+
+      if (withMeta && key === "d") {
+        event.preventDefault()
+        void handleDuplicate(node.type, node.id)
+        return
+      }
+
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault()
+        if (node.type === "folder") {
+          void deleteFolder(node.id)
+        } else {
+          void deleteRequest(node.id)
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeydown)
+    return () => window.removeEventListener("keydown", handleKeydown)
+  }, [activeTab, activeTabRequestId, deleteFolder, deleteRequest, renamingId, requestMap, selectedNode])
 
   const sidebarTabs: { key: SidebarTab; label: string }[] = [
     { key: "requests", label: "请求" },
@@ -531,6 +594,7 @@ export function Sidebar() {
             )}
             style={{ paddingLeft: `${8 + depth * 16}px` }}
             onClick={() => toggleFolder(folder.id)}
+            onMouseDown={() => setSelectedNode({ type: "folder", id: folder.id, name: folder.name })}
             onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openDropdownMenu(e, "folder", folder.id, folder.name) }}
             onDragStart={handleDragStart("folder", folder.id)}
             onDragEnd={handleDragEnd}
@@ -609,6 +673,7 @@ export function Sidebar() {
           )}
           style={{ paddingLeft: `${8 + depth * 16 + 16}px` }}
           onClick={() => { if (renamingId !== request.id) handleOpenRequest(request) }}
+          onMouseDown={() => setSelectedNode({ type: "request", id: request.id, name: request.name })}
           onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openDropdownMenu(e, "request", request.id, request.name) }}
           onDragStart={handleDragStart("request", request.id)}
           onDragEnd={handleDragEnd}
@@ -803,10 +868,19 @@ export function Sidebar() {
             </>
           )}
           <button className={MENU_ITEM} onClick={() => startRename(dropdownMenu.id, dropdownMenu.type, dropdownMenu.name)}>
-            <AppIcon name="pencil" size={12} /> 重命名
+            <AppIcon name="pencil" size={12} />
+            <span className="flex-1">重命名</span>
+            <span className={MENU_ITEM_HOTKEY}>⌘E</span>
           </button>
           <button className={MENU_ITEM} onClick={() => handleDuplicate(dropdownMenu.type, dropdownMenu.id)}>
-            <AppIcon name="copy" size={12} /> 复制
+            <AppIcon name="copy" size={12} />
+            <span className="flex-1">复制</span>
+            <span className={MENU_ITEM_HOTKEY}>⌘C</span>
+          </button>
+          <button className={MENU_ITEM} onClick={() => handleDuplicate(dropdownMenu.type, dropdownMenu.id)}>
+            <AppIcon name="copy" size={12} />
+            <span className="flex-1">Duplicate</span>
+            <span className={MENU_ITEM_HOTKEY}>⌘D</span>
           </button>
           {dropdownMenu.type === "request" && (
             <button className={MENU_ITEM} onClick={() => { const req = requestMap.get(dropdownMenu.id); if (req) handleCopyCurl(req) }}>
@@ -825,7 +899,9 @@ export function Sidebar() {
               setDropdownMenu(null)
             }}
           >
-            <AppIcon name="delete" size={12} /> 删除
+            <AppIcon name="delete" size={12} />
+            <span className="flex-1">删除</span>
+            <span className={cn(MENU_ITEM_HOTKEY, "!text-[var(--danger)]/80")}>⌫</span>
           </button>
         </div>,
         document.body

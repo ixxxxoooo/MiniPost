@@ -71,6 +71,7 @@ function useRequestEditorActions() {
     } catch (err) {
       if ((err as Error)?.name === "AbortError") return
       const msg = err instanceof Error ? err.message : String(err)
+      setTabResponse(activeTab.id, null)
       setTabResponseError(activeTab.id, msg)
       updateConsoleError(logId, msg)
     } finally {

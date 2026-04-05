@@ -306,7 +306,7 @@ function TypeDropdown({ value, onChange }: { value: "text" | "file"; onChange: (
                 className={cn(
                   "w-full px-2.5 py-1 text-[10px] text-left transition-colors",
                   value === t
-                    ? "bg-[rgb(237,237,237)] text-[var(--fg)] font-medium"
+                    ? "bg-[var(--selected-bg)] text-[var(--fg)] font-medium"
                     : "text-[var(--fg)] hover:bg-[var(--sidebar-hover)]"
                 )}
                 onClick={() => { onChange(t); setOpen(false) }}
@@ -438,7 +438,7 @@ function FileValueDropdown({
                       className={cn(
                         "w-full px-2.5 py-1.5 rounded-[7px] text-left text-[12px] transition-colors",
                         isSelected
-                          ? "bg-[rgb(237,237,237)] text-[var(--fg)]"
+                          ? "bg-[var(--selected-bg)] text-[var(--fg)]"
                           : "text-[var(--fg)] hover:bg-[var(--sidebar-hover)]"
                       )}
                       onClick={() => { onSelectHistory(file); setOpen(false) }}

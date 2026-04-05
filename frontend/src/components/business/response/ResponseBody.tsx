@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 import { CodeEditor, type EditorLanguage } from "@/components/ui/CodeEditor"
 import { AppIcon } from "@/components/ui/icon"
+import { useUIStore } from "@/stores/uiStore"
 
 interface ResponseBodyProps {
   body: string
@@ -57,7 +58,10 @@ function looksLikeJs(text: string): boolean {
     || /^!function/.test(trimmed)
 }
 
-function detectDefaultMode(contentType: string, body: string): DisplayMode {
+function detectDefaultMode(contentType: string, body: string, responseFormatDetection: "auto" | "json"): DisplayMode {
+  if (responseFormatDetection === "json") {
+    return "json"
+  }
   const normalized = contentType.toLowerCase()
   if (normalized.includes("json")) return "json"
   if (normalized.includes("html")) return "html"
@@ -200,6 +204,224 @@ function canPreview(mode: DisplayMode, contentType: string, body: string): boole
   return normalized.includes("html") || normalized.includes("xml") || looksLikeHtml(body) || looksLikeXml(body)
 }
 
+function parseJsonPathTokens(expression: string): Array<string | number> | null {
+  const input = expression.trim()
+  if (!input) return []
+  if (input === "$") return []
+  if (!input.startsWith("$")) return null
+  const tokens: Array<string | number> = []
+  let i = 1
+
+  while (i < input.length) {
+    const ch = input[i]
+    if (ch === ".") {
+      i += 1
+      const start = i
+      while (i < input.length && /[A-Za-z0-9_$-]/.test(input[i])) i += 1
+      if (start === i) return null
+      tokens.push(input.slice(start, i))
+      continue
+    }
+    if (ch === "[") {
+      i += 1
+      if (i >= input.length) return null
+      if (input[i] === "'" || input[i] === "\"") {
+        const quote = input[i]
+        i += 1
+        const start = i
+        while (i < input.length && input[i] !== quote) i += 1
+        if (i >= input.length) return null
+        const key = input.slice(start, i)
+        i += 1
+        if (input[i] !== "]") return null
+        i += 1
+        tokens.push(key)
+        continue
+      }
+      const start = i
+      while (i < input.length && /[0-9]/.test(input[i])) i += 1
+      if (start === i) return null
+      if (input[i] !== "]") return null
+      const index = Number.parseInt(input.slice(start, i), 10)
+      i += 1
+      tokens.push(index)
+      continue
+    }
+    return null
+  }
+  return tokens
+}
+
+function tryApplyJsonFilter(rawBody: string, expression: string): { text: string; error: string | null } {
+  try {
+    const parsed = JSON.parse(rawBody)
+    const tokens = parseJsonPathTokens(expression)
+    if (!tokens) {
+      return { text: rawBody, error: "JSONPath 表达式无效（示例：$.headers.host）" }
+    }
+    let current: unknown = parsed
+    for (const token of tokens) {
+      if (typeof token === "number") {
+        if (!Array.isArray(current) || token < 0 || token >= current.length) {
+          return { text: rawBody, error: "过滤结果为空" }
+        }
+        current = current[token]
+      } else {
+        if (typeof current !== "object" || current === null || !(token in (current as Record<string, unknown>))) {
+          return { text: rawBody, error: "过滤结果为空" }
+        }
+        current = (current as Record<string, unknown>)[token]
+      }
+    }
+    if (typeof current === "string") return { text: current, error: null }
+    if (typeof current === "number" || typeof current === "boolean" || current === null) {
+      return { text: String(current), error: null }
+    }
+    return { text: JSON.stringify(current, null, 2), error: null }
+  } catch {
+    return { text: rawBody, error: "JSON 解析失败，无法按路径过滤" }
+  }
+}
+
+function tryApplyTextFilter(text: string, expression: string): { text: string; error: string | null } {
+  const query = expression.trim().toLowerCase()
+  if (!query) return { text, error: null }
+  const lines = text.split("\n").filter((line) => line.toLowerCase().includes(query))
+  if (lines.length === 0) return { text, error: "过滤结果为空" }
+  return { text: lines.join("\n"), error: null }
+}
+
+type JsonTreeRow = {
+  path: string
+  depth: number
+  key: string
+  value: unknown
+  kind: "primitive" | "object" | "array"
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function jsonRowKind(value: unknown): JsonTreeRow["kind"] {
+  if (Array.isArray(value)) return "array"
+  if (isJsonObject(value)) return "object"
+  return "primitive"
+}
+
+function jsonBadge(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.length}]`
+  if (isJsonObject(value)) return Object.keys(value).length === 0 ? "{}" : `{${Object.keys(value).length}}`
+  return ""
+}
+
+function buildJsonRows(
+  root: unknown,
+  expanded: Set<string>,
+  path = "$",
+  depth = 0
+): JsonTreeRow[] {
+  const rows: JsonTreeRow[] = []
+  const kind = jsonRowKind(root)
+
+  if (kind === "primitive") {
+    rows.push({ path, depth, key: "value", value: root, kind })
+    return rows
+  }
+
+  const entries = Array.isArray(root)
+    ? root.map((item, idx) => [String(idx), item] as const)
+    : Object.entries(root as Record<string, unknown>)
+
+  entries.forEach(([key, value]) => {
+    const rowPath = Array.isArray(root) ? `${path}[${key}]` : `${path}.${key}`
+    const rowKind = jsonRowKind(value)
+    rows.push({
+      path: rowPath,
+      depth,
+      key,
+      value,
+      kind: rowKind,
+    })
+    if (rowKind !== "primitive" && expanded.has(rowPath)) {
+      rows.push(...buildJsonRows(value, expanded, rowPath, depth + 1))
+    }
+  })
+
+  return rows
+}
+
+function formatPreviewPrimitive(value: unknown): string {
+  if (value === null) return "null"
+  if (typeof value === "string") return value
+  if (typeof value === "number" || typeof value === "boolean") return String(value)
+  return ""
+}
+
+function JsonStructuredPreview({ value }: { value: unknown }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const rows = useMemo(() => buildJsonRows(value, expanded), [expanded, value])
+
+  const toggle = (path: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }
+
+  return (
+    <div className="h-full overflow-auto rounded-[8px] border border-[var(--border-color)] bg-[var(--surface)]">
+      <table className="w-full border-collapse text-[12px]">
+        <tbody>
+          {rows.map((row) => {
+            const complex = row.kind !== "primitive"
+            const isOpen = expanded.has(row.path)
+            return (
+              <tr key={row.path} className="border-b border-[var(--border-subtle)] last:border-b-0">
+                <td className="w-[36%] border-r border-[var(--border-subtle)] px-3 py-2 align-top">
+                  <div
+                    className="flex items-center gap-1.5"
+                    style={{ paddingLeft: `${row.depth * 18}px` }}
+                  >
+                    {complex ? (
+                      <button
+                        type="button"
+                        className="flex h-4 w-4 items-center justify-center rounded-[4px] text-[var(--fg-muted)] hover:bg-[var(--button-bg)]"
+                        onClick={() => toggle(row.path)}
+                      >
+                        <AppIcon name={isOpen ? "arrowDown" : "arrowRight"} size={9} />
+                      </button>
+                    ) : (
+                      <span className="w-4" />
+                    )}
+                    <span className="font-semibold text-[var(--fg)]">{row.key}</span>
+                  </div>
+                </td>
+                <td className="px-3 py-2 align-top">
+                  {complex ? (
+                    <span className="inline-flex items-center rounded-[6px] bg-[var(--surface-secondary)] px-2 py-0.5 font-mono text-[12px] text-[var(--fg-secondary)]">
+                      {jsonBadge(row.value)}
+                    </span>
+                  ) : (
+                    <span className={cn(
+                      "break-all",
+                      typeof row.value === "string" ? "text-[var(--fg-secondary)]" : "font-mono text-[var(--fg)]"
+                    )}>
+                      {formatPreviewPrimitive(row.value)}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function getDisplayLabel(mode: DisplayMode): string {
   return DISPLAY_OPTIONS.find((option) => option.value === mode)?.label ?? "Raw"
 }
@@ -269,6 +491,18 @@ function FormatDropdown({
     }
   }, [open])
 
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        setOpen(false)
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [open])
+
   const structured = DISPLAY_OPTIONS.filter((option) => option.group === "structured")
   const encoded = DISPLAY_OPTIONS.filter((option) => option.group === "encoded")
 
@@ -281,7 +515,7 @@ function FormatDropdown({
           "h-6 px-1.5 rounded-[8px] border border-transparent bg-transparent",
           "text-[10px] text-[var(--fg)] flex items-center gap-1 transition-colors",
           "hover:bg-[var(--button-bg)]",
-          !previewActive && "bg-[rgb(237,237,237)]"
+          !previewActive && "bg-[var(--selected-bg)]"
         )}
         onClick={() => {
           if (previewActive) {
@@ -316,7 +550,7 @@ function FormatDropdown({
                     type="button"
                     className={cn(
                       "w-full h-7 px-2 rounded-[7px] text-left text-[11px] transition-colors flex items-center gap-2",
-                      checked ? "bg-[rgb(237,237,237)] text-[var(--fg)]" : "text-[var(--fg)] hover:bg-[var(--sidebar-hover)]"
+                      checked ? "bg-[var(--selected-bg)] text-[var(--fg)]" : "text-[var(--fg)] hover:bg-[var(--sidebar-hover)]"
                     )}
                     onClick={() => { onChange(option.value); setOpen(false) }}
                   >
@@ -337,7 +571,7 @@ function FormatDropdown({
                     type="button"
                     className={cn(
                       "w-full h-7 px-2 rounded-[7px] text-left text-[11px] transition-colors flex items-center gap-2",
-                      checked ? "bg-[rgb(237,237,237)] text-[var(--fg)]" : "text-[var(--fg)] hover:bg-[var(--sidebar-hover)]"
+                      checked ? "bg-[var(--selected-bg)] text-[var(--fg)]" : "text-[var(--fg)] hover:bg-[var(--sidebar-hover)]"
                     )}
                     onClick={() => { onChange(option.value); setOpen(false) }}
                   >
@@ -357,20 +591,29 @@ function FormatDropdown({
 }
 
 export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
-  const defaultMode = useMemo(() => detectDefaultMode(contentType, body), [contentType, body])
+  const responseFormatDetection = useUIStore((s) => s.responseFormatDetection)
+  const defaultMode = useMemo(
+    () => detectDefaultMode(contentType, body, responseFormatDetection),
+    [contentType, body, responseFormatDetection]
+  )
   const [mode, setMode] = useState<DisplayMode>(defaultMode)
   const [preview, setPreview] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [filterExpr, setFilterExpr] = useState("")
+  const [searchSignal, setSearchSignal] = useState<number | undefined>(undefined)
 
   useEffect(() => {
     setMode(defaultMode)
     setPreview(false)
+    setFilterOpen(false)
+    setFilterExpr("")
   }, [defaultMode, body, contentType])
 
   const editorLanguage = useMemo(() => toEditorLanguage(mode), [mode])
   const previewAvailable = useMemo(() => canPreview(mode, contentType, body), [mode, contentType, body])
 
-  const displayBody = useMemo(() => {
+  const formattedBody = useMemo(() => {
     if (!body) return ""
     if (mode === "json") return tryFormatJson(body)
     if (mode === "xml" || mode === "html") return tryFormatXml(body)
@@ -380,12 +623,43 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
     return body
   }, [body, mode])
 
+  const filteredBodyState = useMemo(() => {
+    if (!filterOpen || !filterExpr.trim()) return { text: formattedBody, error: null as string | null }
+    if (mode === "json") return tryApplyJsonFilter(body, filterExpr)
+    return tryApplyTextFilter(formattedBody, filterExpr)
+  }, [body, filterExpr, filterOpen, formattedBody, mode])
+
+  const displayBody = filteredBodyState.text
+
   const previewDoc = useMemo(() => buildPreviewDocument(mode, body), [mode, body])
+  const jsonPreviewValue = useMemo(() => {
+    if (mode !== "json") return null
+    try {
+      return JSON.parse(body)
+    } catch {
+      return null
+    }
+  }, [body, mode])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(displayBody)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1200)
+  }
+
+  const handleFormat = () => {
+    setPreview(false)
+    setFilterOpen(false)
+    setFilterExpr("")
+    if (mode === "raw") {
+      const detected = detectDefaultMode(contentType, body, responseFormatDetection)
+      if (detected !== "raw") setMode(detected)
+    }
+  }
+
+  const handleSearch = () => {
+    if (preview) setPreview(false)
+    window.setTimeout(() => setSearchSignal(Date.now()), 0)
   }
 
   return (
@@ -403,7 +677,7 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
             className={cn(
               "h-6 px-1.5 rounded-[8px] border border-transparent bg-transparent text-[10px] flex items-center gap-1 transition-colors",
               preview && previewAvailable
-                ? "bg-[rgb(237,237,237)] text-[var(--accent)]"
+                ? "bg-[var(--selected-bg)] text-[var(--accent)]"
                 : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)]",
               !previewAvailable && "opacity-40 pointer-events-none"
             )}
@@ -418,6 +692,35 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
         <div className="flex items-center gap-1.5">
           <button
             type="button"
+            className="h-6 w-6 rounded-[8px] border border-transparent bg-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
+            onClick={handleFormat}
+            title="格式化响应"
+          >
+            <AppIcon name="arrowLeftRight" size={12} />
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "h-6 w-6 rounded-[8px] border border-transparent bg-transparent transition-colors flex items-center justify-center",
+              filterOpen
+                ? "bg-[var(--selected-bg)] text-[var(--accent)]"
+                : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)]"
+            )}
+            onClick={() => setFilterOpen((prev) => !prev)}
+            title="过滤"
+          >
+            <AppIcon name="sidebarCollapse" size={12} />
+          </button>
+          <button
+            type="button"
+            className="h-6 w-6 rounded-[8px] border border-transparent bg-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
+            onClick={handleSearch}
+            title="搜索 (⌘F)"
+          >
+            <AppIcon name="search" size={12} />
+          </button>
+          <button
+            type="button"
             className="h-6 px-1.5 rounded-[8px] border border-transparent bg-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
             onClick={handleCopy}
             title="复制响应"
@@ -427,15 +730,44 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
         </div>
       </div>
 
+      {filterOpen && (
+        <div className="px-3 pb-2">
+          <div className="flex items-center gap-1.5">
+            <input
+              value={filterExpr}
+              onChange={(e) => setFilterExpr(e.target.value)}
+              placeholder={mode === "json" ? "JSONPath 过滤（如 $.headers.host）" : "输入关键字过滤行"}
+              className="h-7 flex-1 rounded-[8px] border border-[var(--button-border)] bg-[var(--surface)] px-2.5 text-[11px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
+            />
+            {filterExpr && (
+              <button
+                type="button"
+                className="h-7 rounded-[8px] border border-[var(--button-border)] px-2 text-[11px] text-[var(--fg-secondary)] hover:bg-[var(--button-bg)]"
+                onClick={() => setFilterExpr("")}
+              >
+                清空
+              </button>
+            )}
+          </div>
+          {filteredBodyState.error && filterExpr.trim() && (
+            <div className="mt-1 text-[10px] text-[var(--warning)]">{filteredBodyState.error}</div>
+          )}
+        </div>
+      )}
+
       <div className="flex-1 min-h-0">
         {preview && previewAvailable ? (
-          <iframe
-            title="Response Preview"
-            sandbox=""
-            srcDoc={previewDoc}
-            className="h-full w-full bg-[var(--surface)]"
-            style={{ border: "none" }}
-          />
+          mode === "json" && jsonPreviewValue !== null ? (
+            <JsonStructuredPreview value={jsonPreviewValue} />
+          ) : (
+            <iframe
+              title="Response Preview"
+              sandbox=""
+              srcDoc={previewDoc}
+              className="h-full w-full bg-[var(--surface)]"
+              style={{ border: "none" }}
+            />
+          )
         ) : (
           <CodeEditor
             value={displayBody || "(空响应)"}
@@ -443,6 +775,8 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
             isDark={isDark}
             readOnly
             fillParent
+            syntaxStyle="postman"
+            searchSignal={searchSignal}
             className="[&_.cm-gutters]:bg-transparent [&_.cm-gutters]:border-r-0 [&_.cm-activeLineGutter]:bg-transparent"
           />
         )}
