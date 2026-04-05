@@ -115,7 +115,18 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
 }
 
 export function BottomBar() {
-  const { layoutDirection, setLayoutDirection, consoleOpen, toggleConsole, consoleLogs, clearConsoleLogs, consoleHeight, setConsoleHeight } = useUIStore()
+  const {
+    layoutDirection,
+    setLayoutDirection,
+    sidebarCollapsed,
+    toggleSidebar,
+    consoleOpen,
+    toggleConsole,
+    consoleLogs,
+    clearConsoleLogs,
+    consoleHeight,
+    setConsoleHeight,
+  } = useUIStore()
   const { cookiePanelOpen, toggleCookiePanel, cookies } = useCookieStore()
   const errorCount = consoleLogs.filter((l) => l.error).length
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -262,6 +273,14 @@ export function BottomBar() {
             <span className="relative h-[11px] w-[13px] rounded-[2px] border border-current">
               <span className="absolute bottom-[1px] left-1/2 top-[1px] w-px -translate-x-1/2 bg-current" />
             </span>
+          </button>
+          <button
+            className="flex h-5 w-5 items-center justify-center rounded-[6px] text-[var(--fg-secondary)] transition-colors hover:bg-[var(--button-bg)] hover:text-[var(--fg)]"
+            onClick={toggleSidebar}
+            title={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
+            type="button"
+          >
+            <AppIcon name={sidebarCollapsed ? "sidebarExpand" : "sidebarCollapse"} size={11} strokeWidth={1.9} />
           </button>
         </div>
       </div>

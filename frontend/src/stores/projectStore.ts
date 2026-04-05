@@ -234,6 +234,19 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const { currentProjectId } = get()
     if (!currentProjectId) return
     try {
+      // 删除请求前先关闭该请求对应的所有 tab，removeTab 会自动将焦点切到相邻 tab
+      const tabState = useTabStore.getState()
+      const projectTabState = tabState.projectTabs[currentProjectId]
+      if (projectTabState?.tabs?.length) {
+        const tabsToClose = projectTabState.tabs
+          .filter((tab) => tab.requestId === requestId)
+          .map((tab) => tab.id)
+
+        tabsToClose.forEach((tabId) => {
+          tabState.removeTab(tabId)
+        })
+      }
+
       await requestItemService.deleteRequest(currentProjectId, requestId)
       await get().loadCollections(currentProjectId)
     } catch (err) {

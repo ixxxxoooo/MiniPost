@@ -5,9 +5,9 @@ import { json } from "@codemirror/lang-json"
 import { javascript } from "@codemirror/lang-javascript"
 import { xml } from "@codemirror/lang-xml"
 import { defaultKeymap, indentWithTab } from "@codemirror/commands"
-import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, foldKeymap } from "@codemirror/language"
+import { syntaxHighlighting, HighlightStyle, defaultHighlightStyle, bracketMatching, foldGutter, foldKeymap } from "@codemirror/language"
 import { searchKeymap, highlightSelectionMatches, openSearchPanel } from "@codemirror/search"
-import { oneDark } from "@codemirror/theme-one-dark"
+import { tags as t } from "@lezer/highlight"
 import { cn } from "@/lib/utils"
 
 export type EditorLanguage = "json" | "javascript" | "xml" | "text"
@@ -22,6 +22,10 @@ interface CodeEditorProps {
   readOnly?: boolean
   /** 编辑器自动撑满父容器 */
   fillParent?: boolean
+  /** 响应区可用的 Postman 风格语法色 */
+  syntaxStyle?: "default" | "postman"
+  /** 每次值变更时触发打开搜索面板 */
+  searchSignal?: number
 }
 
 export function stripJsonComments(text: string): string {
@@ -221,6 +225,28 @@ const editorThemeDark = EditorView.theme({
   },
 })
 
+const editorHighlightLight = HighlightStyle.define([
+  { tag: [t.propertyName], color: "#c02f1d" },
+  { tag: [t.string, t.special(t.string)], color: "#0a4fa8" },
+  { tag: [t.number, t.integer, t.float], color: "#0f7b45" },
+  { tag: [t.bool, t.null], color: "#8f2d56" },
+  { tag: [t.keyword, t.operatorKeyword], color: "#8b5cf6" },
+  { tag: [t.brace, t.squareBracket, t.paren, t.separator, t.punctuation], color: "#2f2f33" },
+  { tag: [t.variableName, t.name], color: "#2f2f33" },
+  { tag: [t.comment], color: "#99a1ab", fontStyle: "italic" },
+])
+
+const editorHighlightDark = HighlightStyle.define([
+  { tag: [t.propertyName], color: "#f28b82" },
+  { tag: [t.string, t.special(t.string)], color: "#80b7ff" },
+  { tag: [t.number, t.integer, t.float], color: "#8ddf99" },
+  { tag: [t.bool, t.null], color: "#f59cb5" },
+  { tag: [t.keyword, t.operatorKeyword], color: "#c6a6ff" },
+  { tag: [t.brace, t.squareBracket, t.paren, t.separator, t.punctuation], color: "#d3d7de" },
+  { tag: [t.variableName, t.name], color: "#d3d7de" },
+  { tag: [t.comment], color: "#8f99a8", fontStyle: "italic" },
+])
+
 function getLanguageExtension(language: EditorLanguage) {
   switch (language) {
     case "json": return json()
@@ -239,6 +265,8 @@ export function CodeEditor({
   className,
   readOnly = false,
   fillParent = false,
+  syntaxStyle = "default",
+  searchSignal,
 }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -253,7 +281,9 @@ export function CodeEditor({
       bracketMatching(),
       foldGutter(),
       highlightSelectionMatches(),
-      syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+      syntaxStyle === "postman"
+        ? syntaxHighlighting(isDark ? editorHighlightDark : editorHighlightLight, { fallback: true })
+        : syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       keymap.of([...defaultKeymap, ...foldKeymap, ...searchKeymap, indentWithTab]),
       EditorView.updateListener.of((update) => {
         if (update.docChanged && onChangeRef.current) {
@@ -263,10 +293,6 @@ export function CodeEditor({
       EditorView.lineWrapping,
       isDark ? editorThemeDark : editorThemeLight,
     ]
-
-    if (isDark) {
-      extensions.push(oneDark)
-    }
 
     if (readOnly) {
       extensions.push(EditorState.readOnly.of(true))
@@ -292,7 +318,7 @@ export function CodeEditor({
     }
 
     return extensions
-  }, [language, placeholder, isDark, readOnly, fillParent])
+  }, [language, placeholder, isDark, readOnly, fillParent, syntaxStyle])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -326,6 +352,14 @@ export function CodeEditor({
       })
     }
   }, [value])
+
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    if (searchSignal === undefined) return
+    openSearchPanel(view)
+    view.focus()
+  }, [searchSignal])
 
   return (
     <div

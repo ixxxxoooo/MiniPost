@@ -55,6 +55,7 @@
   --window-border: transparent;
   --button-bg: rgb(237, 237, 237);
   --button-border: rgb(230, 230, 230);
+  --selected-bg: rgb(242, 242, 242);
 
   /* 侧边栏 */
   --sidebar-bg: rgba(249, 249, 249, 0.92);
@@ -122,6 +123,7 @@
   --window-border: rgb(48, 48, 48);
   --button-bg: rgb(59, 59, 59);
   --button-border: rgb(48, 48, 48);
+  --selected-bg: rgb(68, 68, 68);
 
   --sidebar-bg: rgba(38, 38, 38, 0.92);
   --sidebar-fg: #f5f5f7;

@@ -1,36 +1,51 @@
 package service
 
 import (
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"minipost/internal/model"
 	appErrors "minipost/internal/pkg/errors"
+	"minipost/internal/pkg/httputil"
 )
 
 type HttpService struct {
 	client *http.Client
 }
 
+type requestOptions struct {
+	followRedirects  bool
+	timeout          time.Duration
+	maxResponseBytes int64
+	sslVerify        bool
+	httpVersion      string
+}
+
 func NewHttpService() *HttpService {
 	return &HttpService{
 		client: &http.Client{
 			Timeout: 30 * time.Second,
-			// 不自动跟随重定向，让用户看到原始响应
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
 		},
 	}
 }
 
 // SendRequest 执行 HTTP 请求并返回响应
 func (s *HttpService) SendRequest(input model.SendRequestInput) (*model.HttpResponse, error) {
+	normalizedInput, err := s.normalizeInput(input)
+	if err != nil {
+		return nil, err
+	}
+	input = normalizedInput
+	options, headers := s.extractRequestOptions(input.Headers)
+	input.Headers = headers
+
 	reqURL, err := s.buildURL(input.URL, input.Params)
 	if err != nil {
 		return nil, appErrors.Wrap("INVALID_URL", "URL 解析失败", err)
@@ -64,8 +79,9 @@ func (s *HttpService) SendRequest(input model.SendRequestInput) (*model.HttpResp
 		req.Header.Set("User-Agent", "MiniPost/1.0")
 	}
 
+	client := s.buildClient(options)
 	start := time.Now()
-	resp, err := s.client.Do(req)
+	resp, err := client.Do(req)
 	duration := time.Since(start).Milliseconds()
 
 	if err != nil {
@@ -73,9 +89,9 @@ func (s *HttpService) SendRequest(input model.SendRequestInput) (*model.HttpResp
 	}
 	defer resp.Body.Close()
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := s.readResponseBody(resp.Body, options.maxResponseBytes)
 	if err != nil {
-		return nil, appErrors.Wrap("READ_BODY_FAILED", "读取响应体失败", err)
+		return nil, err
 	}
 
 	respContentType := resp.Header.Get("Content-Type")
@@ -136,6 +152,136 @@ func (s *HttpService) buildBody(body model.RequestBody) (io.Reader, string, erro
 
 	default:
 		return nil, "", nil
+	}
+}
+
+func (s *HttpService) normalizeInput(input model.SendRequestInput) (model.SendRequestInput, error) {
+	fields := strings.Fields(strings.TrimSpace(input.URL))
+	if len(fields) == 0 || !strings.EqualFold(fields[0], "curl") {
+		return input, nil
+	}
+
+	parsed, err := httputil.ParseCurlCommand(input.URL)
+	if err != nil {
+		return input, appErrors.Wrap("INVALID_CURL", "cURL 命令解析失败", err)
+	}
+	return *parsed, nil
+}
+
+func (s *HttpService) extractRequestOptions(headers []model.KeyValue) (requestOptions, []model.KeyValue) {
+	options := requestOptions{
+		followRedirects:  true,
+		timeout:          s.client.Timeout,
+		maxResponseBytes: 0,
+		sslVerify:        true,
+		httpVersion:      "auto",
+	}
+
+	cleaned := make([]model.KeyValue, 0, len(headers))
+	for _, header := range headers {
+		key := strings.ToLower(strings.TrimSpace(header.Key))
+		value := strings.TrimSpace(header.Value)
+
+		switch key {
+		case "x-minipost-option-follow-redirects":
+			options.followRedirects = parseBoolOption(value, options.followRedirects)
+			continue
+		case "x-minipost-option-timeout-ms":
+			if parsed, err := strconv.Atoi(value); err == nil {
+				if parsed <= 0 {
+					options.timeout = 0
+				} else {
+					options.timeout = time.Duration(parsed) * time.Millisecond
+				}
+			}
+			continue
+		case "x-minipost-option-max-response-size-mb":
+			if parsed, err := strconv.Atoi(value); err == nil {
+				if parsed <= 0 {
+					options.maxResponseBytes = 0
+				} else {
+					options.maxResponseBytes = int64(parsed) * 1024 * 1024
+				}
+			}
+			continue
+		case "x-minipost-option-ssl-verify":
+			options.sslVerify = parseBoolOption(value, options.sslVerify)
+			continue
+		case "x-minipost-option-http-version":
+			switch strings.ToLower(value) {
+			case "auto", "http1", "http2":
+				options.httpVersion = strings.ToLower(value)
+			}
+			continue
+		default:
+			cleaned = append(cleaned, header)
+		}
+	}
+
+	return options, cleaned
+}
+
+func (s *HttpService) buildClient(options requestOptions) *http.Client {
+	client := *s.client
+	client.Timeout = options.timeout
+
+	if options.followRedirects {
+		client.CheckRedirect = nil
+	} else {
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	}
+
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if currentTransport, ok := s.client.Transport.(*http.Transport); ok && currentTransport != nil {
+		transport = currentTransport.Clone()
+	}
+
+	if !options.sslVerify {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+
+	switch options.httpVersion {
+	case "http1":
+		transport.ForceAttemptHTTP2 = false
+	case "http2":
+		transport.ForceAttemptHTTP2 = true
+	}
+
+	client.Transport = transport
+	return &client
+}
+
+func (s *HttpService) readResponseBody(body io.Reader, maxResponseBytes int64) ([]byte, error) {
+	if maxResponseBytes <= 0 {
+		bodyBytes, err := io.ReadAll(body)
+		if err != nil {
+			return nil, appErrors.Wrap("READ_BODY_FAILED", "读取响应体失败", err)
+		}
+		return bodyBytes, nil
+	}
+
+	limited := io.LimitReader(body, maxResponseBytes+1)
+	bodyBytes, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, appErrors.Wrap("READ_BODY_FAILED", "读取响应体失败", err)
+	}
+	if int64(len(bodyBytes)) > maxResponseBytes {
+		limitMB := maxResponseBytes / (1024 * 1024)
+		return nil, appErrors.New("MAX_RESPONSE_SIZE_EXCEEDED", fmt.Sprintf("响应体超过最大大小限制（%d MB）", limitMB))
+	}
+	return bodyBytes, nil
+}
+
+func parseBoolOption(raw string, defaultValue bool) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return defaultValue
 	}
 }
 

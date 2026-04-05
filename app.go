@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"minipost/internal/model"
+	appErrors "minipost/internal/pkg/errors"
 	"minipost/internal/pkg/httputil"
 	"minipost/internal/pkg/logger"
 	"minipost/internal/repository"
@@ -57,9 +59,29 @@ func (a *App) shutdown(ctx context.Context) {
 	logger.Info("Wails OnShutdown 回调执行, 应用正在关闭")
 }
 
+func normalizeCurlInput(input model.SendRequestInput) (model.SendRequestInput, error) {
+	fields := strings.Fields(strings.TrimSpace(input.URL))
+	if len(fields) == 0 || !strings.EqualFold(fields[0], "curl") {
+		return input, nil
+	}
+
+	parsed, err := httputil.ParseCurlCommand(input.URL)
+	if err != nil {
+		return input, appErrors.Wrap("INVALID_CURL", "cURL 命令解析失败", err)
+	}
+	return *parsed, nil
+}
+
 // ---- HTTP 请求 ----
 
 func (a *App) SendRequestWithEnv(input model.SendRequestInput, projectID, envID string) (*model.HttpResponse, error) {
+	normalizedInput, err := normalizeCurlInput(input)
+	if err != nil {
+		logger.Warn("cURL 解析失败", "url", input.URL, "error", err.Error())
+		return nil, err
+	}
+	input = normalizedInput
+
 	logger.Debug("SendRequestWithEnv 调用",
 		"method", input.Method,
 		"url", input.URL,
@@ -112,6 +134,13 @@ func (a *App) SendRequestWithEnv(input model.SendRequestInput, projectID, envID 
 }
 
 func (a *App) SendRequest(input model.SendRequestInput) (*model.HttpResponse, error) {
+	normalizedInput, err := normalizeCurlInput(input)
+	if err != nil {
+		logger.Warn("cURL 解析失败", "url", input.URL, "error", err.Error())
+		return nil, err
+	}
+	input = normalizedInput
+
 	logger.Debug("SendRequest 调用", "method", input.Method, "url", input.URL)
 	resp, err := a.httpSvc.SendRequest(input)
 	if err != nil {

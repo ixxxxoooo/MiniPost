@@ -53,6 +53,19 @@ export function Toolbar() {
     return () => window.removeEventListener("keydown", handler)
   }, [setSettingsOpen])
 
+  useEffect(() => {
+    if (!showCurlDialog) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault()
+        setShowCurlDialog(false)
+        setCurlError("")
+      }
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [showCurlDialog])
+
   const handleCurlImport = async () => {
     if (!curlCommand.trim() || !activeTab) return
     setCurlError("")
@@ -162,6 +175,12 @@ export function Toolbar() {
               <textarea
                 value={curlCommand}
                 onChange={(e) => setCurlCommand(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault()
+                    void handleCurlImport()
+                  }
+                }}
                 placeholder={'curl --request GET \\\n  --url https://api.example.com/data \\\n  --header \'Content-Type: application/json\''}
                 className={cn(
                   "w-full min-h-[180px] p-3.5 rounded-[8px]",
@@ -179,6 +198,9 @@ export function Toolbar() {
                   {curlError}
                 </div>
               )}
+              <div className="mt-2 text-[10px] text-[var(--fg-muted)]">
+                Enter 导入，Shift + Enter 换行
+              </div>
             </div>
 
             <div className="flex items-center justify-between px-6 pb-6 pt-1">

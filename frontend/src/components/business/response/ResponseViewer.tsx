@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
@@ -103,6 +103,13 @@ export function ResponseViewer() {
   const isDark = resolved === "dark"
   const response = activeTab?.response ?? null
   const responseError = activeTab?.responseError ?? null
+  const safeHeaders = response?.headers ?? {}
+
+  useEffect(() => {
+    if (responseError) {
+      setActiveTabValue("body")
+    }
+  }, [responseError])
 
   if (!response && !responseError && !isSending) {
     return (
@@ -122,18 +129,8 @@ export function ResponseViewer() {
     )
   }
 
-  if (responseError && !response) {
-    return (
-      <div className="flex h-full items-center justify-center gap-2 px-6 bg-[var(--surface)]">
-        <AppIcon name="clear" size={16} className="text-[var(--danger)]" />
-        <span className="text-[length:var(--size-font-xs)] text-[var(--danger)]">{responseError}</span>
-      </div>
-    )
-  }
-
-  if (!response) return null
-  const headerCount = isSending ? 0 : Object.keys(response.headers).length
-  const cookies = parseResponseCookies(response.headers)
+  const headerCount = isSending ? 0 : Object.keys(safeHeaders).length
+  const cookies = parseResponseCookies(safeHeaders)
   const cookieCount = isSending ? 0 : cookies.length
 
   return (
@@ -163,7 +160,7 @@ export function ResponseViewer() {
             </TabsTrigger>
           </TabsList>
 
-          {!isSending && (
+          {!isSending && response && !responseError && (
             <div className="ml-auto flex items-center gap-2 text-[11px] text-[var(--fg-muted)]">
               <div className="relative group/status">
                 <span className={cn("px-2 py-0.5 rounded-[8px] font-medium", statusBadgeClass(response.statusCode))}>
@@ -202,14 +199,37 @@ export function ResponseViewer() {
         <TabsContent value="body" className="flex-1 m-0 min-h-0 overflow-hidden">
           <div className="h-full p-[var(--size-padding-sm)]">
             <div className="h-full overflow-hidden">
-              <ResponseBody body={response.body} contentType={response.contentType} isDark={isDark} />
+              {responseError ? (
+                <div className="h-full rounded-[10px] border border-[var(--danger)]/20 bg-[var(--danger)]/6 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-[7px] bg-[var(--danger)]/14">
+                      <AppIcon name="clear" size={12} className="text-[var(--danger)]" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-semibold text-[var(--danger)]">Request Error</div>
+                      <div className="mt-1 whitespace-pre-wrap break-words text-[12px] leading-5 text-[var(--fg-secondary)]">
+                        {responseError}
+                      </div>
+                      <div className="mt-3 text-[11px] text-[var(--fg-muted)]">
+                        请检查 URL、协议、代理、证书或超时设置后重试。
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : response ? (
+                <ResponseBody body={response.body} contentType={response.contentType} isDark={isDark} />
+              ) : (
+                <div className="flex h-full items-center justify-center text-2xs text-[var(--fg-muted)]">
+                  暂无响应内容
+                </div>
+              )}
             </div>
           </div>
         </TabsContent>
 
         <TabsContent value="headers" className="flex-1 m-0 min-h-0 overflow-hidden">
           <div className="h-full p-[var(--size-padding-sm)]">
-            <ResponseHeaders headers={response.headers} />
+            <ResponseHeaders headers={safeHeaders} />
           </div>
         </TabsContent>
 

@@ -1,15 +1,19 @@
 package httputil
 
 import (
+	"errors"
 	"minipost/internal/model"
 	"strings"
+	"unicode"
 )
 
 // ParseCurlCommand 将 cURL 命令解析为 SendRequestInput（基础版本）
 // 后续迭代可增强为完整的 cURL 解析器
 func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 	curlCmd = strings.TrimSpace(curlCmd)
-	curlCmd = strings.TrimPrefix(curlCmd, "curl ")
+	if curlCmd == "" {
+		return nil, errors.New("cURL 命令为空")
+	}
 
 	input := &model.SendRequestInput{
 		Method:  "GET",
@@ -20,6 +24,16 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 	}
 
 	parts := tokenize(curlCmd)
+	if len(parts) == 0 {
+		return nil, errors.New("cURL 命令为空")
+	}
+	if strings.EqualFold(parts[0], "curl") {
+		parts = parts[1:]
+	}
+	if len(parts) == 0 {
+		return nil, errors.New("cURL 命令缺少请求信息")
+	}
+
 	for i := 0; i < len(parts); i++ {
 		part := parts[i]
 		switch part {
@@ -28,6 +42,13 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 				i++
 				input.Method = strings.ToUpper(parts[i])
 			}
+		case "--url":
+			if i+1 < len(parts) {
+				i++
+				input.URL = strings.Trim(parts[i], "'\"")
+			}
+		case "-I", "--head":
+			input.Method = "HEAD"
 		case "-H", "--header":
 			if i+1 < len(parts) {
 				i++
@@ -39,7 +60,7 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 					})
 				}
 			}
-		case "-d", "--data", "--data-raw":
+		case "-d", "--data", "--data-raw", "--data-binary", "--data-urlencode":
 			if i+1 < len(parts) {
 				i++
 				data := parts[i]
@@ -72,6 +93,9 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 			}
 		}
 	}
+	if strings.TrimSpace(input.URL) == "" {
+		return nil, errors.New("cURL 命令缺少 URL")
+	}
 
 	return input, nil
 }
@@ -90,14 +114,23 @@ func tokenize(input string) []string {
 			inSingleQuote = !inSingleQuote
 		case ch == '"' && !inSingleQuote:
 			inDoubleQuote = !inDoubleQuote
-		case ch == ' ' && !inSingleQuote && !inDoubleQuote:
+		case ch == '\\' && i+1 < len(input) && !inSingleQuote:
+			next := input[i+1]
+			// cURL 多行命令中的反斜杠换行
+			if next == '\n' || next == '\r' {
+				i++
+				if next == '\r' && i+1 < len(input) && input[i+1] == '\n' {
+					i++
+				}
+				continue
+			}
+			i++
+			current.WriteByte(input[i])
+		case unicode.IsSpace(rune(ch)) && !inSingleQuote && !inDoubleQuote:
 			if current.Len() > 0 {
 				tokens = append(tokens, current.String())
 				current.Reset()
 			}
-		case ch == '\\' && i+1 < len(input):
-			i++
-			current.WriteByte(input[i])
 		default:
 			current.WriteByte(ch)
 		}

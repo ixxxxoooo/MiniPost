@@ -160,6 +160,25 @@ export function WorkspaceHeader() {
     return () => document.removeEventListener("mousedown", handleOutside)
   }, [open])
 
+  useEffect(() => {
+    if (!open && !deleteConfirm && !switchConfirm) return
+    const handler = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return
+      event.preventDefault()
+      if (deleteConfirm) {
+        setDeleteConfirm(null)
+        return
+      }
+      if (switchConfirm) {
+        setSwitchConfirm(null)
+        return
+      }
+      setOpen(false)
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [deleteConfirm, open, switchConfirm])
+
   const handleCreate = async () => {
     const name = searchQuery.trim()
     if (!name) return
@@ -336,7 +355,7 @@ export function WorkspaceHeader() {
                       className={cn(
                         "flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 text-left transition-colors group",
                         selected
-                          ? "bg-[rgb(237,237,237)] text-[var(--fg)]"
+                          ? "bg-[var(--selected-bg)] text-[var(--fg)]"
                           : "text-[var(--fg)] hover:bg-[var(--surface-secondary)]"
                       )}
                     >
