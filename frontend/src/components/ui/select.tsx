@@ -39,7 +39,8 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden",
+        "relative z-50 max-h-96 overflow-hidden",
+        "w-max min-w-[var(--radix-select-trigger-width)]",
         "rounded-[var(--radius-menu)] border border-[var(--border-color)]",
         "bg-[var(--surface-elevated)] text-[var(--fg)] shadow-[var(--shadow-lg)]",
         "data-[state=open]:animate-fade-in",
@@ -52,7 +53,7 @@ const SelectContent = React.forwardRef<
       <SelectPrimitive.Viewport
         className={cn(
           "p-1",
-          position === "popper" && "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
+          position === "popper" && "w-auto min-w-[var(--radix-select-trigger-width)]"
         )}
       >
         {children}
@@ -70,18 +71,15 @@ const SelectItem = React.forwardRef<
     ref={ref}
     className={cn(
       "relative flex w-full cursor-default select-none items-center",
-      "rounded-[var(--radius-sm)] py-1.5 pl-7 pr-2 text-[length:var(--size-font-sm)] outline-none",
-      "focus:bg-[var(--sidebar-hover)] focus:text-[var(--fg)]",
+      "rounded-[var(--radius-sm)] py-1.5 px-2 text-[length:var(--size-font-sm)] outline-none",
+      "whitespace-nowrap",
+      "focus:bg-[rgb(237,237,237)] focus:text-[var(--fg)]",
+      "data-[state=checked]:bg-[rgb(237,237,237)] data-[state=checked]:text-[var(--fg)]",
       "data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
       className
     )}
     {...props}
   >
-    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-      <SelectPrimitive.ItemIndicator>
-        <AppIcon name="square" size={14} strokeWidth={1.9} />
-      </SelectPrimitive.ItemIndicator>
-    </span>
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
   </SelectPrimitive.Item>
 ))

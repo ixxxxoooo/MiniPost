@@ -3,19 +3,20 @@ import { Toolbar } from "./Toolbar"
 import { BottomBar } from "./BottomBar"
 import { Sidebar } from "./Sidebar"
 import { TabBar } from "./TabBar"
-import { RequestEditor } from "@/components/business/editor/RequestEditor"
+import { SettingsPanel } from "./SettingsPanel"
+import { RequestEditorBody, RequestEditorToolbar } from "@/components/business/editor/RequestEditor"
 import { ResponseViewer } from "@/components/business/response/ResponseViewer"
+import { EnvironmentEditorPage } from "@/components/business/environment/EnvironmentEditorPage"
 import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { cn } from "@/lib/utils"
 
 export function AppLayout() {
-  const { sidebarCollapsed, layoutDirection } = useUIStore()
+  const { sidebarCollapsed, layoutDirection, editingEnvironmentId } = useUIStore()
   const currentProjectId = useProjectStore((s) => s.currentProjectId)
   const activeTab = useTabStore(getProjectActiveTabFromState)
 
-  // 请求/响应分割拖拽
   const [splitRatio, setSplitRatio] = useState(0.55)
   const splitContainerRef = useRef<HTMLDivElement>(null)
   const resizingRef = useRef(false)
@@ -46,6 +47,8 @@ export function AppLayout() {
     document.addEventListener("mouseup", onUp)
   }, [layoutDirection])
 
+  const showEnvEditor = !!editingEnvironmentId
+
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--surface)]">
       <Toolbar />
@@ -56,53 +59,64 @@ export function AppLayout() {
         <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
           <TabBar />
 
-          {activeTab ? (
-            <div
-              ref={splitContainerRef}
-              className={cn(
-                "flex-1 overflow-hidden flex min-h-0 min-w-0",
-                layoutDirection === "vertical" ? "flex-col" : "flex-row"
-              )}
-            >
-              <div
-                className="overflow-hidden min-h-0 min-w-0"
-                style={{
-                  [layoutDirection === "vertical" ? "height" : "width"]: `${splitRatio * 100}%`,
-                  flexShrink: 0,
-                }}
-              >
-                <RequestEditor />
-              </div>
+          {showEnvEditor ? (
+            <EnvironmentEditorPage />
+          ) : activeTab ? (
+            <div className="flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden">
+              <RequestEditorToolbar />
 
               <div
+                ref={splitContainerRef}
                 className={cn(
-                  "group flex-shrink-0 flex items-center justify-center relative",
-                  layoutDirection === "vertical"
-                    ? "h-[5px] cursor-row-resize"
-                    : "w-[5px] cursor-col-resize"
+                  "flex-1 overflow-hidden flex min-h-0 min-w-0",
+                  layoutDirection === "vertical" ? "flex-col" : "flex-row"
                 )}
-                onMouseDown={handleSplitDragStart}
               >
                 <div
-                  className={cn(
-                    "bg-[var(--border-color)] group-hover:bg-[var(--accent)] transition-colors duration-200",
-                    layoutDirection === "vertical"
-                      ? "h-px w-full absolute top-1/2 -translate-y-1/2"
-                      : "w-px h-full absolute left-1/2 -translate-x-1/2"
-                  )}
-                />
+                  className="overflow-hidden min-h-0 min-w-0"
+                  style={{
+                    [layoutDirection === "vertical" ? "height" : "width"]: `${splitRatio * 100}%`,
+                    flexShrink: 0,
+                  }}
+                >
+                  <RequestEditorBody />
+                </div>
+
                 <div
                   className={cn(
-                    "bg-transparent group-hover:bg-[var(--accent)]/50 transition-all duration-200 rounded-full absolute",
+                    "group relative flex-shrink-0",
                     layoutDirection === "vertical"
-                      ? "w-6 h-1 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-                      : "h-6 w-1 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+                      ? "h-px"
+                      : "w-px"
                   )}
-                />
-              </div>
+                >
+                  <div
+                    className={cn(
+                      "absolute z-10",
+                      layoutDirection === "vertical"
+                        ? "inset-x-0 -top-2 h-[5px] cursor-row-resize"
+                        : "inset-y-0 -left-2 w-[5px] cursor-col-resize"
+                    )}
+                    onMouseDown={handleSplitDragStart}
+                  />
+                  <div
+                    className={cn(
+                      "absolute inset-0 bg-[var(--border-color)] group-hover:bg-[var(--accent)] transition-colors duration-200"
+                    )}
+                  />
+                  <div
+                    className={cn(
+                      "pointer-events-none bg-transparent group-hover:bg-[var(--accent)]/50 transition-all duration-200 rounded-full absolute",
+                      layoutDirection === "vertical"
+                        ? "w-6 h-1 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+                        : "h-6 w-1 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+                    )}
+                  />
+                </div>
 
-              <div className="flex-1 overflow-hidden min-h-0 min-w-0">
-                <ResponseViewer />
+                <div className="flex-1 overflow-hidden min-h-0 min-w-0">
+                  <ResponseViewer />
+                </div>
               </div>
             </div>
           ) : currentProjectId ? (
@@ -126,6 +140,8 @@ export function AppLayout() {
           <BottomBar />
         </div>
       </div>
+
+      <SettingsPanel />
     </div>
   )
 }

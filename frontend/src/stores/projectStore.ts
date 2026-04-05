@@ -1,7 +1,10 @@
 import { create } from "zustand"
-import { projectService, folderService, requestItemService } from "@/services/projectService"
+import { projectService, folderService, requestItemService, collectionService } from "@/services/projectService"
 import type { model } from "../../wailsjs/go/models"
 import { useTabStore } from "@/stores/tabStore"
+import { useUIStore } from "@/stores/uiStore"
+
+type CollectionNodeType = "folder" | "request"
 
 const LAST_PROJECT_STORAGE_KEY = "minipost:last-project-id"
 
@@ -10,6 +13,7 @@ interface ProjectState {
   currentProjectId: string | null
   folders: model.Folder[]
   requests: model.RequestItem[]
+  treeNodes: model.CollectionNode[]
   loading: boolean
   error: string | null
 
@@ -23,10 +27,18 @@ interface ProjectState {
   createFolder: (parentId: string, name: string) => Promise<void>
   renameFolder: (folderId: string, name: string) => Promise<void>
   deleteFolder: (folderId: string) => Promise<void>
+  moveFolder: (folderId: string, targetParentId: string, targetIndex: number) => Promise<void>
 
   createRequest: (folderId: string, name: string) => Promise<model.RequestItem | null>
   saveRequestToBackend: (request: model.RequestItem) => Promise<void>
   deleteRequest: (requestId: string) => Promise<void>
+  moveRequest: (requestId: string, targetFolderId: string, targetIndex: number) => Promise<void>
+  moveCollectionNode: (nodeId: string, nodeType: CollectionNodeType, targetParentFolderId: string, targetIndex: number) => Promise<void>
+  renameRequest: (requestId: string, name: string) => Promise<void>
+  duplicateRequest: (requestId: string) => Promise<void>
+  duplicateFolder: (folderId: string) => Promise<void>
+  exportProjectJSON: () => Promise<string | null>
+  importFromFile: (format: string, content: string) => Promise<void>
 }
 
 function readLastProjectId(): string | null {
@@ -62,6 +74,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   currentProjectId: null,
   folders: [],
   requests: [],
+  treeNodes: [],
   loading: false,
   error: null,
 
@@ -77,17 +90,22 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         : lastProjectId && nextProjects.some((project) => project.id === lastProjectId)
           ? lastProjectId
           : nextProjects[0]?.id ?? null
+      const shouldResetEnvironmentTabs = resolvedProjectId !== currentProjectId
 
       set({ projects: nextProjects, loading: false, currentProjectId: resolvedProjectId })
 
       if (resolvedProjectId) {
         useTabStore.getState().setCurrentProject(resolvedProjectId)
         persistLastProjectId(resolvedProjectId)
+        if (shouldResetEnvironmentTabs) {
+          useUIStore.getState().clearEnvironmentTabs()
+        }
         await get().loadCollections(resolvedProjectId)
       } else {
         useTabStore.getState().setCurrentProject(null)
         persistLastProjectId(null)
-        set({ folders: [], requests: [] })
+        useUIStore.getState().clearEnvironmentTabs()
+        set({ folders: [], requests: [], treeNodes: [] })
       }
     } catch (err) {
       set({ error: String(err), loading: false })
@@ -119,7 +137,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (currentProjectId === id) {
         useTabStore.getState().setCurrentProject(null)
         persistLastProjectId(null)
-        set({ currentProjectId: null, folders: [], requests: [] })
+        useUIStore.getState().clearEnvironmentTabs()
+        set({ currentProjectId: null, folders: [], requests: [], treeNodes: [] })
       }
       useTabStore.getState().deleteProjectTabs(id)
       await get().loadProjects()
@@ -129,6 +148,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   selectProject: async (id) => {
+    useUIStore.getState().clearEnvironmentTabs()
     useTabStore.getState().setCurrentProject(id)
     persistLastProjectId(id)
     set({ currentProjectId: id })
@@ -137,13 +157,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   loadCollections: async (projectId) => {
     try {
-      const [folders, requests] = await Promise.all([
-        folderService.listFolders(projectId),
-        requestItemService.listRequests(projectId),
-      ])
+      const data = await collectionService.getCollectionData(projectId)
       set({
-        folders: folders ?? [],
-        requests: requests ?? [],
+        folders: data?.folders ?? [],
+        requests: data?.requests ?? [],
+        treeNodes: data?.treeNodes ?? [],
       })
     } catch (err) {
       set({ error: String(err) })
@@ -183,6 +201,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
+  moveFolder: async (folderId, targetParentId, targetIndex) => {
+    await get().moveCollectionNode(folderId, "folder", targetParentId, targetIndex)
+  },
+
   createRequest: async (folderId, name) => {
     const { currentProjectId } = get()
     if (!currentProjectId) return null
@@ -213,6 +235,86 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     if (!currentProjectId) return
     try {
       await requestItemService.deleteRequest(currentProjectId, requestId)
+      await get().loadCollections(currentProjectId)
+    } catch (err) {
+      set({ error: String(err) })
+    }
+  },
+
+  moveRequest: async (requestId, targetFolderId, targetIndex) => {
+    await get().moveCollectionNode(requestId, "request", targetFolderId, targetIndex)
+  },
+
+  moveCollectionNode: async (nodeId, nodeType: CollectionNodeType, targetParentFolderId, targetIndex) => {
+    const { currentProjectId } = get()
+    if (!currentProjectId) return
+    try {
+      await collectionService.moveCollectionNode(currentProjectId, nodeId, nodeType, targetParentFolderId, targetIndex)
+      await get().loadCollections(currentProjectId)
+    } catch (err) {
+      set({ error: String(err) })
+    }
+  },
+
+  renameRequest: async (requestId, name) => {
+    const { currentProjectId } = get()
+    if (!currentProjectId) return
+    try {
+      await requestItemService.renameRequest(currentProjectId, requestId, name)
+      await get().loadCollections(currentProjectId)
+      // 同步更新所有关联的 Tab 标题
+      const tabState = useTabStore.getState()
+      const projectTabs = tabState.projectTabs[currentProjectId]
+      if (projectTabs) {
+        projectTabs.tabs.forEach((tab) => {
+          if (tab.requestId === requestId && tab.title !== name) {
+            tabState.updateTab(tab.id, { title: name })
+          }
+        })
+      }
+    } catch (err) {
+      set({ error: String(err) })
+    }
+  },
+
+  duplicateRequest: async (requestId) => {
+    const { currentProjectId } = get()
+    if (!currentProjectId) return
+    try {
+      await requestItemService.duplicateRequest(currentProjectId, requestId)
+      await get().loadCollections(currentProjectId)
+    } catch (err) {
+      set({ error: String(err) })
+    }
+  },
+
+  duplicateFolder: async (folderId) => {
+    const { currentProjectId } = get()
+    if (!currentProjectId) return
+    try {
+      await folderService.duplicateFolder(currentProjectId, folderId)
+      await get().loadCollections(currentProjectId)
+    } catch (err) {
+      set({ error: String(err) })
+    }
+  },
+
+  exportProjectJSON: async () => {
+    const { currentProjectId } = get()
+    if (!currentProjectId) return null
+    try {
+      return await projectService.exportProjectJSON(currentProjectId)
+    } catch (err) {
+      set({ error: String(err) })
+      return null
+    }
+  },
+
+  importFromFile: async (format, content) => {
+    const { currentProjectId } = get()
+    if (!currentProjectId) return
+    try {
+      await collectionService.importFromFile(currentProjectId, format, content)
       await get().loadCollections(currentProjectId)
     } catch (err) {
       set({ error: String(err) })

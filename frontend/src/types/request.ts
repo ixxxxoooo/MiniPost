@@ -8,11 +8,18 @@ export interface KeyValuePair {
   description?: string
 }
 
+export interface FormDataItem extends KeyValuePair {
+  type: "text" | "file"
+  filePath?: string
+  fileName?: string
+}
+
 export interface RequestBody {
   type: BodyType
   raw?: string
   json?: string
   formUrlEncoded?: KeyValuePair[]
+  formData?: FormDataItem[]
 }
 
 export interface BasicAuthConfig {
@@ -74,6 +81,17 @@ export function createKeyValuePair(partial?: Partial<KeyValuePair>): KeyValuePai
     key: "",
     value: "",
     enabled: true,
+    ...partial,
+  }
+}
+
+export function createFormDataItem(partial?: Partial<FormDataItem>): FormDataItem {
+  return {
+    id: crypto.randomUUID(),
+    key: "",
+    value: "",
+    enabled: true,
+    type: "text",
     ...partial,
   }
 }

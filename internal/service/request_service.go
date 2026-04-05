@@ -1,6 +1,9 @@
 package service
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -9,12 +12,82 @@ import (
 	"minipost/internal/repository"
 )
 
+// ---- Postman Collection v2.1 结构 ----
+
+type postmanCollection struct {
+	Info struct {
+		Name string `json:"name"`
+	} `json:"info"`
+	Item []postmanItem `json:"item"`
+}
+
+type postmanItem struct {
+	Name    string         `json:"name"`
+	Item    []postmanItem  `json:"item,omitempty"`
+	Request *postmanReq    `json:"request,omitempty"`
+}
+
+type postmanReq struct {
+	Method string       `json:"method"`
+	Header []postmanKV  `json:"header"`
+	Body   *postmanBody `json:"body,omitempty"`
+	URL    postmanURL   `json:"url"`
+}
+
+type postmanURL struct {
+	Raw string `json:"raw"`
+}
+
+type postmanKV struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+type postmanBody struct {
+	Mode       string       `json:"mode"`
+	Raw        string       `json:"raw,omitempty"`
+	URLEncoded []postmanKV  `json:"urlencoded,omitempty"`
+	Options    []postmanOpt `json:"options,omitempty"`
+}
+
+type postmanOpt struct {
+	Raw struct {
+		Language string `json:"language"`
+	} `json:"raw"`
+}
+
+// ---- OpenAPI/Swagger 结构 ----
+
+type openAPIDoc struct {
+	Swagger  string                           `json:"swagger,omitempty"`
+	OpenAPI  string                           `json:"openapi,omitempty"`
+	Host     string                           `json:"host,omitempty"`
+	BasePath string                           `json:"basePath,omitempty"`
+	Schemes  []string                         `json:"schemes,omitempty"`
+	Servers  []openAPIServer                  `json:"servers,omitempty"`
+	Paths    map[string]map[string]openAPIOp  `json:"paths"`
+}
+
+type openAPIServer struct {
+	URL string `json:"url"`
+}
+
+type openAPIOp struct {
+	Tags        []string `json:"tags,omitempty"`
+	Summary     string   `json:"summary,omitempty"`
+	OperationID string   `json:"operationId,omitempty"`
+}
+
 type RequestService struct {
 	store *repository.FileStore
 }
 
 func NewRequestService(store *repository.FileStore) *RequestService {
 	return &RequestService{store: store}
+}
+
+func (s *RequestService) GetCollectionData(projectID string) (*model.CollectionData, error) {
+	return s.store.GetCollectionData(projectID)
 }
 
 func (s *RequestService) ListRequests(projectID string) ([]model.RequestItem, error) {
@@ -33,6 +106,7 @@ func (s *RequestService) CreateRequest(projectID, folderID, name string) (*model
 		Body:      model.RequestBody{Type: "none"},
 		Auth:      model.AuthConfig{Type: "none"},
 		FolderID:  folderID,
+		SortOrder: 0,
 		ProjectID: projectID,
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -52,12 +126,10 @@ func (s *RequestService) DeleteRequest(projectID, requestID string) error {
 	return s.store.DeleteRequest(projectID, requestID)
 }
 
-// ListFolders 列出项目下所有文件夹
 func (s *RequestService) ListFolders(projectID string) ([]model.Folder, error) {
 	return s.store.ListFolders(projectID)
 }
 
-// CreateFolder 创建文件夹
 func (s *RequestService) CreateFolder(projectID, parentID, name string) (*model.Folder, error) {
 	folder := &model.Folder{
 		ID:        uuid.New().String(),
@@ -72,7 +144,6 @@ func (s *RequestService) CreateFolder(projectID, parentID, name string) (*model.
 	return folder, nil
 }
 
-// RenameFolder 重命名文件夹
 func (s *RequestService) RenameFolder(projectID, folderID, name string) error {
 	folders, err := s.store.ListFolders(projectID)
 	if err != nil {
@@ -87,7 +158,227 @@ func (s *RequestService) RenameFolder(projectID, folderID, name string) error {
 	return nil
 }
 
-// DeleteFolder 删除文件夹
+func (s *RequestService) MoveCollectionNode(projectID, nodeID string, nodeType model.CollectionNodeType, targetParentID string, targetIndex int) error {
+	return s.store.MoveCollectionNode(projectID, nodeID, nodeType, targetParentID, targetIndex)
+}
+
+func (s *RequestService) MoveFolder(projectID, folderID, targetParentID string, targetIndex int) error {
+	return s.store.MoveFolder(projectID, folderID, targetParentID, targetIndex)
+}
+
+func (s *RequestService) MoveRequest(projectID, requestID, targetFolderID string, targetIndex int) error {
+	return s.store.MoveRequest(projectID, requestID, targetFolderID, targetIndex)
+}
+
 func (s *RequestService) DeleteFolder(projectID, folderID string) error {
 	return s.store.DeleteFolder(projectID, folderID)
+}
+
+func (s *RequestService) RenameRequest(projectID, requestID, name string) error {
+	requests, err := s.store.ListRequests(projectID)
+	if err != nil {
+		return err
+	}
+	for _, r := range requests {
+		if r.ID == requestID {
+			r.Name = name
+			r.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+			return s.store.SaveRequest(&r)
+		}
+	}
+	return nil
+}
+
+func (s *RequestService) DuplicateRequest(projectID, requestID string) (*model.RequestItem, error) {
+	requests, err := s.store.ListRequests(projectID)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range requests {
+		if r.ID == requestID {
+			now := time.Now().UTC().Format(time.RFC3339)
+			dup := r
+			dup.ID = uuid.New().String()
+			dup.Name = r.Name + " (副本)"
+			dup.CreatedAt = now
+			dup.UpdatedAt = now
+			if err := s.store.SaveRequest(&dup); err != nil {
+				return nil, err
+			}
+			return &dup, nil
+		}
+	}
+	return nil, fmt.Errorf("请求 %s 不存在", requestID)
+}
+
+func (s *RequestService) DuplicateFolder(projectID, folderID string) (*model.Folder, error) {
+	folders, err := s.store.ListFolders(projectID)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range folders {
+		if f.ID == folderID {
+			dup := &model.Folder{
+				ID:        uuid.New().String(),
+				Name:      f.Name + " (副本)",
+				ProjectID: projectID,
+				ParentID:  f.ParentID,
+				SortOrder: 0,
+			}
+			if err := s.store.SaveFolder(dup); err != nil {
+				return nil, err
+			}
+			// 复制文件夹内的请求
+			requests, _ := s.store.ListRequests(projectID)
+			for _, r := range requests {
+				if r.FolderID == folderID {
+					now := time.Now().UTC().Format(time.RFC3339)
+					dupReq := r
+					dupReq.ID = uuid.New().String()
+					dupReq.FolderID = dup.ID
+					dupReq.CreatedAt = now
+					dupReq.UpdatedAt = now
+					_ = s.store.SaveRequest(&dupReq)
+				}
+			}
+			return dup, nil
+		}
+	}
+	return nil, fmt.Errorf("文件夹 %s 不存在", folderID)
+}
+
+// ExportProjectJSON 导出项目的所有集合数据为 JSON
+func (s *RequestService) ExportProjectJSON(projectID string) ([]byte, error) {
+	data, err := s.store.GetCollectionData(projectID)
+	if err != nil {
+		return nil, err
+	}
+	return json.MarshalIndent(data, "", "  ")
+}
+
+// ImportPostmanCollection 导入 Postman Collection v2.1 格式
+func (s *RequestService) ImportPostmanCollection(projectID string, raw []byte) error {
+	var collection postmanCollection
+	if err := json.Unmarshal(raw, &collection); err != nil {
+		return fmt.Errorf("解析 Postman JSON 失败: %w", err)
+	}
+	return s.importPostmanItems(projectID, "", collection.Item)
+}
+
+func (s *RequestService) importPostmanItems(projectID, parentFolderID string, items []postmanItem) error {
+	for _, item := range items {
+		if len(item.Item) > 0 {
+			// 这是一个文件夹
+			folder, err := s.CreateFolder(projectID, parentFolderID, item.Name)
+			if err != nil {
+				return err
+			}
+			if err := s.importPostmanItems(projectID, folder.ID, item.Item); err != nil {
+				return err
+			}
+		} else if item.Request != nil {
+			// 这是一个请求
+			req, err := s.CreateRequest(projectID, parentFolderID, item.Name)
+			if err != nil {
+				return err
+			}
+			req.Method = item.Request.Method
+			if item.Request.URL.Raw != "" {
+				req.URL = item.Request.URL.Raw
+			}
+			for _, h := range item.Request.Header {
+				req.Headers = append(req.Headers, model.KeyValue{Key: h.Key, Value: h.Value})
+			}
+			if item.Request.Body != nil {
+				switch item.Request.Body.Mode {
+				case "raw":
+					req.Body = model.RequestBody{Type: "raw", Raw: item.Request.Body.Raw}
+					for _, opt := range item.Request.Body.Options {
+						if opt.Raw.Language == "json" {
+							req.Body.Type = "json"
+							req.Body.JSON = item.Request.Body.Raw
+							req.Body.Raw = ""
+						}
+					}
+				case "urlencoded":
+					var formData []model.KeyValue
+					for _, kv := range item.Request.Body.URLEncoded {
+						formData = append(formData, model.KeyValue{Key: kv.Key, Value: kv.Value})
+					}
+					req.Body = model.RequestBody{Type: "form-urlencoded", FormUrlEncoded: formData}
+				}
+			}
+			if err := s.SaveRequest(req); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// ImportSwagger 导入 OpenAPI/Swagger 2.0 或 3.x 格式
+func (s *RequestService) ImportSwagger(projectID string, raw []byte) error {
+	var doc openAPIDoc
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return fmt.Errorf("解析 OpenAPI JSON 失败: %w", err)
+	}
+
+	// 按 tag 分组创建文件夹
+	tagFolders := make(map[string]string) // tag -> folderID
+
+	for pathStr, methods := range doc.Paths {
+		for method, op := range methods {
+			methodUpper := strings.ToUpper(method)
+			if methodUpper == "PARAMETERS" || methodUpper == "$REF" {
+				continue
+			}
+			folderID := ""
+			if len(op.Tags) > 0 {
+				tag := op.Tags[0]
+				if fid, ok := tagFolders[tag]; ok {
+					folderID = fid
+				} else {
+					folder, err := s.CreateFolder(projectID, "", tag)
+					if err != nil {
+						return err
+					}
+					tagFolders[tag] = folder.ID
+					folderID = folder.ID
+				}
+			}
+
+			name := op.Summary
+			if name == "" {
+				name = op.OperationID
+			}
+			if name == "" {
+				name = methodUpper + " " + pathStr
+			}
+
+			baseURL := ""
+			if len(doc.Servers) > 0 {
+				baseURL = doc.Servers[0].URL
+			} else if doc.Host != "" {
+				scheme := "https"
+				if len(doc.Schemes) > 0 {
+					scheme = doc.Schemes[0]
+				}
+				baseURL = scheme + "://" + doc.Host
+				if doc.BasePath != "" && doc.BasePath != "/" {
+					baseURL += doc.BasePath
+				}
+			}
+
+			req, err := s.CreateRequest(projectID, folderID, name)
+			if err != nil {
+				return err
+			}
+			req.Method = methodUpper
+			req.URL = baseURL + pathStr
+			if err := s.SaveRequest(req); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

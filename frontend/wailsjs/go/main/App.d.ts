@@ -20,9 +20,23 @@ export function DeleteProject(arg1:string):Promise<void>;
 
 export function DeleteRequestItem(arg1:string,arg2:string):Promise<void>;
 
+export function DuplicateFolder(arg1:string,arg2:string):Promise<model.Folder>;
+
+export function DuplicateRequest(arg1:string,arg2:string):Promise<model.RequestItem>;
+
+export function ExportProjectJSON(arg1:string):Promise<string>;
+
+export function GetCollectionData(arg1:string):Promise<model.CollectionData>;
+
 export function GetHistory(arg1:string):Promise<Array<model.HistoryEntry>>;
 
 export function ImportCurl(arg1:string):Promise<model.SendRequestInput>;
+
+export function ImportFromFile(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function ImportPostmanCollection(arg1:string,arg2:string):Promise<void>;
+
+export function ImportSwagger(arg1:string,arg2:string):Promise<void>;
 
 export function ListEnvironments(arg1:string):Promise<Array<model.Environment>>;
 
@@ -32,13 +46,29 @@ export function ListProjects():Promise<Array<model.Project>>;
 
 export function ListRequests(arg1:string):Promise<Array<model.RequestItem>>;
 
+export function MoveCollectionNode(arg1:string,arg2:string,arg3:model.CollectionNodeType,arg4:string,arg5:number):Promise<void>;
+
+export function MoveFolder(arg1:string,arg2:string,arg3:string,arg4:number):Promise<void>;
+
+export function MoveRequestItem(arg1:string,arg2:string,arg3:string,arg4:number):Promise<void>;
+
+export function OpenFileDialogAny():Promise<string>;
+
+export function OpenFileDialogJSON():Promise<string>;
+
 export function RenameFolder(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function RenameProject(arg1:string,arg2:string):Promise<model.Project>;
 
+export function RenameRequest(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function SaveEnvironment(arg1:model.Environment):Promise<void>;
 
+export function SaveFileDialogJSON(arg1:string,arg2:string):Promise<void>;
+
 export function SaveRequestItem(arg1:model.RequestItem):Promise<void>;
+
+export function SaveResponseToFile(arg1:string,arg2:string):Promise<void>;
 
 export function SendRequest(arg1:model.SendRequestInput):Promise<model.HttpResponse>;
 

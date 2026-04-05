@@ -11,13 +11,75 @@ import { EnvironmentManager } from "@/components/business/environment/Environmen
 import type { model } from "../../../wailsjs/go/models"
 
 type SidebarTab = "requests" | "history" | "environments"
+type CollectionNodeType = "folder" | "request"
+type DropPosition = "before" | "after" | "inside"
 
-interface ContextMenuState {
+interface DropdownMenuState {
   x: number
   y: number
   type: "folder" | "request"
   id: string
   name: string
+}
+
+interface DraggingState {
+  id: string
+  type: CollectionNodeType
+}
+
+interface DropIndicator {
+  targetId: string | null
+  targetType: CollectionNodeType | "root"
+  position: DropPosition
+}
+
+const AUTO_EXPAND_DELAY = 600
+
+function buildCurlCommand(request: model.RequestItem): string {
+  const parts: string[] = ["curl"]
+  const method = (request.method || "GET").toUpperCase()
+  if (method !== "GET") parts.push(`-X ${method}`)
+  const url = request.url || ""
+  const params = request.params?.filter((p) => p.key)
+  let fullUrl = url
+  if (params && params.length > 0) {
+    const qs = params.map((p) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value || "")}`).join("&")
+    fullUrl += (url.includes("?") ? "&" : "?") + qs
+  }
+  parts.push(`'${fullUrl}'`)
+  const headers = request.headers?.filter((h) => h.key)
+  if (headers) {
+    for (const h of headers) {
+      parts.push(`-H '${h.key}: ${h.value || ""}'`)
+    }
+  }
+  if (request.auth) {
+    if (request.auth.type === "bearer" && request.auth.bearer?.token) {
+      parts.push(`-H 'Authorization: Bearer ${request.auth.bearer.token}'`)
+    } else if (request.auth.type === "basic" && request.auth.basic) {
+      parts.push(`-u '${request.auth.basic.username || ""}:${request.auth.basic.password || ""}'`)
+    } else if (request.auth.type === "api-key" && request.auth.apiKey) {
+      if ((request.auth.apiKey.addTo || "header") === "header") {
+        parts.push(`-H '${request.auth.apiKey.key}: ${request.auth.apiKey.value || ""}'`)
+      }
+    }
+  }
+  if (request.body) {
+    if (request.body.type === "json" && request.body.json) {
+      parts.push(`-H 'Content-Type: application/json'`)
+      parts.push(`-d '${request.body.json}'`)
+    } else if (request.body.type === "raw" && request.body.raw) {
+      parts.push(`-d '${request.body.raw}'`)
+    } else if (request.body.type === "form-urlencoded" && request.body.formUrlEncoded) {
+      parts.push(`-H 'Content-Type: application/x-www-form-urlencoded'`)
+      const formData = request.body.formUrlEncoded
+        .filter((f: { key: string }) => f.key)
+        .map((f: { key: string; value: string }) => `${encodeURIComponent(f.key)}=${encodeURIComponent(f.value || "")}`)
+        .join("&")
+      if (formData) parts.push(`-d '${formData}'`)
+    }
+  }
+  return parts.join(" \\\n  ")
 }
 
 function convertRequestToData(request: model.RequestItem) {
@@ -59,11 +121,27 @@ function convertRequestToData(request: model.RequestItem) {
   }
 }
 
+const MENU_BTN = "h-5 w-5 flex items-center justify-center rounded-[var(--radius-sm)] hover:bg-[var(--sidebar-hover)] transition-all"
+const MENU_ITEM = "w-full whitespace-nowrap px-2.5 py-1.5 rounded-[7px] text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] flex items-center gap-2"
+
 export function Sidebar() {
-  const { sidebarWidth, setSidebarWidth, sidebarCollapsed } = useUIStore()
+  const { sidebarWidth, setSidebarWidth, sidebarCollapsed, editingEnvironmentId, setEditingEnvironmentId } = useUIStore()
   const {
-    currentProjectId, folders, requests,
-    createFolder, createRequest, deleteFolder, deleteRequest, renameFolder,
+    currentProjectId,
+    folders,
+    requests,
+    treeNodes,
+    createFolder,
+    createRequest,
+    deleteFolder,
+    deleteRequest,
+    renameFolder,
+    renameRequest,
+    duplicateRequest,
+    duplicateFolder,
+    moveCollectionNode,
+    exportProjectJSON,
+    importFromFile,
   } = useProjectStore()
   const { openRequestTab } = useTabStore()
   const tabs = useTabStore(getProjectTabsFromState)
@@ -71,21 +149,41 @@ export function Sidebar() {
   const [activeTab, setActiveTab] = useState<SidebarTab>("requests")
   const [searchQuery, setSearchQuery] = useState("")
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [dropdownMenu, setDropdownMenu] = useState<DropdownMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renamingType, setRenamingType] = useState<"folder" | "request">("folder")
   const [renameValue, setRenameValue] = useState("")
+  const [dragging, setDragging] = useState<DraggingState | null>(null)
+  const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const resizingRef = useRef(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const autoExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoExpandTargetRef = useRef<string | null>(null)
+
+  const isDragging = dragging !== null
+  const isSearching = searchQuery.trim().length > 0
 
   useEffect(() => {
-    if (!contextMenu) return
+    if (!dropdownMenu) return
     const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setContextMenu(null)
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setDropdownMenu(null)
     }
     document.addEventListener("mousedown", handler)
     return () => document.removeEventListener("mousedown", handler)
-  }, [contextMenu])
+  }, [dropdownMenu])
+
+  useEffect(() => {
+    return () => {
+      if (autoExpandTimerRef.current) clearTimeout(autoExpandTimerRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (editingEnvironmentId) {
+      setActiveTab("environments")
+    }
+  }, [editingEnvironmentId])
 
   const handleSidebarResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -116,29 +214,55 @@ export function Sidebar() {
 
   const activeTabRequestId = tabs.find((t) => t.id === activeTabId)?.requestId
 
-  const filteredRequests = useMemo(() => {
-    if (!searchQuery.trim()) return requests
+  const folderMap = useMemo(() => new Map(folders.map((folder) => [folder.id, folder])), [folders])
+  const requestMap = useMemo(() => new Map(requests.map((request) => [request.id, request])), [requests])
+
+  const filteredNodeIds = useMemo(() => {
+    if (!isSearching) return null
     const q = searchQuery.toLowerCase()
-    return requests.filter((r) =>
-      r.name.toLowerCase().includes(q) || r.url?.toLowerCase().includes(q)
+    const matchedRequestIds = new Set(
+      requests
+        .filter((request) => request.name.toLowerCase().includes(q) || request.url?.toLowerCase().includes(q))
+        .map((request) => request.id)
     )
-  }, [requests, searchQuery])
+    const matchedFolderIds = new Set<string>()
+    treeNodes.forEach((node) => {
+      if (node.nodeType === "request" && matchedRequestIds.has(node.nodeId)) {
+        let currentParentId = node.parentFolderId
+        while (currentParentId) {
+          matchedFolderIds.add(currentParentId)
+          currentParentId = folderMap.get(currentParentId)?.parentId || ""
+        }
+      }
+    })
+    return new Set<string>([...matchedRequestIds, ...matchedFolderIds])
+  }, [searchQuery, isSearching, requests, treeNodes, folderMap])
 
-  const rootFolders = folders.filter((f) => !f.parentId || f.parentId === "")
-  const rootRequests = filteredRequests.filter((r) => !r.folderId || r.folderId === "")
+  const sortedTreeNodes = useMemo(
+    () => [...treeNodes].sort((a, b) => a.sortOrder - b.sortOrder || a.nodeId.localeCompare(b.nodeId)),
+    [treeNodes]
+  )
 
-  const getChildFolders = (parentId: string) => folders.filter((f) => f.parentId === parentId)
-  const getChildRequests = (folderId: string) => filteredRequests.filter((r) => r.folderId === folderId)
+  const getChildren = useCallback((parentFolderId: string) => {
+    const children = sortedTreeNodes.filter((node) => (node.parentFolderId || "") === parentFolderId)
+    if (!filteredNodeIds) return children
+    return children.filter((node) => filteredNodeIds.has(node.nodeId))
+  }, [sortedTreeNodes, filteredNodeIds])
+
+  const isDescendantFolder = useCallback((folderId: string, potentialParentId: string) => {
+    if (!potentialParentId) return false
+    let currentId: string | undefined = potentialParentId
+    while (currentId) {
+      if (currentId === folderId) return true
+      currentId = folderMap.get(currentId)?.parentId
+    }
+    return false
+  }, [folderMap])
 
   const handleOpenRequest = (request: model.RequestItem) => {
     if (!currentProjectId) return
+    setEditingEnvironmentId(null)
     openRequestTab(currentProjectId, convertRequestToData(request))
-  }
-
-  const handleContextMenu = (e: React.MouseEvent, type: "folder" | "request", id: string, name: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setContextMenu({ x: e.clientX, y: e.clientY, type, id, name })
   }
 
   const handleNewRequest = async (folderId: string = "") => {
@@ -147,15 +271,19 @@ export function Sidebar() {
     if (req) handleOpenRequest(req)
   }
 
-  const handleNewFolder = async () => {
+  const handleNewFolder = async (parentId: string = "") => {
     if (!currentProjectId) return
-    await createFolder("", "New Folder")
+    await createFolder(parentId, "New Folder")
+    if (parentId) {
+      setExpandedFolders((prev) => new Set(prev).add(parentId))
+    }
   }
 
-  const startRename = (id: string, currentName: string) => {
+  const startRename = (id: string, type: "folder" | "request", currentName: string) => {
     setRenamingId(id)
+    setRenamingType(type)
     setRenameValue(currentName)
-    setContextMenu(null)
+    setDropdownMenu(null)
   }
 
   const handleRenameSubmit = async () => {
@@ -163,10 +291,67 @@ export function Sidebar() {
       setRenamingId(null)
       return
     }
-    if (contextMenu?.type === "folder" || folders.find((f) => f.id === renamingId)) {
+    if (renamingType === "folder") {
       await renameFolder(renamingId, renameValue.trim())
+    } else {
+      await renameRequest(renamingId, renameValue.trim())
     }
     setRenamingId(null)
+  }
+
+  const handleCopyCurl = (request: model.RequestItem) => {
+    const curl = buildCurlCommand(request)
+    navigator.clipboard.writeText(curl)
+    setDropdownMenu(null)
+  }
+
+  const handleDuplicate = async (type: "folder" | "request", id: string) => {
+    setDropdownMenu(null)
+    if (type === "folder") {
+      await duplicateFolder(id)
+    } else {
+      await duplicateRequest(id)
+    }
+  }
+
+  const handleExportNode = async (type: "folder" | "request", id: string) => {
+    setDropdownMenu(null)
+    const data = type === "folder"
+      ? JSON.stringify(folderMap.get(id), null, 2)
+      : JSON.stringify(requestMap.get(id), null, 2)
+    if (data) {
+      const { SaveFileDialogJSON } = await import("../../../wailsjs/go/main/App")
+      const name = type === "folder" ? folderMap.get(id)?.name : requestMap.get(id)?.name
+      await SaveFileDialogJSON(`${name || id}.json`, data)
+    }
+  }
+
+  const handleExportProject = async () => {
+    const json = await exportProjectJSON()
+    if (json) {
+      const { SaveFileDialogJSON } = await import("../../../wailsjs/go/main/App")
+      await SaveFileDialogJSON("project-export.json", json)
+    }
+  }
+
+  const handleImportNative = async () => {
+    try {
+      const { OpenFileDialogJSON } = await import("../../../wailsjs/go/main/App")
+      const content = await OpenFileDialogJSON()
+      if (!content) return
+      await importFromFile("auto", content)
+    } catch (err) {
+      console.error("导入失败:", err)
+    }
+  }
+
+  const openDropdownMenu = (e: React.MouseEvent, type: "folder" | "request", id: string, name: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const x = Math.min(rect.right, window.innerWidth - 180)
+    const y = rect.bottom + 2
+    setDropdownMenu({ x, y, type, id, name })
   }
 
   const sidebarTabs: { key: SidebarTab; label: string }[] = [
@@ -175,24 +360,184 @@ export function Sidebar() {
     { key: "environments", label: "环境" },
   ]
 
-  if (sidebarCollapsed) return null
+  const clearDragState = () => {
+    setDragging(null)
+    setDropIndicator(null)
+    if (autoExpandTimerRef.current) {
+      clearTimeout(autoExpandTimerRef.current)
+      autoExpandTimerRef.current = null
+    }
+    autoExpandTargetRef.current = null
+  }
 
-  const renderFolderNode = (folder: model.Folder, depth: number = 0) => {
-    const isExpanded = expandedFolders.has(folder.id)
-    const childFolders = getChildFolders(folder.id)
-    const childRequests = getChildRequests(folder.id)
+  const scheduleAutoExpand = (folderId: string) => {
+    if (autoExpandTargetRef.current === folderId) return
+    if (autoExpandTimerRef.current) clearTimeout(autoExpandTimerRef.current)
+    autoExpandTargetRef.current = folderId
+    autoExpandTimerRef.current = setTimeout(() => {
+      setExpandedFolders((prev) => {
+        if (prev.has(folderId)) return prev
+        return new Set(prev).add(folderId)
+      })
+      autoExpandTargetRef.current = null
+      autoExpandTimerRef.current = null
+    }, AUTO_EXPAND_DELAY)
+  }
 
+  const cancelAutoExpand = () => {
+    if (autoExpandTimerRef.current) {
+      clearTimeout(autoExpandTimerRef.current)
+      autoExpandTimerRef.current = null
+    }
+    autoExpandTargetRef.current = null
+  }
+
+  const getDropPosition = (event: React.DragEvent<HTMLElement>, allowInside: boolean): DropPosition => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const offsetY = event.clientY - rect.top
+    const ratio = rect.height > 0 ? offsetY / rect.height : 0.5
+    if (allowInside && ratio >= 0.25 && ratio <= 0.75) return "inside"
+    return ratio < 0.5 ? "before" : "after"
+  }
+
+  const moveNode = async (nodeId: string, nodeType: CollectionNodeType, targetParentFolderId: string, targetIndex: number) => {
+    await moveCollectionNode(nodeId, nodeType, targetParentFolderId, targetIndex)
+  }
+
+  const handleDragStart = (type: CollectionNodeType, id: string) => (event: React.DragEvent<HTMLElement>) => {
+    if (isSearching) {
+      event.preventDefault()
+      return
+    }
+    event.stopPropagation()
+    event.dataTransfer.effectAllowed = "move"
+    event.dataTransfer.setData("text/plain", `${type}:${id}`)
+    requestAnimationFrame(() => {
+      setDragging({ type, id })
+    })
+  }
+
+  const handleDragEnd = () => {
+    clearDragState()
+  }
+
+  const handleNodeDragOver = (node: model.CollectionNode) => (event: React.DragEvent<HTMLDivElement>) => {
+    if (!dragging || dragging.id === node.nodeId || isSearching) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = "move"
+
+    if (dragging.type === "folder" && node.nodeType === "folder" && isDescendantFolder(dragging.id, node.nodeId)) {
+      setDropIndicator(null)
+      cancelAutoExpand()
+      return
+    }
+
+    const isFolder = node.nodeType === "folder"
+    const position = getDropPosition(event, isFolder)
+    setDropIndicator({ targetId: node.nodeId, targetType: node.nodeType as CollectionNodeType, position })
+
+    if (isFolder && position === "inside") {
+      scheduleAutoExpand(node.nodeId)
+    } else {
+      cancelAutoExpand()
+    }
+  }
+
+  const handleNodeDragLeave = () => {
+    cancelAutoExpand()
+  }
+
+  const handleRootDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!dragging || isSearching) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "move"
+    setDropIndicator({ targetId: null, targetType: "root", position: "after" })
+    cancelAutoExpand()
+  }
+
+  const handleNodeDrop = (node: model.CollectionNode) => async (event: React.DragEvent<HTMLDivElement>) => {
+    if (!dragging || isSearching) return
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (dragging.type === "folder" && node.nodeType === "folder" && isDescendantFolder(dragging.id, node.nodeId)) {
+      clearDragState()
+      return
+    }
+
+    const isFolder = node.nodeType === "folder"
+    const position = getDropPosition(event, isFolder)
+    if (position === "inside" && !isFolder) {
+      clearDragState()
+      return
+    }
+
+    if (position === "inside") {
+      await moveNode(dragging.id, dragging.type, node.nodeId, getChildren(node.nodeId).length)
+      setExpandedFolders((prev) => new Set(prev).add(node.nodeId))
+      clearDragState()
+      return
+    }
+
+    const siblings = getChildren(node.parentFolderId || "")
+    const targetIndex = siblings.findIndex((item) => item.nodeId === node.nodeId) + (position === "after" ? 1 : 0)
+    await moveNode(dragging.id, dragging.type, node.parentFolderId || "", Math.max(0, targetIndex))
+    clearDragState()
+  }
+
+  const handleRootDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    if (!dragging || isSearching) return
+    event.preventDefault()
+    event.stopPropagation()
+    await moveNode(dragging.id, dragging.type, "", getChildren("").length)
+    clearDragState()
+  }
+
+  const renderDropLine = (id: string, position: "before" | "after", depth: number) => {
+    const isActive = dropIndicator?.targetId === id && dropIndicator.position === position
+    if (!isActive) return null
     return (
-      <div key={folder.id}>
-        <div
-          className={cn(
-            "flex items-center h-[24px] px-2 rounded-[var(--radius-btn)] cursor-pointer group",
-            "hover:bg-[var(--sidebar-hover)]"
-          )}
-          style={{ paddingLeft: `${8 + depth * 16}px` }}
-          onClick={() => toggleFolder(folder.id)}
-          onContextMenu={(e) => handleContextMenu(e, "folder", folder.id, folder.name)}
-        >
+      <div
+        className="absolute left-0 right-1 h-[2px] bg-[var(--accent)] rounded-full pointer-events-none z-[5]"
+        style={{
+          marginLeft: `${8 + depth * 16}px`,
+          top: position === "before" ? -1 : undefined,
+          bottom: position === "after" ? -1 : undefined,
+        }}
+      />
+    )
+  }
+
+  const renderNode = (node: model.CollectionNode, depth: number = 0): React.ReactNode => {
+    if (node.nodeType === "folder") {
+      const folder = folderMap.get(node.nodeId)
+      if (!folder) return null
+      const isExpanded = expandedFolders.has(folder.id)
+      const childNodes = getChildren(folder.id)
+      const isDropInside = dropIndicator?.targetId === folder.id && dropIndicator.position === "inside"
+      const isDraggingSelf = dragging?.type === "folder" && dragging.id === folder.id
+
+      return (
+        <div key={`folder:${node.nodeId}`} className="relative">
+          {renderDropLine(folder.id, "before", depth)}
+          <div
+            draggable={renamingId !== folder.id && !isSearching}
+            className={cn(
+              "relative flex items-center h-[28px] px-2 rounded-[var(--radius-btn)] cursor-pointer group transition-colors duration-100",
+              !isDragging && "hover:bg-[var(--sidebar-hover)]",
+              isDropInside && "bg-[var(--accent)]/10 ring-1 ring-[var(--accent)]",
+              isDraggingSelf && "opacity-40"
+            )}
+            style={{ paddingLeft: `${8 + depth * 16}px` }}
+            onClick={() => toggleFolder(folder.id)}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openDropdownMenu(e, "folder", folder.id, folder.name) }}
+            onDragStart={handleDragStart("folder", folder.id)}
+            onDragEnd={handleDragEnd}
+            onDragOver={handleNodeDragOver(node)}
+            onDragLeave={handleNodeDragLeave}
+            onDrop={handleNodeDrop(node)}
+          >
             <AppIcon
               name="arrowRight"
               size={12}
@@ -202,12 +547,82 @@ export function Sidebar() {
                 isExpanded && "rotate-90"
               )}
             />
-          {isExpanded ? (
-            <AppIcon name="folderOpen" size={14} className="mr-1.5 flex-shrink-0 text-[var(--fg-muted)]" />
-          ) : (
-            <AppIcon name="folder" size={14} className="mr-1.5 flex-shrink-0 text-[var(--fg-muted)]" />
+            {isExpanded ? (
+              <AppIcon name="folderOpen" size={14} className="mr-1.5 flex-shrink-0 text-[var(--fg-muted)]" />
+            ) : (
+              <AppIcon name="folder" size={14} className="mr-1.5 flex-shrink-0 text-[var(--fg-muted)]" />
+            )}
+            {renamingId === folder.id ? (
+              <input
+                className="flex-1 bg-transparent text-[length:var(--size-font-2xs)] text-[var(--fg)] border-b border-[var(--accent)] outline-none"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleRenameSubmit(); if (e.key === "Escape") setRenamingId(null) }}
+                onBlur={handleRenameSubmit}
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <>
+                <span className="text-[length:var(--size-font-2xs)] truncate flex-1 text-[var(--sidebar-fg)]">{folder.name}</span>
+                <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 flex-shrink-0 transition-opacity ml-1">
+                  <button
+                    className={MENU_BTN}
+                    onClick={(e) => { e.stopPropagation(); handleNewRequest(folder.id) }}
+                    title="新建请求"
+                  >
+                    <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
+                  </button>
+                  <button
+                    className={MENU_BTN}
+                    onClick={(e) => { e.stopPropagation(); openDropdownMenu(e, "folder", folder.id, folder.name) }}
+                    title="更多操作"
+                  >
+                    <AppIcon name="more" size={12} className="text-[var(--fg-muted)]" />
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          {renderDropLine(folder.id, "after", depth)}
+          {isExpanded && childNodes.length > 0 && (
+            <div>{childNodes.map((childNode) => renderNode(childNode, depth + 1))}</div>
           )}
-          {renamingId === folder.id ? (
+        </div>
+      )
+    }
+
+    const request = requestMap.get(node.nodeId)
+    if (!request) return null
+    const isSelected = activeTabRequestId === request.id
+    const isDraggingSelf = dragging?.type === "request" && dragging.id === request.id
+
+    return (
+      <div key={`request:${node.nodeId}`} className="relative">
+        {renderDropLine(request.id, "before", depth)}
+        <div
+          draggable={!isSearching && renamingId !== request.id}
+          className={cn(
+            "flex items-center h-[28px] px-2 rounded-[var(--radius-btn)] cursor-pointer group transition-colors duration-100",
+            isSelected ? "bg-[var(--sidebar-active)] text-[var(--sidebar-accent)]" : !isDragging && "hover:bg-[var(--sidebar-hover)]",
+            isDraggingSelf && "opacity-40"
+          )}
+          style={{ paddingLeft: `${8 + depth * 16 + 16}px` }}
+          onClick={() => { if (renamingId !== request.id) handleOpenRequest(request) }}
+          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openDropdownMenu(e, "request", request.id, request.name) }}
+          onDragStart={handleDragStart("request", request.id)}
+          onDragEnd={handleDragEnd}
+          onDragOver={handleNodeDragOver(node)}
+          onDragLeave={handleNodeDragLeave}
+          onDrop={handleNodeDrop(node)}
+        >
+          <span className={cn(
+            "text-[9px] font-mono font-bold mr-1.5 w-[32px] text-right flex-shrink-0 uppercase",
+            METHOD_COLORS[request.method as HttpMethod] || "text-[var(--fg-muted)]"
+          )}>
+            {request.method?.substring(0, 3) || "GET"}
+          </span>
+          {renamingId === request.id ? (
             <input
               className="flex-1 bg-transparent text-[length:var(--size-font-2xs)] text-[var(--fg)] border-b border-[var(--accent)] outline-none"
               value={renameValue}
@@ -215,60 +630,43 @@ export function Sidebar() {
               onKeyDown={(e) => { if (e.key === "Enter") handleRenameSubmit(); if (e.key === "Escape") setRenamingId(null) }}
               onBlur={handleRenameSubmit}
               autoFocus
+              onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span className="text-[length:var(--size-font-2xs)] truncate flex-1 text-[var(--sidebar-fg)]">{folder.name}</span>
+            <>
+              <span className={cn(
+                "text-[length:var(--size-font-2xs)] truncate flex-1",
+                isSelected ? "text-[var(--sidebar-accent)] font-medium" : "text-[var(--sidebar-fg)]"
+              )} title={request.name}>
+                {request.name}
+              </span>
+              <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 flex-shrink-0 transition-opacity ml-1">
+                <button
+                  className={MENU_BTN}
+                  onClick={(e) => { e.stopPropagation(); handleNewRequest(request.folderId || "") }}
+                  title="新建请求"
+                >
+                  <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
+                </button>
+                <button
+                  className={MENU_BTN}
+                  onClick={(e) => { e.stopPropagation(); openDropdownMenu(e, "request", request.id, request.name) }}
+                  title="更多操作"
+                >
+                  <AppIcon name="more" size={12} className="text-[var(--fg-muted)]" />
+                </button>
+              </div>
+            </>
           )}
-          <button
-            className="opacity-0 group-hover:opacity-100 h-4 w-4 flex items-center justify-center rounded-[var(--radius-sm)] hover:bg-[var(--sidebar-hover)] transition-opacity"
-            onClick={(e) => { e.stopPropagation(); handleNewRequest(folder.id) }}
-            title="在此文件夹新建请求"
-          >
-            <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
-          </button>
         </div>
-        {isExpanded && (
-          <div>
-            {childFolders.map((cf) => renderFolderNode(cf, depth + 1))}
-            {childRequests.map((req) => renderRequestNode(req, depth + 1))}
-          </div>
-        )}
+        {renderDropLine(request.id, "after", depth)}
       </div>
     )
   }
 
-  const renderRequestNode = (request: model.RequestItem, depth: number = 0) => {
-    const isSelected = activeTabRequestId === request.id
-    return (
-      <div
-        key={request.id}
-        className={cn(
-          "flex items-center h-[24px] px-2 rounded-[var(--radius-btn)] cursor-pointer group",
-          isSelected ? "bg-[var(--sidebar-active)] text-[var(--sidebar-accent)]" : "hover:bg-[var(--sidebar-hover)]"
-        )}
-        style={{ paddingLeft: `${8 + depth * 16 + 16}px` }}
-        onPointerDown={(e) => {
-          if (e.button !== 0) return
-          e.preventDefault()
-          handleOpenRequest(request)
-        }}
-        onContextMenu={(e) => handleContextMenu(e, "request", request.id, request.name)}
-      >
-        <span className={cn(
-          "text-[9px] font-mono font-bold mr-1.5 w-[32px] text-right flex-shrink-0 uppercase",
-          METHOD_COLORS[request.method as HttpMethod] || "text-[var(--fg-muted)]"
-        )}>
-          {request.method?.substring(0, 3) || "GET"}
-        </span>
-        <span className={cn(
-          "text-[length:var(--size-font-2xs)] truncate flex-1",
-          isSelected ? "text-[var(--sidebar-accent)] font-medium" : "text-[var(--sidebar-fg)]"
-        )} title={request.name}>
-          {request.name}
-        </span>
-      </div>
-    )
-  }
+  const rootNodes = getChildren("")
+
+  if (sidebarCollapsed) return null
 
   return (
     <div
@@ -277,7 +675,6 @@ export function Sidebar() {
       )}
       style={{ width: sidebarWidth }}
     >
-      {/* 自绘拖拽条 */}
       <div
         className="absolute right-0 top-0 h-full w-[5px] cursor-col-resize z-10 group"
         onMouseDown={handleSidebarResizeStart}
@@ -285,14 +682,13 @@ export function Sidebar() {
         <div className="absolute inset-y-0 right-1/2 translate-x-1/2 w-px bg-transparent group-hover:bg-[var(--accent)]/40 transition-colors duration-200" />
       </div>
 
-      {/* Tab 切换栏 */}
       {currentProjectId && (
-        <div className="flex items-center border-b border-[var(--sidebar-border)] flex-shrink-0">
+        <div className="flex items-center h-[var(--size-tab)] border-b border-[var(--sidebar-border)] flex-shrink-0">
           {sidebarTabs.map((tab) => (
             <button
               key={tab.key}
               className={cn(
-                "flex-1 text-center font-medium transition-colors py-1.5",
+                "flex-1 h-[calc(var(--size-tab)-2px)] text-center font-medium transition-colors",
                 "text-[length:var(--size-font-2xs)]",
                 activeTab === tab.key
                   ? "text-[var(--fg)] border-b-2 border-[var(--accent)]"
@@ -306,7 +702,6 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* 搜索 + 操作栏 */}
       {currentProjectId && activeTab === "requests" && (
         <div className="px-2 pt-1.5 pb-1 flex items-center gap-1 flex-shrink-0">
           <div className="relative flex-1">
@@ -334,10 +729,17 @@ export function Sidebar() {
           </div>
           <button
             className="h-[var(--size-btn-sm)] w-[var(--size-btn-sm)] flex items-center justify-center rounded-[var(--radius-btn)] hover:bg-[var(--sidebar-hover)] transition-colors flex-shrink-0"
-            onClick={handleNewFolder}
+            onClick={handleImportNative}
+            title="导入"
+          >
+            <AppIcon name="fileImport" size={14} className="text-[var(--fg-secondary)]" />
+          </button>
+          <button
+            className="h-[var(--size-btn-sm)] w-[var(--size-btn-sm)] flex items-center justify-center rounded-[var(--radius-btn)] hover:bg-[var(--sidebar-hover)] transition-colors flex-shrink-0"
+            onClick={() => handleNewFolder()}
             title="新建文件夹"
           >
-            <AppIcon name="folderOpen" size={14} className="text-[var(--fg-secondary)]" />
+            <AppIcon name="folderAdd" size={14} className="text-[var(--fg-secondary)]" />
           </button>
           <button
             className="h-[var(--size-btn-sm)] w-[var(--size-btn-sm)] flex items-center justify-center rounded-[var(--radius-btn)] hover:bg-[var(--sidebar-hover)] transition-colors flex-shrink-0"
@@ -349,8 +751,11 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* 主内容区 */}
-      <div className="flex-1 min-h-0 overflow-y-auto py-0.5 px-1">
+      <div
+        className="flex-1 min-h-0 overflow-y-auto py-0.5 px-1"
+        onDragOver={activeTab === "requests" && !isSearching ? handleRootDragOver : undefined}
+        onDrop={activeTab === "requests" && !isSearching ? handleRootDrop : undefined}
+      >
         {!currentProjectId ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center px-4">
@@ -360,12 +765,11 @@ export function Sidebar() {
           </div>
         ) : activeTab === "requests" ? (
           <div>
-            {rootFolders.map((f) => renderFolderNode(f))}
-            {rootRequests.map((r) => renderRequestNode(r))}
-            {rootFolders.length === 0 && rootRequests.length === 0 && (
+            {rootNodes.map((node) => renderNode(node))}
+            {rootNodes.length === 0 && (
               <div className="text-center py-8">
                 <p className="text-2xs text-[var(--fg-muted)]">
-                  {searchQuery ? "无匹配结果" : "暂无请求"}
+                  {isSearching ? "无匹配结果" : "暂无请求"}
                 </p>
               </div>
             )}
@@ -377,37 +781,48 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* 右键菜单 */}
-      {contextMenu && createPortal(
+      {/* 节点操作下拉菜单 */}
+      {dropdownMenu && createPortal(
         <div
           ref={menuRef}
           className={cn(
-            "fixed z-[100] min-w-[160px] py-1 rounded-[var(--radius-menu)] shadow-lg border animate-fade-in",
+            "fixed z-[100] w-max p-1 rounded-[10px] shadow-lg border animate-fade-in",
             "bg-[var(--surface-elevated)] border-[var(--border-color)]"
           )}
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          style={{ left: dropdownMenu.x, top: dropdownMenu.y }}
         >
-          <button
-            className="w-full px-2.5 py-1 text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] flex items-center gap-2"
-            onClick={() => startRename(contextMenu.id, contextMenu.name)}
-          >
+          {dropdownMenu.type === "folder" && (
+            <>
+              <button className={MENU_ITEM} onClick={() => { handleNewRequest(dropdownMenu.id); setDropdownMenu(null) }}>
+                <AppIcon name="add" size={12} /> 添加请求
+              </button>
+              <button className={MENU_ITEM} onClick={() => { handleNewFolder(dropdownMenu.id); setDropdownMenu(null) }}>
+                <AppIcon name="folderAdd" size={12} /> 添加文件夹
+              </button>
+              <div className="h-px bg-[var(--border-subtle)] my-0.5" />
+            </>
+          )}
+          <button className={MENU_ITEM} onClick={() => startRename(dropdownMenu.id, dropdownMenu.type, dropdownMenu.name)}>
             <AppIcon name="pencil" size={12} /> 重命名
           </button>
-          {contextMenu.type === "folder" && (
-            <button
-              className="w-full px-2.5 py-1 text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] flex items-center gap-2"
-              onClick={() => { handleNewRequest(contextMenu.id); setContextMenu(null) }}
-            >
-              <AppIcon name="add" size={12} /> 在此新建请求
+          <button className={MENU_ITEM} onClick={() => handleDuplicate(dropdownMenu.type, dropdownMenu.id)}>
+            <AppIcon name="copy" size={12} /> 复制
+          </button>
+          {dropdownMenu.type === "request" && (
+            <button className={MENU_ITEM} onClick={() => { const req = requestMap.get(dropdownMenu.id); if (req) handleCopyCurl(req) }}>
+              <AppIcon name="commandLine" size={12} /> 复制 cURL
             </button>
           )}
+          <button className={MENU_ITEM} onClick={() => handleExportNode(dropdownMenu.type, dropdownMenu.id)}>
+            <AppIcon name="download" size={12} /> 导出
+          </button>
           <div className="h-px bg-[var(--border-subtle)] my-0.5" />
           <button
-            className="w-full px-2.5 py-1 text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--danger)] flex items-center gap-2"
+            className={cn(MENU_ITEM, "!text-[var(--danger)]")}
             onClick={async () => {
-              if (contextMenu.type === "folder") await deleteFolder(contextMenu.id)
-              else await deleteRequest(contextMenu.id)
-              setContextMenu(null)
+              if (dropdownMenu.type === "folder") await deleteFolder(dropdownMenu.id)
+              else await deleteRequest(dropdownMenu.id)
+              setDropdownMenu(null)
             }}
           >
             <AppIcon name="delete" size={12} /> 删除
@@ -415,6 +830,9 @@ export function Sidebar() {
         </div>,
         document.body
       )}
+
+      {/* 导入对话框 */}
+      {/* 导入功能已改为使用系统原生文件对话框 */}
     </div>
   )
 }

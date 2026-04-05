@@ -80,6 +80,185 @@ export namespace model {
 	}
 	
 	
+	export class CollectionNode {
+	    nodeId: string;
+	    nodeType: string;
+	    projectId: string;
+	    parentFolderId?: string;
+	    sortOrder: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CollectionNode(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.nodeId = source["nodeId"];
+	        this.nodeType = source["nodeType"];
+	        this.projectId = source["projectId"];
+	        this.parentFolderId = source["parentFolderId"];
+	        this.sortOrder = source["sortOrder"];
+	    }
+	}
+	export class RequestBody {
+	    type: string;
+	    raw: string;
+	    json: string;
+	    formUrlEncoded: KeyValue[];
+	
+	    static createFrom(source: any = {}) {
+	        return new RequestBody(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.raw = source["raw"];
+	        this.json = source["json"];
+	        this.formUrlEncoded = this.convertValues(source["formUrlEncoded"], KeyValue);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class KeyValue {
+	    key: string;
+	    value: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new KeyValue(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.value = source["value"];
+	    }
+	}
+	export class RequestItem {
+	    id: string;
+	    name: string;
+	    method: string;
+	    url: string;
+	    params: KeyValue[];
+	    headers: KeyValue[];
+	    body: RequestBody;
+	    auth: AuthConfig;
+	    folderId?: string;
+	    sortOrder: number;
+	    projectId: string;
+	    createdAt: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RequestItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.method = source["method"];
+	        this.url = source["url"];
+	        this.params = this.convertValues(source["params"], KeyValue);
+	        this.headers = this.convertValues(source["headers"], KeyValue);
+	        this.body = this.convertValues(source["body"], RequestBody);
+	        this.auth = this.convertValues(source["auth"], AuthConfig);
+	        this.folderId = source["folderId"];
+	        this.sortOrder = source["sortOrder"];
+	        this.projectId = source["projectId"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Folder {
+	    id: string;
+	    name: string;
+	    projectId: string;
+	    parentId?: string;
+	    sortOrder: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Folder(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.projectId = source["projectId"];
+	        this.parentId = source["parentId"];
+	        this.sortOrder = source["sortOrder"];
+	    }
+	}
+	export class CollectionData {
+	    folders: Folder[];
+	    requests: RequestItem[];
+	    treeNodes: CollectionNode[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CollectionData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.folders = this.convertValues(source["folders"], Folder);
+	        this.requests = this.convertValues(source["requests"], RequestItem);
+	        this.treeNodes = this.convertValues(source["treeNodes"], CollectionNode);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class Variable {
 	    id: string;
 	    key: string;
@@ -136,26 +315,7 @@ export namespace model {
 		    return a;
 		}
 	}
-	export class Folder {
-	    id: string;
-	    name: string;
-	    projectId: string;
-	    parentId?: string;
-	    sortOrder: number;
 	
-	    static createFrom(source: any = {}) {
-	        return new Folder(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.projectId = source["projectId"];
-	        this.parentId = source["parentId"];
-	        this.sortOrder = source["sortOrder"];
-	    }
-	}
 	export class HistoryEntry {
 	    id: string;
 	    requestId?: string;
@@ -208,20 +368,7 @@ export namespace model {
 	        this.contentType = source["contentType"];
 	    }
 	}
-	export class KeyValue {
-	    key: string;
-	    value: string;
 	
-	    static createFrom(source: any = {}) {
-	        return new KeyValue(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.key = source["key"];
-	        this.value = source["value"];
-	    }
-	}
 	export class Project {
 	    id: string;
 	    name: string;
@@ -244,94 +391,8 @@ export namespace model {
 	        this.schemaVersion = source["schemaVersion"];
 	    }
 	}
-	export class RequestBody {
-	    type: string;
-	    raw: string;
-	    json: string;
-	    formUrlEncoded: KeyValue[];
 	
-	    static createFrom(source: any = {}) {
-	        return new RequestBody(source);
-	    }
 	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.type = source["type"];
-	        this.raw = source["raw"];
-	        this.json = source["json"];
-	        this.formUrlEncoded = this.convertValues(source["formUrlEncoded"], KeyValue);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class RequestItem {
-	    id: string;
-	    name: string;
-	    method: string;
-	    url: string;
-	    params: KeyValue[];
-	    headers: KeyValue[];
-	    body: RequestBody;
-	    auth: AuthConfig;
-	    folderId?: string;
-	    projectId: string;
-	    createdAt: string;
-	    updatedAt: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new RequestItem(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.method = source["method"];
-	        this.url = source["url"];
-	        this.params = this.convertValues(source["params"], KeyValue);
-	        this.headers = this.convertValues(source["headers"], KeyValue);
-	        this.body = this.convertValues(source["body"], RequestBody);
-	        this.auth = this.convertValues(source["auth"], AuthConfig);
-	        this.folderId = source["folderId"];
-	        this.projectId = source["projectId"];
-	        this.createdAt = source["createdAt"];
-	        this.updatedAt = source["updatedAt"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
 	export class SendRequestInput {
 	    method: string;
 	    url: string;

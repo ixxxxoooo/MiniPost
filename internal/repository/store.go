@@ -15,11 +15,16 @@ type CollectionStore interface {
 	ListFolders(projectID string) ([]model.Folder, error)
 	SaveFolder(folder *model.Folder) error
 	DeleteFolder(projectID, folderID string) error
+	MoveFolder(projectID, folderID, targetParentID string, targetIndex int) error
 
 	ListRequests(projectID string) ([]model.RequestItem, error)
 	GetRequest(projectID, requestID string) (*model.RequestItem, error)
 	SaveRequest(request *model.RequestItem) error
 	DeleteRequest(projectID, requestID string) error
+	MoveRequest(projectID, requestID, targetFolderID string, targetIndex int) error
+
+	GetCollectionData(projectID string) (*model.CollectionData, error)
+	MoveCollectionNode(projectID, nodeID string, nodeType model.CollectionNodeType, targetParentFolderID string, targetIndex int) error
 }
 
 // EnvironmentStore 环境变量存储接口

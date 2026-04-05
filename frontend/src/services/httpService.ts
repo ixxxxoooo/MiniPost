@@ -1,6 +1,7 @@
 import { SendRequest, SendRequestWithEnv } from "../../wailsjs/go/main/App"
 import type { HttpResponse } from "@/types/response"
 import type { RequestData } from "@/types/request"
+import { stripJsonComments } from "@/components/ui/CodeEditor"
 
 export interface SendRequestPayload {
   method: string
@@ -32,9 +33,9 @@ function buildPayload(request: RequestData): SendRequestPayload {
       .filter((h) => h.enabled && h.key)
       .map((h) => ({ key: h.key, value: h.value })),
     body: {
-      type: request.body.type,
-      raw: request.body.raw ?? "",
-      json: request.body.json ?? "",
+      type: request.body.type === "form-data" ? "form-urlencoded" : request.body.type,
+      raw: stripJsonComments(request.body.raw ?? ""),
+      json: stripJsonComments(request.body.json ?? ""),
       formUrlEncoded: (request.body.formUrlEncoded ?? [])
         .filter((f) => f.enabled && f.key)
         .map((f) => ({ key: f.key, value: f.value })),
@@ -55,10 +56,11 @@ export async function sendHttpRequest(
 ): Promise<HttpResponse> {
   const payload = buildPayload(request)
 
+  // 始终使用 SendRequestWithEnv 以确保历史记录被保存
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = (projectId && envId)
+  const result = projectId
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? await SendRequestWithEnv(payload as any, projectId, envId)
+    ? await SendRequestWithEnv(payload as any, projectId, envId || "")
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     : await SendRequest(payload as any)
 

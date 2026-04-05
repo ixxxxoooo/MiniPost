@@ -8,7 +8,7 @@ interface EnvironmentState {
   loading: boolean
 
   loadEnvironments: (projectId: string) => Promise<void>
-  createEnvironment: (projectId: string, name: string) => Promise<void>
+  createEnvironment: (projectId: string, name: string) => Promise<model.Environment | null>
   saveEnvironment: (env: model.Environment) => Promise<void>
   deleteEnvironment: (projectId: string, envId: string) => Promise<void>
   setActiveEnvironment: (envId: string | null) => void
@@ -32,8 +32,12 @@ export const useEnvironmentStore = create<EnvironmentState>((set, get) => ({
   },
 
   createEnvironment: async (projectId, name) => {
-    await environmentService.createEnvironment(projectId, name)
+    const created = await environmentService.createEnvironment(projectId, name)
     await get().loadEnvironments(projectId)
+    if (created?.id) return created as model.Environment
+    const envs = get().environments
+    const found = envs.find((e) => e.name === name)
+    return found ?? null
   },
 
   saveEnvironment: async (env) => {
