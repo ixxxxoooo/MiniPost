@@ -1,8 +1,8 @@
 import { KeyValueEditor } from "./KeyValueEditor"
-import { useTabStore } from "@/stores/tabStore"
+import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 
 export function ParamsEditor() {
-  const activeTab = useTabStore((s) => s.getActiveTab())
+  const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
 
   if (!activeTab) return null

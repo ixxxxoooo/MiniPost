@@ -1,10 +1,10 @@
 import { BODY_TYPES, type BodyType } from "@/lib/constants"
-import { useTabStore } from "@/stores/tabStore"
+import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { KeyValueEditor } from "./KeyValueEditor"
 import { cn } from "@/lib/utils"
 
 export function BodyEditor() {
-  const activeTab = useTabStore((s) => s.getActiveTab())
+  const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
 
   if (!activeTab) return null

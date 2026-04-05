@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { AppIcon } from "@/components/ui/icon"
 import { useProjectStore } from "@/stores/projectStore"
+import { useTabStore, getProjectTabsFromState } from "@/stores/tabStore"
 
 const BUTTON_MIN_WIDTH = 92
 const BUTTON_MAX_WIDTH = 180
@@ -13,6 +14,7 @@ const CHAR_WIDTH = 11
 
 export function WorkspaceHeader() {
   const { currentProjectId, projects, selectProject, createProject } = useProjectStore()
+  const projectTabs = useTabStore(getProjectTabsFromState)
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [newProjectName, setNewProjectName] = useState("")
@@ -58,6 +60,24 @@ export function WorkspaceHeader() {
 
     setSearchQuery("")
     setNewProjectName("")
+    setOpen(false)
+  }
+
+  const handleSelectProject = async (projectId: string) => {
+    if (projectId === currentProjectId) {
+      setOpen(false)
+      return
+    }
+
+    const hasDirtyTabs = projectTabs.some((tab) => tab.dirty)
+    if (hasDirtyTabs) {
+      const confirmed = window.confirm("当前工作区存在未保存的标签，切换后这些修改仍会保留，但你可能会中断当前编辑。确定继续切换吗？")
+      if (!confirmed) {
+        return
+      }
+    }
+
+    await selectProject(projectId)
     setOpen(false)
   }
 
@@ -150,8 +170,7 @@ export function WorkspaceHeader() {
                         : "text-[var(--fg)] hover:bg-[var(--surface-secondary)]"
                     )}
                     onClick={() => {
-                      void selectProject(project.id)
-                      setOpen(false)
+                      void handleSelectProject(project.id)
                     }}
                     type="button"
                   >

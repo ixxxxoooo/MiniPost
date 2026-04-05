@@ -3,7 +3,7 @@ import { createPortal } from "react-dom"
 import { X, ChevronLeft, ChevronRight, Globe } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
-import { useTabStore, type RequestTab } from "@/stores/tabStore"
+import { useTabStore, getProjectActiveTabIdFromState, getProjectTabsFromState, type RequestTab } from "@/stores/tabStore"
 import { useProjectStore } from "@/stores/projectStore"
 
 interface TabContextMenuState {
@@ -13,8 +13,8 @@ interface TabContextMenuState {
 }
 
 export function TabBar() {
-  const tabs = useTabStore((s) => s.tabs)
-  const activeTabId = useTabStore((s) => s.activeTabId)
+  const tabs = useTabStore(getProjectTabsFromState)
+  const activeTabId = useTabStore(getProjectActiveTabIdFromState)
   const setActiveTab = useTabStore((s) => s.setActiveTab)
   const removeTab = useTabStore((s) => s.removeTab)
   const closeOtherTabs = useTabStore((s) => s.closeOtherTabs)

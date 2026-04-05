@@ -1,9 +1,9 @@
 import { AUTH_TYPES, type AuthType } from "@/lib/constants"
-import { useTabStore } from "@/stores/tabStore"
+import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { cn } from "@/lib/utils"
 
 export function AuthEditor() {
-  const activeTab = useTabStore((s) => s.getActiveTab())
+  const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
 
   if (!activeTab) return null

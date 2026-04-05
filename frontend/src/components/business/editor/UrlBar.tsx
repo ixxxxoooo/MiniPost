@@ -1,7 +1,7 @@
 import { Send, Loader2, Save } from "lucide-react"
 import { HTTP_METHODS, METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useTabStore } from "@/stores/tabStore"
+import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
 import { cn } from "@/lib/utils"
 
@@ -11,7 +11,7 @@ interface UrlBarProps {
 }
 
 export function UrlBar({ onSend, onSave }: UrlBarProps) {
-  const activeTab = useTabStore((s) => s.getActiveTab())
+  const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
   const { isSending } = useUIStore()
 
@@ -39,7 +39,7 @@ export function UrlBar({ onSend, onSave }: UrlBarProps) {
               "h-[30px] w-[96px] rounded-none border-0 border-r border-[var(--button-border)] bg-transparent px-3",
               "text-[11px] font-mono font-semibold shadow-none focus:ring-0",
               "justify-between",
-              METHOD_COLORS[request.method]
+              METHOD_COLORS[request.method as HttpMethod]
             )}
           >
             <SelectValue placeholder="方法" />

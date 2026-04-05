@@ -1,6 +1,9 @@
 import { create } from "zustand"
 import { projectService, folderService, requestItemService } from "@/services/projectService"
 import type { model } from "../../wailsjs/go/models"
+import { useTabStore } from "@/stores/tabStore"
+
+const LAST_PROJECT_STORAGE_KEY = "minipost:last-project-id"
 
 interface ProjectState {
   projects: model.Project[]
@@ -26,6 +29,34 @@ interface ProjectState {
   deleteRequest: (requestId: string) => Promise<void>
 }
 
+function readLastProjectId(): string | null {
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  try {
+    return window.localStorage.getItem(LAST_PROJECT_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+function persistLastProjectId(projectId: string | null) {
+  if (typeof window === "undefined") {
+    return
+  }
+
+  try {
+    if (projectId) {
+      window.localStorage.setItem(LAST_PROJECT_STORAGE_KEY, projectId)
+      return
+    }
+    window.localStorage.removeItem(LAST_PROJECT_STORAGE_KEY)
+  } catch {
+    // 本地持久化失败时不阻断主流程
+  }
+}
+
 export const useProjectStore = create<ProjectState>((set, get) => ({
   projects: [],
   currentProjectId: null,
@@ -38,7 +69,26 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const projects = await projectService.listProjects()
-      set({ projects: projects ?? [], loading: false })
+      const nextProjects = projects ?? []
+      const lastProjectId = readLastProjectId()
+      const currentProjectId = get().currentProjectId
+      const resolvedProjectId = currentProjectId && nextProjects.some((project) => project.id === currentProjectId)
+        ? currentProjectId
+        : lastProjectId && nextProjects.some((project) => project.id === lastProjectId)
+          ? lastProjectId
+          : nextProjects[0]?.id ?? null
+
+      set({ projects: nextProjects, loading: false, currentProjectId: resolvedProjectId })
+
+      if (resolvedProjectId) {
+        useTabStore.getState().setCurrentProject(resolvedProjectId)
+        persistLastProjectId(resolvedProjectId)
+        await get().loadCollections(resolvedProjectId)
+      } else {
+        useTabStore.getState().setCurrentProject(null)
+        persistLastProjectId(null)
+        set({ folders: [], requests: [] })
+      }
     } catch (err) {
       set({ error: String(err), loading: false })
     }
@@ -67,8 +117,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       await projectService.deleteProject(id)
       const { currentProjectId } = get()
       if (currentProjectId === id) {
+        useTabStore.getState().setCurrentProject(null)
+        persistLastProjectId(null)
         set({ currentProjectId: null, folders: [], requests: [] })
       }
+      useTabStore.getState().deleteProjectTabs(id)
       await get().loadProjects()
     } catch (err) {
       set({ error: String(err) })
@@ -76,6 +129,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   selectProject: async (id) => {
+    useTabStore.getState().setCurrentProject(id)
+    persistLastProjectId(id)
     set({ currentProjectId: id })
     await get().loadCollections(id)
   },

@@ -36,6 +36,11 @@ func NewFileStore() (*FileStore, error) {
 	return &FileStore{baseDir: baseDir}, nil
 }
 
+// BaseDir 返回数据存储根目录路径
+func (fs *FileStore) BaseDir() string {
+	return fs.baseDir
+}
+
 // ---- 配置 ----
 
 type AppConfig struct {

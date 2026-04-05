@@ -5,7 +5,7 @@ import { ParamsEditor } from "./ParamsEditor"
 import { HeadersEditor } from "./HeadersEditor"
 import { BodyEditor } from "./BodyEditor"
 import { AuthEditor } from "./AuthEditor"
-import { useTabStore } from "@/stores/tabStore"
+import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
 import { useEnvironmentStore } from "@/stores/environmentStore"
@@ -13,7 +13,7 @@ import { sendHttpRequest } from "@/services/httpService"
 import { cn } from "@/lib/utils"
 
 export function RequestEditor() {
-  const activeTab = useTabStore((s) => s.getActiveTab())
+  const activeTab = useTabStore(getProjectActiveTabFromState)
   const setTabResponse = useTabStore((s) => s.setTabResponse)
   const setTabResponseError = useTabStore((s) => s.setTabResponseError)
   const markTabDirty = useTabStore((s) => s.markTabDirty)
@@ -50,13 +50,13 @@ export function RequestEditor() {
       name: req.name,
       method: req.method,
       url: req.url,
-      params: req.params.filter((p) => p.key).map((p) => ({ key: p.key, value: p.value })),
-      headers: req.headers.filter((h) => h.key).map((h) => ({ key: h.key, value: h.value })),
+      params: req.params.filter((p: { key: string }) => p.key).map((p: { key: string; value: string }) => ({ key: p.key, value: p.value })),
+      headers: req.headers.filter((h: { key: string }) => h.key).map((h: { key: string; value: string }) => ({ key: h.key, value: h.value })),
       body: {
         type: req.body.type,
         raw: req.body.raw ?? "",
         json: req.body.json ?? "",
-        formUrlEncoded: (req.body.formUrlEncoded ?? []).filter((f) => f.key).map((f) => ({ key: f.key, value: f.value })),
+        formUrlEncoded: (req.body.formUrlEncoded ?? []).filter((f: { key: string }) => f.key).map((f: { key: string; value: string }) => ({ key: f.key, value: f.value })),
       },
       auth: {
         type: req.auth.type,

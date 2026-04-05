@@ -1,6 +1,6 @@
 import { Loader2, AlertCircle } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { useTabStore } from "@/stores/tabStore"
+import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
 import { StatusBar } from "./StatusBar"
 import { ResponseBody } from "./ResponseBody"
@@ -8,7 +8,7 @@ import { ResponseHeaders } from "./ResponseHeaders"
 import { cn } from "@/lib/utils"
 
 export function ResponseViewer() {
-  const activeTab = useTabStore((s) => s.getActiveTab())
+  const activeTab = useTabStore(getProjectActiveTabFromState)
   const { isSending, resolved } = useUIStore()
 
   const isDark = resolved === "dark"
