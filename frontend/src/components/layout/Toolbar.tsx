@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { useUIStore } from "@/stores/uiStore"
 import { useEnvironmentStore } from "@/stores/environmentStore"
 import { useProjectStore } from "@/stores/projectStore"
-import { useTabStore } from "@/stores/tabStore"
+import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { ImportCurl } from "../../../wailsjs/go/main/App"
 import { WindowControls } from "./WindowControls"
 import { WorkspaceHeader } from "./WorkspaceHeader"
@@ -34,7 +34,7 @@ function useTitlebarDoubleClick() {
 export function Toolbar() {
   const { resolved, setTheme } = useUIStore()
   const { currentProjectId } = useProjectStore()
-  const activeTab = useTabStore((s) => s.getActiveTab())
+  const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
   const [showCurlInput, setShowCurlInput] = useState(false)
   const [curlCommand, setCurlCommand] = useState("")

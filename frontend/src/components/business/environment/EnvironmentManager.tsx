@@ -24,10 +24,6 @@ export function EnvironmentManager() {
   const [showNewInput, setShowNewInput] = useState(false)
 
   useEffect(() => {
-    if (currentProjectId) loadEnvironments(currentProjectId)
-  }, [currentProjectId, loadEnvironments])
-
-  useEffect(() => {
     if (selectedEnvId) {
       const env = environments.find((e) => e.id === selectedEnvId)
       if (env) setEditingEnv(JSON.parse(JSON.stringify(env)))

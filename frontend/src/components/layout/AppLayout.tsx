@@ -6,12 +6,14 @@ import { TabBar } from "./TabBar"
 import { RequestEditor } from "@/components/business/editor/RequestEditor"
 import { ResponseViewer } from "@/components/business/response/ResponseViewer"
 import { useUIStore } from "@/stores/uiStore"
-import { useTabStore } from "@/stores/tabStore"
+import { useProjectStore } from "@/stores/projectStore"
+import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { cn } from "@/lib/utils"
 
 export function AppLayout() {
   const { sidebarCollapsed, layoutDirection } = useUIStore()
-  const activeTab = useTabStore((s) => s.getActiveTab())
+  const currentProjectId = useProjectStore((s) => s.currentProjectId)
+  const activeTab = useTabStore(getProjectActiveTabFromState)
 
   // 请求/响应分割拖拽
   const [splitRatio, setSplitRatio] = useState(0.55)
@@ -103,12 +105,20 @@ export function AppLayout() {
                 <ResponseViewer />
               </div>
             </div>
-          ) : (
+          ) : currentProjectId ? (
             <div className="flex flex-1 min-h-0 items-center justify-center bg-[var(--surface)]">
               <div className="text-center">
                 <div className="text-[40px] mb-3 opacity-20">⚡</div>
                 <p className="text-[length:var(--size-font-sm)] text-[var(--fg-secondary)] font-medium">MiniPost</p>
                 <p className="text-2xs text-[var(--fg-muted)] mt-1">选择一个请求或创建新请求开始</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-1 min-h-0 items-center justify-center bg-[var(--surface)]">
+              <div className="text-center max-w-[320px] px-6">
+                <div className="text-[40px] mb-3 opacity-20">📁</div>
+                <p className="text-[length:var(--size-font-sm)] text-[var(--fg-secondary)] font-medium">请选择工作区</p>
+                <p className="text-2xs text-[var(--fg-muted)] mt-1">先在顶部选择一个工作区，然后再打开或创建请求标签</p>
               </div>
             </div>
           )}

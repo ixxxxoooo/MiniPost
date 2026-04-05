@@ -4,7 +4,7 @@ import { AppIcon } from "@/components/ui/icon"
 import { cn } from "@/lib/utils"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { useProjectStore } from "@/stores/projectStore"
-import { useTabStore } from "@/stores/tabStore"
+import { useTabStore, getProjectActiveTabIdFromState, getProjectTabsFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
 import { HistoryPanel } from "@/components/business/history/HistoryPanel"
 import { EnvironmentManager } from "@/components/business/environment/EnvironmentManager"
@@ -64,9 +64,10 @@ export function Sidebar() {
   const {
     currentProjectId, folders, requests,
     createFolder, createRequest, deleteFolder, deleteRequest, renameFolder,
-    loadProjects,
   } = useProjectStore()
-  const { openRequestTab, tabs, activeTabId } = useTabStore()
+  const { openRequestTab } = useTabStore()
+  const tabs = useTabStore(getProjectTabsFromState)
+  const activeTabId = useTabStore(getProjectActiveTabIdFromState)
   const [activeTab, setActiveTab] = useState<SidebarTab>("requests")
   const [searchQuery, setSearchQuery] = useState("")
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
@@ -76,10 +77,6 @@ export function Sidebar() {
   const menuRef = useRef<HTMLDivElement>(null)
   const resizingRef = useRef(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    loadProjects()
-  }, [loadProjects])
 
   useEffect(() => {
     if (!contextMenu) return
@@ -420,12 +417,4 @@ export function Sidebar() {
       )}
     </div>
   )
-}
-
-function Select({ currentProjectId, projects, onSelect }: {
-  currentProjectId: string | null
-  projects: model.Project[]
-  onSelect: (id: string) => void
-}) {
-  return null
 }

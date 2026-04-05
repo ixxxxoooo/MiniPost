@@ -1,0 +1,94 @@
+# 日志与可观测性规范
+
+## 1. 核心原则
+所有代码变更都必须保证关键路径上有足够的日志覆盖。
+日志是排查问题的第一道防线，缺失日志等于制造黑盒。
+
+---
+
+## 2. Go 后端日志规范
+
+### 日志工具
+使用 `minipost/internal/pkg/logger` 包，禁止直接使用 `fmt.Println`、`log.Fatal` 或 `log.Println`。
+
+### 日志级别使用原则
+- **DEBUG**: 高频调用的详细信息（如列表查询结果数量、变量解析过程）
+- **INFO**: 关键业务操作（启动、关闭、创建、删除、HTTP 请求完成）
+- **WARN**: 可恢复的异常（HTTP 请求失败、历史记录保存失败等非致命错误）
+- **ERROR**: 不可恢复的异常（存储读写失败、数据损坏）
+- **FATAL**: 阻断启动的致命错误（存储初始化失败）
+
+### 必须打日志的关键节点
+1. **应用生命周期**: 启动、OnStartup 回调、OnShutdown 回调、退出
+2. **存储初始化**: FileStore 创建成功或失败
+3. **所有 Wails binding 方法**: 调用入口和结果（成功用 INFO/DEBUG，失败用 WARN/ERROR）
+4. **HTTP 请求**: 发送前（DEBUG）、完成后（INFO，含 status/duration/size）、失败时（WARN）
+5. **数据变更操作**: 创建/删除/重命名 项目、文件夹、请求、环境变量
+
+### 日志格式
+使用 key=value 结构化格式：
+```
+2026-04-05 13:42:05.000 [INFO] app.go:85 HTTP 请求完成 method=GET url=https://api.example.com status=200 duration_ms=150 size=1024
+```
+
+### 日志文件位置
+- 存储在 `~/.minipost/logs/minipost-YYYY-MM-DD.log`
+- 同时输出到 stderr（开发模式可见）
+
+---
+
+## 3. 前端日志规范
+
+### 日志工具
+使用 `@/lib/logger` 模块，提供 debug/info/warn/error 四个函数。
+
+### 调用格式
+```typescript
+import { info, error as logError } from "@/lib/logger"
+info("ModuleName", "操作描述", { key: value })
+logError("ModuleName", "错误描述", { error: String(err) })
+```
+
+### 必须打日志的关键节点
+1. **应用启动**: main.tsx 中的初始化流程
+2. **全局错误**: 通过 initGlobalErrorHandlers 自动捕获 unhandled error 和 rejection
+3. **Store 操作**: 项目加载、切换、创建等关键状态变更
+4. **HTTP 请求**: 发送和响应
+5. **错误边界**: ErrorBoundary 捕获的渲染崩溃
+
+### 日志级别
+- 开发模式默认 DEBUG
+- 生产模式默认 INFO
+
+---
+
+## 4. 错误处理与边界
+
+### Go 后端
+- 所有 error 必须记录日志后再返回
+- 禁止静默吞掉 error（`_ = someFunc()` 仅限确实不需要处理的场景，且需注释说明原因）
+- 致命错误使用 `logger.Fatal`，非致命错误使用 `logger.Error` 或 `logger.Warn`
+
+### 前端
+- React 根节点必须包裹 `<ErrorBoundary>`
+- 全局 window.onerror 和 unhandledrejection 必须注册
+- Store 中所有 async 操作的 catch 块必须记录日志
+- Wails binding 调用失败时必须记录调用参数和错误信息
+
+---
+
+## 5. 新增代码时的检查清单
+每次新增或修改代码时，自查以下事项：
+- [ ] 新增的 Wails binding 方法是否在调用入口和结果处打了日志
+- [ ] 新增的 async 操作是否有 catch 并记录了日志
+- [ ] 新增的数据变更操作（CRUD）是否有成功/失败日志
+- [ ] 是否有潜在的静默失败路径（error 被忽略）
+- [ ] 日志信息是否包含足够的上下文（ID、名称、参数等）
+
+---
+
+## 6. 禁止事项
+- 禁止在 Go 后端使用 `fmt.Println` / `log.Fatal` / `log.Println` 输出日志
+- 禁止在前端使用裸 `console.log` 输出业务日志（调试临时使用后必须清理）
+- 禁止日志中输出敏感信息（密码、token 等，应脱敏处理）
+- 禁止在循环体内打 INFO 级别日志（应使用 DEBUG 或汇总后打一条）
