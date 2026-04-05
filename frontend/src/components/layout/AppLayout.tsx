@@ -1,5 +1,6 @@
 import { useRef, useCallback, useState } from "react"
 import { Toolbar } from "./Toolbar"
+import { BottomBar } from "./BottomBar"
 import { Sidebar } from "./Sidebar"
 import { TabBar } from "./TabBar"
 import { RequestEditor } from "@/components/business/editor/RequestEditor"
@@ -111,6 +112,8 @@ export function AppLayout() {
               </div>
             </div>
           )}
+
+          <BottomBar />
         </div>
       </div>
     </div>

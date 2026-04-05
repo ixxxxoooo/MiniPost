@@ -117,7 +117,7 @@ export function WindowControls() {
 
   return (
     <div
-      className="titlebar-no-drag flex flex-shrink-0 items-center gap-[8px] px-3"
+      className="titlebar-no-drag flex flex-shrink-0 items-center gap-[6px] px-2.5"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >

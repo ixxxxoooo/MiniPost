@@ -1,5 +1,6 @@
 import { Send, Loader2, Save } from "lucide-react"
 import { HTTP_METHODS, METHOD_COLORS, type HttpMethod } from "@/lib/constants"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTabStore } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
 import { cn } from "@/lib/utils"
@@ -21,8 +22,8 @@ export function UrlBar({ onSend, onSave }: UrlBarProps) {
   return (
     <div
       className={cn(
-        "flex items-center gap-[var(--size-gap)] px-[var(--size-padding)] border-b flex-shrink-0",
-        "border-[var(--border-color)] bg-[var(--surface)]"
+        "flex items-center gap-[var(--size-gap)] px-[var(--size-padding)] flex-shrink-0",
+        "bg-[var(--surface)]"
       )}
       style={{ height: "40px" }}
     >
@@ -30,36 +31,50 @@ export function UrlBar({ onSend, onSave }: UrlBarProps) {
         <div className="w-1.5 h-1.5 rounded-full bg-[var(--warning)] flex-shrink-0" title="未保存" />
       )}
 
-      {/* 方法选择 */}
-      <select
-        value={request.method}
-        onChange={(e) => updateTabRequest(activeTab.id, { method: e.target.value as HttpMethod })}
-        className={cn(
-          "h-[var(--size-btn-sm)] px-2 rounded-[var(--radius-btn)] font-mono font-bold text-[length:var(--size-font-xs)]",
-          "bg-transparent border border-[var(--border-color)] outline-none cursor-pointer",
-          METHOD_COLORS[request.method]
-        )}
-      >
-        {HTTP_METHODS.map((m) => (
-          <option key={m} value={m}>{m}</option>
-        ))}
-      </select>
+      <div className="flex flex-1 items-center overflow-hidden rounded-[10px] border border-[var(--button-border)] bg-[var(--surface)] focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]/20">
+        {/* 方法选择 */}
+        <Select value={request.method} onValueChange={(value) => updateTabRequest(activeTab.id, { method: value as HttpMethod })}>
+          <SelectTrigger
+            className={cn(
+              "h-[30px] w-[96px] rounded-none border-0 border-r border-[var(--button-border)] bg-transparent px-3",
+              "text-[11px] font-mono font-semibold shadow-none focus:ring-0",
+              "justify-between",
+              METHOD_COLORS[request.method]
+            )}
+          >
+            <SelectValue placeholder="方法" />
+          </SelectTrigger>
+          <SelectContent className="rounded-[10px] border-[var(--button-border)] bg-[var(--surface-elevated)] p-1 shadow-[var(--shadow-lg)]">
+            {HTTP_METHODS.map((method) => (
+              <SelectItem
+                key={method}
+                value={method}
+                className={cn(
+                  "rounded-[8px] py-1.5 pl-7 pr-2 text-[11px] font-mono font-semibold",
+                  METHOD_COLORS[method]
+                )}
+              >
+                {method}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-      {/* URL 输入 */}
-      <input
-        value={request.url}
-        onChange={(e) => updateTabRequest(activeTab.id, { url: e.target.value })}
-        placeholder="输入请求 URL..."
-        className={cn(
-          "flex-1 h-[var(--size-btn)] px-3 rounded-[var(--radius-input)]",
-          "border border-[var(--border-color)] bg-[var(--surface)] text-[var(--fg)]",
-          "font-mono text-[length:var(--size-font-xs)] placeholder:text-[var(--fg-muted)]",
-          "focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30"
-        )}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) onSend()
-        }}
-      />
+        {/* URL 输入 */}
+        <input
+          value={request.url}
+          onChange={(e) => updateTabRequest(activeTab.id, { url: e.target.value })}
+          placeholder="输入请求 URL..."
+          className={cn(
+            "h-[30px] min-w-0 flex-1 bg-transparent px-3",
+            "border-0 text-[var(--fg)] font-mono text-[length:var(--size-font-xs)]",
+            "placeholder:text-[var(--fg-muted)] focus:outline-none focus:ring-0"
+          )}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) onSend()
+          }}
+        />
+      </div>
 
       {/* 保存按钮 */}
       <button

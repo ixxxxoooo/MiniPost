@@ -90,7 +90,7 @@ export function RequestEditor() {
       <UrlBar onSend={handleSend} onSave={handleSave} />
 
       <Tabs defaultValue="params" className="flex-1 flex flex-col overflow-hidden">
-        <TabsList className="w-full justify-start border-b border-[var(--border-color)] px-[var(--size-padding-sm)]">
+        <TabsList className="w-full justify-start px-[var(--size-padding-sm)] py-1">
           <TabsTrigger value="params">
             Params
             {request.params.length > 0 && (
