@@ -1,11 +1,16 @@
 package service
 
 import (
+	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strconv"
 	"strings"
@@ -26,6 +31,121 @@ type requestOptions struct {
 	maxResponseBytes int64
 	sslVerify        bool
 	httpVersion      string
+}
+
+type requestTrace struct {
+	requestStart time.Time
+	getConn      time.Time
+	gotConn      time.Time
+	dnsStart     time.Time
+	dnsDone      time.Time
+	connectStart time.Time
+	connectDone  time.Time
+	tlsStart     time.Time
+	tlsDone      time.Time
+	wroteRequest time.Time
+	firstByte    time.Time
+}
+
+func msBetween(start time.Time, end time.Time) float64 {
+	if start.IsZero() || end.IsZero() || end.Before(start) {
+		return 0
+	}
+	return float64(end.Sub(start)) / float64(time.Millisecond)
+}
+
+func firstNonZero(values ...time.Time) time.Time {
+	for _, value := range values {
+		if !value.IsZero() {
+			return value
+		}
+	}
+	return time.Time{}
+}
+
+func estimateRequestBodyBytes(body model.RequestBody) int64 {
+	switch body.Type {
+	case "json":
+		return int64(len(body.JSON))
+	case "raw":
+		return int64(len(body.Raw))
+	case "form-urlencoded":
+		values := url.Values{}
+		for _, kv := range body.FormUrlEncoded {
+			if kv.Key == "" {
+				continue
+			}
+			values.Add(kv.Key, kv.Value)
+		}
+		return int64(len(values.Encode()))
+	default:
+		return 0
+	}
+}
+
+func estimateRequestHeaderBytes(req *http.Request, proto string) int64 {
+	if proto == "" {
+		proto = "HTTP/1.1"
+	}
+
+	size := int64(len(fmt.Sprintf("%s %s %s\r\n", req.Method, req.URL.RequestURI(), proto)))
+	hostValue := req.Host
+	if hostValue == "" {
+		hostValue = req.URL.Host
+	}
+	hostAlreadyPresent := false
+	for key, values := range req.Header {
+		if strings.EqualFold(key, "host") {
+			hostAlreadyPresent = true
+		}
+		for _, value := range values {
+			size += int64(len(key) + 2 + len(value) + 2)
+		}
+	}
+
+	if hostValue != "" && !hostAlreadyPresent {
+		size += int64(len("Host") + 2 + len(hostValue) + 2)
+	}
+	size += 2 // 头结束空行
+	return size
+}
+
+func estimateResponseHeaderBytes(resp *http.Response) int64 {
+	proto := resp.Proto
+	if proto == "" {
+		proto = "HTTP/1.1"
+	}
+	statusLine := resp.Status
+	if statusLine == "" {
+		statusLine = fmt.Sprintf("%d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+	}
+	size := int64(len(fmt.Sprintf("%s %s\r\n", proto, statusLine)))
+	for key, values := range resp.Header {
+		for _, value := range values {
+			size += int64(len(key) + 2 + len(value) + 2)
+		}
+	}
+	size += 2
+	return size
+}
+
+func buildTimingBreakdown(trace requestTrace, bodyDone time.Time, done time.Time) model.TimingBreakdown {
+	prepareEnd := firstNonZero(trace.getConn, trace.dnsStart, trace.connectStart, trace.wroteRequest, trace.firstByte, bodyDone)
+	socketEnd := firstNonZero(trace.dnsStart, trace.connectStart, trace.gotConn, trace.wroteRequest, trace.firstByte, bodyDone)
+	waitingStart := firstNonZero(trace.wroteRequest, trace.gotConn, trace.connectDone, trace.dnsDone, trace.getConn, trace.requestStart)
+	downloadStart := firstNonZero(trace.firstByte, waitingStart)
+
+	return model.TimingBreakdown{
+		Prepare:              msBetween(trace.requestStart, prepareEnd),
+		SocketInitialization: msBetween(trace.getConn, socketEnd),
+		DNSLookup:            msBetween(trace.dnsStart, trace.dnsDone),
+		TCPHandshake:         msBetween(trace.connectStart, trace.connectDone),
+		SSLHandshake:         msBetween(trace.tlsStart, trace.tlsDone),
+		WaitingTTFB:          msBetween(waitingStart, trace.firstByte),
+		Download:             msBetween(downloadStart, bodyDone),
+		Process:              msBetween(bodyDone, done),
+		Total:                msBetween(trace.requestStart, done),
+	}
 }
 
 func NewHttpService() *HttpService {
@@ -55,6 +175,7 @@ func (s *HttpService) SendRequest(input model.SendRequestInput) (*model.HttpResp
 	if err != nil {
 		return nil, appErrors.Wrap("INVALID_BODY", "请求体构建失败", err)
 	}
+	requestBodyBytes := estimateRequestBodyBytes(input.Body)
 
 	req, err := http.NewRequest(input.Method, reqURL, bodyReader)
 	if err != nil {
@@ -80,12 +201,72 @@ func (s *HttpService) SendRequest(input model.SendRequestInput) (*model.HttpResp
 	}
 
 	client := s.buildClient(options)
+	trace := requestTrace{}
+	clientTrace := &httptrace.ClientTrace{
+		GetConn: func(_ string) {
+			if trace.getConn.IsZero() {
+				trace.getConn = time.Now()
+			}
+		},
+		GotConn: func(_ httptrace.GotConnInfo) {
+			if trace.gotConn.IsZero() {
+				trace.gotConn = time.Now()
+			}
+		},
+		DNSStart: func(_ httptrace.DNSStartInfo) {
+			if trace.dnsStart.IsZero() {
+				trace.dnsStart = time.Now()
+			}
+		},
+		DNSDone: func(_ httptrace.DNSDoneInfo) {
+			if trace.dnsDone.IsZero() {
+				trace.dnsDone = time.Now()
+			}
+		},
+		ConnectStart: func(_, _ string) {
+			if trace.connectStart.IsZero() {
+				trace.connectStart = time.Now()
+			}
+		},
+		ConnectDone: func(_, _ string, _ error) {
+			if trace.connectDone.IsZero() {
+				trace.connectDone = time.Now()
+			}
+		},
+		TLSHandshakeStart: func() {
+			if trace.tlsStart.IsZero() {
+				trace.tlsStart = time.Now()
+			}
+		},
+		TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
+			if trace.tlsDone.IsZero() {
+				trace.tlsDone = time.Now()
+			}
+		},
+		WroteRequest: func(_ httptrace.WroteRequestInfo) {
+			if trace.wroteRequest.IsZero() {
+				trace.wroteRequest = time.Now()
+			}
+		},
+		GotFirstResponseByte: func() {
+			if trace.firstByte.IsZero() {
+				trace.firstByte = time.Now()
+			}
+		},
+	}
+
 	start := time.Now()
+	trace.requestStart = start
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), clientTrace))
 	resp, err := client.Do(req)
-	duration := time.Since(start).Milliseconds()
 
 	if err != nil {
-		return nil, appErrors.Wrap("REQUEST_FAILED", "请求发送失败", err)
+		code, message, detail := classifyRequestSendError(err, reqURL)
+		return nil, &appErrors.AppError{
+			Code:    code,
+			Message: message,
+			Detail:  detail,
+		}
 	}
 	defer resp.Body.Close()
 
@@ -93,17 +274,46 @@ func (s *HttpService) SendRequest(input model.SendRequestInput) (*model.HttpResp
 	if err != nil {
 		return nil, err
 	}
+	bodyDone := time.Now()
 
 	respContentType := resp.Header.Get("Content-Type")
+	warnings := []string{}
+	if !options.sslVerify {
+		if warning := detectTLSWarning(reqURL, resp.TLS); warning != "" {
+			warnings = append(warnings, warning)
+		}
+	}
+	done := time.Now()
+
+	// 使用响应协议信息估算请求头大小，便于与 Postman 的展示口径保持接近。
+	requestHeaderBytes := estimateRequestHeaderBytes(req, resp.Proto)
+	responseHeaderBytes := estimateResponseHeaderBytes(resp)
+	responseBodyBytes := int64(len(bodyBytes))
+	sizeDetails := model.SizeBreakdown{
+		ResponseHeaders: responseHeaderBytes,
+		ResponseBody:    responseBodyBytes,
+		ResponseTotal:   responseHeaderBytes + responseBodyBytes,
+		RequestHeaders:  requestHeaderBytes,
+		RequestBody:     requestBodyBytes,
+		RequestTotal:    requestHeaderBytes + requestBodyBytes,
+	}
+	timings := buildTimingBreakdown(trace, bodyDone, done)
+	if timings.Total <= 0 {
+		timings.Total = float64(done.Sub(start)) / float64(time.Millisecond)
+	}
 
 	return &model.HttpResponse{
 		StatusCode:  resp.StatusCode,
 		StatusText:  http.StatusText(resp.StatusCode),
 		Headers:     resp.Header,
 		Body:        string(bodyBytes),
-		Duration:    float64(duration),
-		Size:        int64(len(bodyBytes)),
+		Duration:    timings.Total,
+		Size:        sizeDetails.ResponseTotal,
 		ContentType: respContentType,
+		Protocol:    resp.Proto,
+		Warnings:    warnings,
+		Timings:     timings,
+		SizeDetails: sizeDetails,
 	}, nil
 }
 
@@ -283,6 +493,122 @@ func parseBoolOption(raw string, defaultValue bool) bool {
 	default:
 		return defaultValue
 	}
+}
+
+func classifyRequestSendError(err error, requestURL string) (code string, message string, detail string) {
+	lower := strings.ToLower(err.Error())
+	endpoint, host := resolveRequestEndpoint(requestURL, true)
+	if host == "" {
+		endpoint = requestURL
+	}
+	rawDetail := stripRequestPrefix(err.Error(), requestURL)
+
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) || strings.Contains(lower, "no such host") {
+		target := host
+		if target == "" {
+			target = requestURL
+		}
+		return "DNS_LOOKUP_FAILED", "域名解析失败", fmt.Sprintf("getaddrinfo ENOTFOUND %s", target)
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return "REQUEST_TIMEOUT", "请求超时", fmt.Sprintf("connect ETIMEDOUT %s", endpoint)
+	}
+	if strings.Contains(lower, "deadline exceeded") || strings.Contains(lower, "timeout") {
+		return "REQUEST_TIMEOUT", "请求超时", fmt.Sprintf("connect ETIMEDOUT %s", endpoint)
+	}
+
+	if strings.Contains(lower, "connection refused") || strings.Contains(lower, "econnrefused") {
+		return "CONNECTION_REFUSED", "连接被目标服务拒绝", fmt.Sprintf("connect ECONNREFUSED %s", endpoint)
+	}
+
+	if strings.Contains(lower, "x509") || strings.Contains(lower, "tls") || strings.Contains(lower, "certificate") {
+		return "TLS_HANDSHAKE_FAILED", "TLS/证书校验失败", rawDetail
+	}
+
+	if strings.Contains(lower, "eof") {
+		// 某些网络环境下，无法连通目标时 Go 可能返回 EOF，这里统一转换为更可读的连接拒绝样式。
+		return "CONNECTION_REFUSED", "连接被目标服务拒绝", fmt.Sprintf("connect ECONNREFUSED %s", endpoint)
+	}
+
+	return "REQUEST_FAILED", "请求发送失败", rawDetail
+}
+
+func stripRequestPrefix(rawError string, requestURL string) string {
+	prefix := fmt.Sprintf(`Get "%s": `, requestURL)
+	if strings.HasPrefix(rawError, prefix) {
+		return strings.TrimSpace(strings.TrimPrefix(rawError, prefix))
+	}
+	return rawError
+}
+
+func resolveRequestEndpoint(requestURL string, preferIP bool) (endpoint string, host string) {
+	u, err := url.Parse(requestURL)
+	if err != nil || u.Hostname() == "" {
+		return requestURL, ""
+	}
+
+	host = u.Hostname()
+	port := u.Port()
+	if port == "" {
+		if strings.EqualFold(u.Scheme, "https") {
+			port = "443"
+		} else {
+			port = "80"
+		}
+	}
+
+	if preferIP {
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		addrs, lookupErr := net.DefaultResolver.LookupIPAddr(ctx, host)
+		if lookupErr == nil && len(addrs) > 0 {
+			return fmt.Sprintf("%s:%s", addrs[0].IP.String(), port), host
+		}
+	}
+
+	return fmt.Sprintf("%s:%s", host, port), host
+}
+
+func detectTLSWarning(requestURL string, tlsState *tls.ConnectionState) string {
+	if tlsState == nil || len(tlsState.PeerCertificates) == 0 {
+		return ""
+	}
+
+	parsedURL, err := url.Parse(requestURL)
+	if err != nil {
+		return ""
+	}
+
+	leaf := tlsState.PeerCertificates[0]
+	verifyOpts := x509.VerifyOptions{
+		DNSName:       parsedURL.Hostname(),
+		Intermediates: x509.NewCertPool(),
+	}
+	for _, cert := range tlsState.PeerCertificates[1:] {
+		verifyOpts.Intermediates.AddCert(cert)
+	}
+	if roots, rootsErr := x509.SystemCertPool(); rootsErr == nil && roots != nil {
+		verifyOpts.Roots = roots
+	}
+
+	if _, err := leaf.Verify(verifyOpts); err != nil {
+		lower := strings.ToLower(err.Error())
+		switch {
+		case strings.Contains(lower, "expired"):
+			return "Certificate has expired"
+		case strings.Contains(lower, "not yet valid"):
+			return "Certificate is not yet valid"
+		case strings.Contains(lower, "unknown authority"):
+			return "Certificate is not trusted"
+		default:
+			return "TLS certificate verification warning"
+		}
+	}
+
+	return ""
 }
 
 func (s *HttpService) applyAuth(req *http.Request, auth model.AuthConfig) {

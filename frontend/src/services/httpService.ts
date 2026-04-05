@@ -115,6 +115,10 @@ export async function sendHttpRequest(
     duration: result.duration,
     size: result.size,
     contentType: result.contentType,
+    protocol: (result as unknown as { protocol?: string }).protocol,
+    warnings: (result as unknown as { warnings?: string[] }).warnings ?? [],
+    timings: (result as unknown as { timings?: HttpResponse["timings"] }).timings,
+    sizeDetails: (result as unknown as { sizeDetails?: HttpResponse["sizeDetails"] }).sizeDetails,
   }
 
   if (!uiSettings.disableCookies) {

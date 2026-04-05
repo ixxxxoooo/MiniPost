@@ -35,6 +35,17 @@ function serializeBulkText(items: KeyValuePair[]): string {
     .join("\n")
 }
 
+function isPlaceholderRow(item: KeyValuePair): boolean {
+  return item.key === "" && item.value === "" && (item.description ?? "") === ""
+}
+
+function ensureTrailingPlaceholder(items: KeyValuePair[]): KeyValuePair[] {
+  if (items.length === 0) return [createKeyValuePair()]
+  const last = items[items.length - 1]
+  if (isPlaceholderRow(last)) return items
+  return [...items, createKeyValuePair()]
+}
+
 export function KeyValueEditor({
   items,
   onChange,
@@ -46,10 +57,6 @@ export function KeyValueEditor({
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkText, setBulkText] = useState("")
   const newKeyRef = useRef<HTMLInputElement>(null)
-
-  // 当最后一行有内容时，自动在底部保持一行空行占位
-  // items 为空时默认显示一行空行
-  const hasEmptyRow = items.length > 0 && items[items.length - 1].key === "" && items[items.length - 1].value === ""
 
   const handleUpdate = (id: string, field: keyof KeyValuePair, value: string | boolean) => {
     const updated = items.map((item) => (item.id === id ? { ...item, [field]: value } : item))
@@ -70,12 +77,13 @@ export function KeyValueEditor({
     onChange(updated)
   }
 
-  // 没有任何 items 时，自动提供一行空行
+  // 统一兜底：无数据时补一行；末尾非空时自动补空白占位行（导入后立即可继续输入）
   useEffect(() => {
-    if (items.length === 0) {
-      onChange([createKeyValuePair()])
+    const normalized = ensureTrailingPlaceholder(items)
+    if (normalized !== items) {
+      onChange(normalized)
     }
-  }, [items.length, onChange])
+  }, [items, onChange])
 
   const enterBulkMode = () => {
     setBulkText(serializeBulkText(items))

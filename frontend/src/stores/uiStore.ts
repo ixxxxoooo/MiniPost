@@ -10,9 +10,14 @@ export interface ConsoleEntry {
   timestamp: string
   method: string
   url: string
+  requestBody?: string
+  requestProtocol?: string
   status?: number
+  statusText?: string
   duration?: number
   size?: number
+  responseProtocol?: string
+  warnings?: string[]
   error?: string
   requestHeaders?: Record<string, string>
   responseHeaders?: Record<string, string[]>
@@ -65,8 +70,8 @@ interface UIState {
   closeEnvironmentTab: (id: string) => void
   closeActiveEnvironmentTab: () => void
   clearEnvironmentTabs: () => void
-  addConsoleRequest: (entry: Pick<ConsoleEntry, "method" | "url" | "requestHeaders">) => string
-  updateConsoleResponse: (id: string, data: Pick<ConsoleEntry, "status" | "duration" | "size" | "responseHeaders" | "responseBody">) => void
+  addConsoleRequest: (entry: Pick<ConsoleEntry, "method" | "url" | "requestHeaders" | "requestBody" | "requestProtocol">) => string
+  updateConsoleResponse: (id: string, data: Pick<ConsoleEntry, "status" | "statusText" | "duration" | "size" | "responseHeaders" | "responseBody" | "responseProtocol" | "warnings">) => void
   updateConsoleError: (id: string, error: string) => void
   clearConsoleLogs: () => void
 }
@@ -87,6 +92,10 @@ function applyTheme(resolved: "light" | "dark") {
 
 const SCROLLBAR_AUTO_HIDE_STORAGE_KEY = "minipost:scrollbar-auto-hide"
 const REQUEST_SETTINGS_STORAGE_KEY = "minipost:request-settings"
+const THEME_STORAGE_KEY = "minipost:theme"
+const FONT_SIZE_STORAGE_KEY = "minipost:font-size"
+let scrollbarActivityTeardown: (() => void) | null = null
+let scrollbarHideTimer: number | null = null
 
 type PersistedRequestSettings = {
   followRedirects: boolean
@@ -177,13 +186,107 @@ function persistScrollbarAutoHide(value: boolean) {
 
 function applyScrollbarMode(autoHide: boolean) {
   if (typeof document === "undefined") return
-  document.documentElement.classList.toggle("scrollbar-auto-hide", autoHide)
+  const root = document.documentElement
+  root.classList.toggle("scrollbar-auto-hide", autoHide)
+  root.classList.remove("scrollbar-active")
+
+  if (!autoHide) {
+    if (scrollbarHideTimer !== null) {
+      window.clearTimeout(scrollbarHideTimer)
+      scrollbarHideTimer = null
+    }
+    if (scrollbarActivityTeardown) {
+      scrollbarActivityTeardown()
+      scrollbarActivityTeardown = null
+    }
+    return
+  }
+
+  if (scrollbarActivityTeardown) return
+
+  const reveal = () => {
+    root.classList.add("scrollbar-active")
+    if (scrollbarHideTimer !== null) window.clearTimeout(scrollbarHideTimer)
+    scrollbarHideTimer = window.setTimeout(() => {
+      root.classList.remove("scrollbar-active")
+      scrollbarHideTimer = null
+    }, 750)
+  }
+
+  const onScrollActivity = () => reveal()
+  window.addEventListener("scroll", onScrollActivity, true)
+  window.addEventListener("wheel", onScrollActivity, { passive: true, capture: true })
+  window.addEventListener("touchmove", onScrollActivity, { passive: true, capture: true })
+
+  scrollbarActivityTeardown = () => {
+    window.removeEventListener("scroll", onScrollActivity, true)
+    window.removeEventListener("wheel", onScrollActivity, true)
+    window.removeEventListener("touchmove", onScrollActivity, true)
+  }
 }
+
+function applyUIFontSize(fontSize: number) {
+  if (typeof document === "undefined") return
+  const root = document.documentElement
+  const normalized = Math.max(10, Math.min(16, Math.round(fontSize)))
+  root.style.setProperty("--size-font-2xs", `${normalized}px`)
+  root.style.setProperty("--size-font-xs", `${normalized + 1}px`)
+  root.style.setProperty("--size-font-sm", `${normalized + 2}px`)
+  root.style.setProperty("--size-font-base", `${normalized + 3}px`)
+}
+
+function readTheme(): Theme {
+  if (typeof window === "undefined") return "system"
+  try {
+    const raw = window.localStorage.getItem(THEME_STORAGE_KEY)
+    if (raw === "light" || raw === "dark" || raw === "system") {
+      return raw
+    }
+  } catch {
+    // ignore persistence errors
+  }
+  return "system"
+}
+
+function persistTheme(theme: Theme) {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+  } catch {
+    // ignore persistence errors
+  }
+}
+
+function readFontSize(): number {
+  if (typeof window === "undefined") return 12
+  try {
+    const raw = window.localStorage.getItem(FONT_SIZE_STORAGE_KEY)
+    if (!raw) return 12
+    const parsed = Number(raw)
+    if (!Number.isFinite(parsed)) return 12
+    return Math.max(10, Math.min(16, Math.round(parsed)))
+  } catch {
+    return 12
+  }
+}
+
+function persistFontSize(fontSize: number) {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(fontSize))
+  } catch {
+    // ignore persistence errors
+  }
+}
+
+const initialTheme = readTheme()
+const initialResolvedTheme = initialTheme === "system" ? getSystemTheme() : initialTheme
+const initialFontSize = readFontSize()
 
 export const useUIStore = create<UIState>((set) => ({
   ...readRequestSettings(),
-  theme: "system",
-  resolved: getSystemTheme(),
+  theme: initialTheme,
+  resolved: initialResolvedTheme,
   sidebarWidth: 240,
   sidebarCollapsed: false,
   layoutDirection: "vertical",
@@ -192,7 +295,7 @@ export const useUIStore = create<UIState>((set) => ({
   consoleHeight: 220,
   consoleLogs: [],
   settingsOpen: false,
-  fontSize: 12,
+  fontSize: initialFontSize,
   scrollbarAutoHide: readScrollbarAutoHide(),
   editingEnvironmentId: null,
   openEnvironmentTabIds: [],
@@ -200,6 +303,7 @@ export const useUIStore = create<UIState>((set) => ({
   setTheme: (theme) => {
     const resolved = theme === "system" ? getSystemTheme() : theme
     applyTheme(resolved)
+    persistTheme(theme)
     set({ theme, resolved })
   },
   setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
@@ -209,7 +313,12 @@ export const useUIStore = create<UIState>((set) => ({
   toggleConsole: () => set((s) => ({ consoleOpen: !s.consoleOpen })),
   setConsoleHeight: (consoleHeight) => set({ consoleHeight: Math.max(80, Math.min(600, consoleHeight)) }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
-  setFontSize: (fontSize) => set({ fontSize }),
+  setFontSize: (fontSize) => {
+    const normalized = Math.max(10, Math.min(16, Math.round(fontSize)))
+    applyUIFontSize(normalized)
+    persistFontSize(normalized)
+    set({ fontSize: normalized })
+  },
   setScrollbarAutoHide: (scrollbarAutoHide) => {
     applyScrollbarMode(scrollbarAutoHide)
     persistScrollbarAutoHide(scrollbarAutoHide)
@@ -401,8 +510,10 @@ export const useUIStore = create<UIState>((set) => ({
 }))
 
 if (typeof window !== "undefined") {
-  applyTheme(getSystemTheme())
-  applyScrollbarMode(readScrollbarAutoHide())
+  const store = useUIStore.getState()
+  applyTheme(store.resolved)
+  applyUIFontSize(store.fontSize)
+  applyScrollbarMode(store.scrollbarAutoHide)
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
     const store = useUIStore.getState()
     if (store.theme === "system") {

@@ -17,15 +17,124 @@ function getStatusColor(code: number): string {
   return "text-[var(--warning)]"
 }
 
+function parseAppError(raw: string): { code: string; message: string; detail: string } {
+  const text = raw.trim()
+  const match = text.match(/^\[([A-Z0-9_]+)\]\s*([^:]+)(?::\s*(.*))?$/)
+  if (!match) {
+    return { code: "REQUEST_FAILED", message: "请求发送失败", detail: text }
+  }
+  return {
+    code: match[1] || "REQUEST_FAILED",
+    message: (match[2] || "请求发送失败").trim(),
+    detail: (match[3] || "").trim(),
+  }
+}
+
+function normalizeConsoleError(raw: string): string {
+  const parsed = parseAppError(raw)
+  const lowerDetail = parsed.detail.toLowerCase()
+  if (parsed.detail) return parsed.detail
+  if (parsed.code === "DNS_LOOKUP_FAILED") return "getaddrinfo ENOTFOUND"
+  if (parsed.code === "REQUEST_TIMEOUT") return "connect ETIMEDOUT"
+  if (parsed.code === "CONNECTION_REFUSED") return "connect ECONNREFUSED"
+  if (parsed.code === "TLS_HANDSHAKE_FAILED") return "TLS handshake failed"
+  if (lowerDetail.includes("econnrefused")) return parsed.detail
+  return parsed.message || raw
+}
+
+function getRequestPath(urlText: string): string {
+  try {
+    const parsed = new URL(urlText)
+    return `${parsed.pathname || "/"}${parsed.search || ""}`
+  } catch {
+    return urlText
+  }
+}
+
+function buildRawLog(entry: ConsoleEntry): string {
+  const requestProtocol = entry.requestProtocol || "HTTP/1.1"
+  const requestLine = `${entry.method} ${getRequestPath(entry.url)} ${requestProtocol}`
+  const requestHeaders = Object.entries(entry.requestHeaders ?? {})
+    .map(([key, value]) => `${key}: ${value}`)
+    .join("\n")
+  const requestBody = entry.requestBody?.trim() ?? ""
+
+  const blocks: string[] = []
+  blocks.push(requestLine)
+
+  if (requestProtocol.startsWith("HTTP/2")) {
+    try {
+      const parsed = new URL(entry.url)
+      blocks.push(`:path: ${parsed.pathname || "/"}${parsed.search || ""}`)
+      blocks.push(`:method: ${entry.method}`)
+      blocks.push(`:authority: ${parsed.host}`)
+      blocks.push(`:scheme: ${parsed.protocol.replace(":", "")}`)
+    } catch {
+      // ignore parse error for pseudo headers
+    }
+  }
+
+  if (requestHeaders) blocks.push(requestHeaders)
+  if (requestBody) blocks.push("", requestBody)
+
+  if (entry.error) {
+    blocks.push("", `Error: ${normalizeConsoleError(entry.error)}`)
+    return blocks.join("\n")
+  }
+
+  const responseProtocol = entry.responseProtocol || "HTTP/1.1"
+  const statusText = entry.statusText ? ` ${entry.statusText}` : ""
+  const responseLine = `${responseProtocol} ${entry.status ?? ""}${statusText}`.trim()
+  const responseHeaders = Object.entries(entry.responseHeaders ?? {})
+    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+    .join("\n")
+
+  if (entry.warnings?.length) {
+    blocks.unshift(`Warning: ${entry.warnings[0]}`)
+  }
+
+  blocks.push("", responseLine)
+  if (responseHeaders) blocks.push(responseHeaders)
+  if (entry.responseBody) blocks.push("", entry.responseBody)
+  return blocks.join("\n")
+}
+
+type ConsoleTone = "neutral" | "warning" | "error"
+
+function getConsoleTone(entry: ConsoleEntry): ConsoleTone {
+  if (entry.error) {
+    const code = parseAppError(entry.error).code
+    if (code === "REQUEST_TIMEOUT" || code === "TLS_HANDSHAKE_FAILED") return "warning"
+    return "error"
+  }
+  if (entry.warnings?.length) return "warning"
+  return "neutral"
+}
+
 function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
   const [expanded, setExpanded] = useState(false)
+  const [showRawLog, setShowRawLog] = useState(false)
   const hasError = !!entry.error
   const hasResponse = entry.status !== undefined
+  const tone = getConsoleTone(entry)
+  const rowToneClass = tone === "error"
+    ? "bg-[#fbeceb]/75 hover:bg-[#f7e4e2]"
+    : tone === "warning"
+      ? "bg-[#fbf2e6]/75 hover:bg-[#f8eedf]"
+      : "hover:bg-[var(--surface-secondary)]"
+  const expandedToneClass = tone === "error"
+    ? "bg-[#fbeceb]/45"
+    : tone === "warning"
+      ? "bg-[#fbf2e6]/45"
+      : "bg-[var(--surface-secondary)]/50"
 
   return (
     <div className="border-b border-[var(--border-color)]/50 last:border-b-0">
       <div
-        className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-mono hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer select-none"
+        className={cn(
+          "flex items-center gap-2 px-3 py-1.5 text-[11px] font-mono transition-colors cursor-pointer select-none",
+          rowToneClass
+        )}
         onClick={() => setExpanded(!expanded)}
       >
         <AppIcon name={expanded ? "arrowDown" : "arrowRight"} size={8} className="text-[var(--fg-muted)] flex-shrink-0" />
@@ -59,54 +168,117 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
       </div>
 
       {expanded && (
-        <div className="px-6 py-2 text-[10px] font-mono bg-[var(--surface-secondary)]/50 space-y-2">
-          <details open>
-            <summary className="text-[var(--fg-muted)] cursor-pointer select-none font-medium mb-1">Network</summary>
-            <div className="ml-2 space-y-0.5 text-[var(--fg-secondary)]">
-              <div>{entry.method} {entry.url}</div>
-              {entry.status !== undefined && (
-                <div>Status: <span className={getStatusColor(entry.status)}>{entry.status}</span></div>
+        <div className={cn("px-5 py-2 text-[10px] font-mono space-y-2", expandedToneClass)}>
+          {hasError ? (
+            <>
+              <details open>
+                <summary className="mb-1 cursor-pointer select-none text-[10px] text-[var(--fg-muted)] flex items-center justify-between gap-2">
+                  <span>Network</span>
+                  <button
+                    className="text-[10px] text-[var(--accent)] hover:underline"
+                    onClick={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      setShowRawLog((prev) => !prev)
+                    }}
+                    type="button"
+                  >
+                    {showRawLog ? "Show pretty log" : "Show raw log"}
+                  </button>
+                </summary>
+                {showRawLog ? (
+                  <pre className="ml-2 whitespace-pre-wrap break-all text-[11px] leading-[1.35] text-[var(--fg-secondary)]">
+                    {buildRawLog(entry)}
+                  </pre>
+                ) : (
+                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)]">
+                    <div className="text-[var(--fg)]">{entry.method} {entry.url}</div>
+                    <div className="text-[var(--danger)]">Error: {normalizeConsoleError(entry.error || "")}</div>
+                  </div>
+                )}
+              </details>
+              {!showRawLog && entry.requestHeaders && Object.keys(entry.requestHeaders).length > 0 && (
+                <details open>
+                  <summary className="text-[var(--fg-muted)] cursor-pointer select-none text-[10px] mb-1">Request Headers</summary>
+                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)]">
+                    {Object.entries(entry.requestHeaders).map(([k, v]) => (
+                      <div key={k}>
+                        <span className="text-[var(--fg)]">{k}</span>: "{v}"
+                      </div>
+                    ))}
+                  </div>
+                </details>
               )}
-              {entry.duration !== undefined && <div>Duration: {Math.round(entry.duration)}ms</div>}
-              {entry.size !== undefined && <div>Size: {entry.size < 1024 ? `${entry.size}B` : `${(entry.size / 1024).toFixed(1)}KB`}</div>}
-            </div>
-          </details>
+            </>
+          ) : (
+            <>
+              <details open>
+                <summary className="mb-1 cursor-pointer select-none text-[10px] text-[var(--fg-muted)] flex items-center justify-between gap-2">
+                  <span>Network</span>
+                  <button
+                    className="text-[10px] text-[var(--accent)] hover:underline"
+                    onClick={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      setShowRawLog((prev) => !prev)
+                    }}
+                    type="button"
+                  >
+                    {showRawLog ? "Show pretty log" : "Show raw log"}
+                  </button>
+                </summary>
+                {showRawLog ? (
+                  <pre className="ml-2 whitespace-pre-wrap break-all text-[11px] leading-[1.35] text-[var(--fg-secondary)]">
+                    {buildRawLog(entry)}
+                  </pre>
+                ) : (
+                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)]">
+                    <div>{entry.method} {entry.url}</div>
+                    {entry.warnings?.length ? (
+                      <div className="text-[var(--warning)]">Warning: {entry.warnings[0]}</div>
+                    ) : null}
+                    {entry.status !== undefined && (
+                      <div>Status: <span className={getStatusColor(entry.status)}>{entry.status}</span></div>
+                    )}
+                    {entry.duration !== undefined && <div>Duration: {Math.round(entry.duration)}ms</div>}
+                    {entry.size !== undefined && <div>Size: {entry.size < 1024 ? `${entry.size}B` : `${(entry.size / 1024).toFixed(1)}KB`}</div>}
+                  </div>
+                )}
+              </details>
 
-          {entry.requestHeaders && Object.keys(entry.requestHeaders).length > 0 && (
-            <details>
-              <summary className="text-[var(--fg-muted)] cursor-pointer select-none font-medium mb-1">Request Headers</summary>
-              <div className="ml-2 space-y-0.5 text-[var(--fg-secondary)]">
-                {Object.entries(entry.requestHeaders).map(([k, v]) => (
-                  <div key={k}><span className="text-[var(--fg)]">{k}</span>: {v}</div>
-                ))}
-              </div>
-            </details>
-          )}
+              {!showRawLog && entry.requestHeaders && Object.keys(entry.requestHeaders).length > 0 && (
+                <details>
+                  <summary className="text-[var(--fg-muted)] cursor-pointer select-none text-[10px] mb-1">Request Headers</summary>
+                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)]">
+                    {Object.entries(entry.requestHeaders).map(([k, v]) => (
+                      <div key={k}><span className="text-[var(--fg)]">{k}</span>: {v}</div>
+                    ))}
+                  </div>
+                </details>
+              )}
 
-          {entry.responseHeaders && Object.keys(entry.responseHeaders).length > 0 && (
-            <details>
-              <summary className="text-[var(--fg-muted)] cursor-pointer select-none font-medium mb-1">Response Headers</summary>
-              <div className="ml-2 space-y-0.5 text-[var(--fg-secondary)]">
-                {Object.entries(entry.responseHeaders).map(([k, v]) => (
-                  <div key={k}><span className="text-[var(--fg)]">{k}</span>: {Array.isArray(v) ? v.join(", ") : v}</div>
-                ))}
-              </div>
-            </details>
-          )}
+              {!showRawLog && entry.responseHeaders && Object.keys(entry.responseHeaders).length > 0 && (
+                <details>
+                  <summary className="text-[var(--fg-muted)] cursor-pointer select-none text-[10px] mb-1">Response Headers</summary>
+                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)]">
+                    {Object.entries(entry.responseHeaders).map(([k, v]) => (
+                      <div key={k}><span className="text-[var(--fg)]">{k}</span>: {Array.isArray(v) ? v.join(", ") : v}</div>
+                    ))}
+                  </div>
+                </details>
+              )}
 
-          {entry.responseBody && (
-            <details>
-              <summary className="text-[var(--fg-muted)] cursor-pointer select-none font-medium mb-1">Response Body</summary>
-              <pre className="ml-2 text-[var(--fg-secondary)] whitespace-pre-wrap break-all max-h-[200px] overflow-auto">
-                {(() => {
-                  try { return JSON.stringify(JSON.parse(entry.responseBody), null, 2) } catch { return entry.responseBody }
-                })()}
-              </pre>
-            </details>
-          )}
-
-          {entry.error && (
-            <div className="text-[var(--danger)]">Error: {entry.error}</div>
+              {!showRawLog && entry.responseBody && (
+                <details>
+                  <summary className="text-[var(--fg-muted)] cursor-pointer select-none text-[10px] mb-1">Response Body</summary>
+                  <pre className="ml-2 text-[10px] text-[var(--fg-secondary)] whitespace-pre-wrap break-all max-h-[200px] overflow-auto">
+                    {(() => {
+                      try { return JSON.stringify(JSON.parse(entry.responseBody), null, 2) } catch { return entry.responseBody }
+                    })()}
+                  </pre>
+                </details>
+              )}
+            </>
           )}
         </div>
       )}
@@ -131,6 +303,9 @@ export function BottomBar() {
   const errorCount = consoleLogs.filter((l) => l.error).length
   const scrollRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
+  const dragHeightRef = useRef<number | null>(null)
+  const dragRafRef = useRef<number | null>(null)
+  const [dragPreviewHeight, setDragPreviewHeight] = useState<number | null>(null)
 
   useEffect(() => {
     if (consoleOpen && scrollRef.current) {
@@ -143,15 +318,31 @@ export function BottomBar() {
     draggingRef.current = true
     const startY = e.clientY
     const startHeight = consoleHeight
+    dragHeightRef.current = startHeight
 
     const onMove = (ev: MouseEvent) => {
       if (!draggingRef.current) return
       const delta = startY - ev.clientY
-      setConsoleHeight(startHeight + delta)
+      const next = Math.max(80, Math.min(600, startHeight + delta))
+      dragHeightRef.current = next
+      if (dragRafRef.current === null) {
+        dragRafRef.current = window.requestAnimationFrame(() => {
+          dragRafRef.current = null
+          setDragPreviewHeight(dragHeightRef.current)
+        })
+      }
     }
 
     const onUp = () => {
       draggingRef.current = false
+      if (dragRafRef.current !== null) {
+        window.cancelAnimationFrame(dragRafRef.current)
+        dragRafRef.current = null
+      }
+      const finalHeight = dragHeightRef.current ?? startHeight
+      setConsoleHeight(finalHeight)
+      setDragPreviewHeight(null)
+      dragHeightRef.current = null
       document.removeEventListener("mousemove", onMove)
       document.removeEventListener("mouseup", onUp)
       document.body.style.cursor = ""
@@ -168,7 +359,7 @@ export function BottomBar() {
     <div className="flex flex-col flex-shrink-0">
       <CookiePanel />
       {consoleOpen && (
-        <div className={cn("flex flex-col", "border border-[var(--border-color)] bg-[var(--surface)]")} style={{ height: consoleHeight }}>
+        <div className={cn("flex flex-col", "border border-[var(--border-color)] bg-[var(--surface)]")} style={{ height: dragPreviewHeight ?? consoleHeight }}>
           {/* 拖拽手柄 */}
           <div
             className="group h-px flex-shrink-0 relative"
@@ -180,7 +371,11 @@ export function BottomBar() {
             <div className="absolute inset-x-0 top-0 h-px bg-transparent group-hover:bg-[var(--accent)] transition-colors" />
             <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-1 rounded-full bg-transparent group-hover:bg-[var(--accent)]/40 transition-all" />
           </div>
-          <div className="flex items-center justify-between h-[25px] px-3 border-b border-[var(--border-color)] bg-[var(--surface-secondary)] flex-shrink-0">
+          <div
+            className="flex items-center justify-between h-[25px] px-3 border-b border-[var(--border-color)] bg-[var(--surface-secondary)] flex-shrink-0 cursor-pointer"
+            onClick={toggleConsole}
+            title="点击收起 Console"
+          >
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-medium text-[var(--fg)]">Console</span>
               {consoleLogs.length > 0 && (
@@ -190,14 +385,20 @@ export function BottomBar() {
             <div className="flex items-center gap-1">
               <button
                 className="h-5 px-1.5 flex items-center gap-1 rounded-[4px] text-[10px] text-[var(--fg-muted)] hover:bg-[var(--sidebar-hover)] transition-colors"
-                onClick={clearConsoleLogs}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  clearConsoleLogs()
+                }}
                 title="清空"
               >
                 Clear
               </button>
               <button
                 className="h-5 w-5 flex items-center justify-center rounded-[4px] hover:bg-[var(--sidebar-hover)] transition-colors"
-                onClick={toggleConsole}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  toggleConsole()
+                }}
                 title="关闭"
               >
                 <AppIcon name="clear" size={10} className="text-[var(--fg-muted)]" />
@@ -275,12 +476,21 @@ export function BottomBar() {
             </span>
           </button>
           <button
-            className="flex h-5 w-5 items-center justify-center rounded-[6px] text-[var(--fg-secondary)] transition-colors hover:bg-[var(--button-bg)] hover:text-[var(--fg)]"
+            className={cn(
+              "flex h-5 w-5 items-center justify-center rounded-[6px] transition-colors hover:bg-[var(--button-bg)]",
+              "text-[var(--fg-secondary)] hover:text-[var(--fg)]"
+            )}
             onClick={toggleSidebar}
             title={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
             type="button"
           >
-            <AppIcon name={sidebarCollapsed ? "sidebarExpand" : "sidebarCollapse"} size={11} strokeWidth={1.9} />
+            <span className="relative h-[11px] w-[13px] rounded-[2px] border border-current">
+              {sidebarCollapsed ? (
+                <span className="absolute bottom-[1px] top-[1px] right-[1px] w-[3px] rounded-[1px] bg-current/80" />
+              ) : (
+                <span className="absolute bottom-[1px] top-[1px] left-[1px] w-[3px] rounded-[1px] bg-current/80" />
+              )}
+            </span>
           </button>
         </div>
       </div>

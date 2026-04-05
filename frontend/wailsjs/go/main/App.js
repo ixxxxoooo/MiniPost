@@ -138,6 +138,10 @@ export function SaveResponseToFile(arg1, arg2) {
   return window['go']['main']['App']['SaveResponseToFile'](arg1, arg2);
 }
 
+export function SaveTextFile(arg1, arg2) {
+  return window['go']['main']['App']['SaveTextFile'](arg1, arg2);
+}
+
 export function SendRequest(arg1) {
   return window['go']['main']['App']['SendRequest'](arg1);
 }

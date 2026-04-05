@@ -227,7 +227,8 @@ export function WorkspaceHeader() {
     if (json) {
       const project = projects.find((p) => p.id === projectId)
       const { SaveFileDialogJSON } = await import("../../../wailsjs/go/main/App")
-      await SaveFileDialogJSON(`${project?.name || projectId}-export.json`, json)
+      const safeName = (project?.name || projectId).replace(/[\\/:*?"<>|]/g, "-").trim() || projectId
+      await SaveFileDialogJSON(`${safeName}.postman_collection.json`, json)
     }
     if (prevProjectId && prevProjectId !== projectId) {
       await selectProject(prevProjectId)
@@ -243,17 +244,6 @@ export function WorkspaceHeader() {
   return (
     <>
       <div className="titlebar-no-drag flex items-center gap-1" ref={ref} onMouseDown={(event) => event.stopPropagation()}>
-        <button
-          className={cn(
-            "flex h-[24px] w-[24px] items-center justify-center rounded-[7px] border transition-colors",
-            "border-transparent bg-[var(--surface-secondary)] text-[var(--fg-secondary)] hover:bg-[var(--button-bg)]"
-          )}
-          title="主页"
-          type="button"
-        >
-          <AppIcon name="home" size={15} strokeWidth={1.65} />
-        </button>
-
         <button
           className={cn(
             "flex h-[24px] w-[24px] items-center justify-center rounded-[7px] border transition-colors",
@@ -280,6 +270,17 @@ export function WorkspaceHeader() {
           disabled={!canGoForward}
         >
           <AppIcon name="arrowRight" size={14} strokeWidth={1.9} />
+        </button>
+
+        <button
+          className={cn(
+            "flex h-[24px] w-[24px] items-center justify-center rounded-[7px] border transition-colors",
+            "border-transparent bg-[var(--surface-secondary)] text-[var(--fg-secondary)] hover:bg-[var(--button-bg)]"
+          )}
+          title="主页"
+          type="button"
+        >
+          <AppIcon name="home" size={15} strokeWidth={1.65} />
         </button>
 
         <div className="relative" style={{ width: `${triggerWidth}px`, maxWidth: `${BUTTON_MAX_WIDTH}px` }}>
@@ -366,9 +367,12 @@ export function WorkspaceHeader() {
                         }}
                         type="button"
                       >
-                        <div className="flex h-5 w-5 items-center justify-center rounded-[6px] bg-[var(--surface-secondary)] text-[var(--fg-secondary)] flex-shrink-0">
-                          <AppIcon name="lock" size={11} strokeWidth={1.9} />
-                        </div>
+                        <AppIcon
+                          name="folder"
+                          size={13}
+                          strokeWidth={1.8}
+                          className="text-[var(--fg-secondary)] flex-shrink-0"
+                        />
                         <div className="min-w-0 flex-1 text-left">
                           <div className="truncate text-[12px] font-medium">{project.name}</div>
                         </div>

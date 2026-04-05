@@ -3,6 +3,8 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,16 +17,20 @@ import (
 // ---- Postman Collection v2.1 结构 ----
 
 type postmanCollection struct {
-	Info struct {
-		Name string `json:"name"`
-	} `json:"info"`
+	Info postmanInfo   `json:"info"`
 	Item []postmanItem `json:"item"`
 }
 
+type postmanInfo struct {
+	Name   string `json:"name"`
+	Schema string `json:"schema,omitempty"`
+}
+
 type postmanItem struct {
-	Name    string         `json:"name"`
-	Item    []postmanItem  `json:"item,omitempty"`
-	Request *postmanReq    `json:"request,omitempty"`
+	Name        string        `json:"name"`
+	Item        []postmanItem `json:"item,omitempty"`
+	Request     *postmanReq   `json:"request,omitempty"`
+	Description string        `json:"description,omitempty"`
 }
 
 type postmanReq struct {
@@ -44,10 +50,10 @@ type postmanKV struct {
 }
 
 type postmanBody struct {
-	Mode       string       `json:"mode"`
-	Raw        string       `json:"raw,omitempty"`
-	URLEncoded []postmanKV  `json:"urlencoded,omitempty"`
-	Options    []postmanOpt `json:"options,omitempty"`
+	Mode       string      `json:"mode"`
+	Raw        string      `json:"raw,omitempty"`
+	URLEncoded []postmanKV `json:"urlencoded,omitempty"`
+	Options    postmanOpt  `json:"options,omitempty"`
 }
 
 type postmanOpt struct {
@@ -59,13 +65,13 @@ type postmanOpt struct {
 // ---- OpenAPI/Swagger 结构 ----
 
 type openAPIDoc struct {
-	Swagger  string                           `json:"swagger,omitempty"`
-	OpenAPI  string                           `json:"openapi,omitempty"`
-	Host     string                           `json:"host,omitempty"`
-	BasePath string                           `json:"basePath,omitempty"`
-	Schemes  []string                         `json:"schemes,omitempty"`
-	Servers  []openAPIServer                  `json:"servers,omitempty"`
-	Paths    map[string]map[string]openAPIOp  `json:"paths"`
+	Swagger  string                          `json:"swagger,omitempty"`
+	OpenAPI  string                          `json:"openapi,omitempty"`
+	Host     string                          `json:"host,omitempty"`
+	BasePath string                          `json:"basePath,omitempty"`
+	Schemes  []string                        `json:"schemes,omitempty"`
+	Servers  []openAPIServer                 `json:"servers,omitempty"`
+	Paths    map[string]map[string]openAPIOp `json:"paths"`
 }
 
 type openAPIServer struct {
@@ -247,13 +253,175 @@ func (s *RequestService) DuplicateFolder(projectID, folderID string) (*model.Fol
 	return nil, fmt.Errorf("文件夹 %s 不存在", folderID)
 }
 
-// ExportProjectJSON 导出项目的所有集合数据为 JSON
+// ExportProjectJSON 导出项目为 Postman Collection v2.1 JSON
 func (s *RequestService) ExportProjectJSON(projectID string) ([]byte, error) {
 	data, err := s.store.GetCollectionData(projectID)
 	if err != nil {
 		return nil, err
 	}
-	return json.MarshalIndent(data, "", "  ")
+	if data == nil {
+		data = &model.CollectionData{}
+	}
+
+	projectName := "MiniPost Export"
+	if project, err := s.store.GetProject(projectID); err == nil && strings.TrimSpace(project.Name) != "" {
+		projectName = project.Name
+	}
+
+	collection := postmanCollection{
+		Info: postmanInfo{
+			Name:   projectName,
+			Schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		},
+		Item: s.buildPostmanItems(data),
+	}
+
+	return json.MarshalIndent(collection, "", "  ")
+}
+
+func (s *RequestService) buildPostmanItems(data *model.CollectionData) []postmanItem {
+	folderByID := make(map[string]model.Folder, len(data.Folders))
+	for _, folder := range data.Folders {
+		folderByID[folder.ID] = folder
+	}
+	requestByID := make(map[string]model.RequestItem, len(data.Requests))
+	for _, request := range data.Requests {
+		requestByID[request.ID] = request
+	}
+
+	children := make(map[string][]model.CollectionNode)
+	for _, node := range data.TreeNodes {
+		parentID := strings.TrimSpace(node.ParentFolderID)
+		children[parentID] = append(children[parentID], node)
+	}
+	for parentID := range children {
+		sort.SliceStable(children[parentID], func(i, j int) bool {
+			if children[parentID][i].SortOrder == children[parentID][j].SortOrder {
+				if children[parentID][i].NodeType == children[parentID][j].NodeType {
+					return children[parentID][i].NodeID < children[parentID][j].NodeID
+				}
+				return children[parentID][i].NodeType < children[parentID][j].NodeType
+			}
+			return children[parentID][i].SortOrder < children[parentID][j].SortOrder
+		})
+	}
+
+	var walk func(parentID string) []postmanItem
+	walk = func(parentID string) []postmanItem {
+		nodes := children[parentID]
+		result := make([]postmanItem, 0, len(nodes))
+		for _, node := range nodes {
+			if node.NodeType == model.CollectionNodeTypeFolder {
+				folder, ok := folderByID[node.NodeID]
+				if !ok {
+					continue
+				}
+				result = append(result, postmanItem{
+					Name: folder.Name,
+					Item: walk(folder.ID),
+				})
+				continue
+			}
+			if node.NodeType == model.CollectionNodeTypeRequest {
+				request, ok := requestByID[node.NodeID]
+				if !ok {
+					continue
+				}
+				result = append(result, postmanItem{
+					Name:    request.Name,
+					Request: convertRequestToPostman(request),
+				})
+			}
+		}
+		return result
+	}
+
+	return walk("")
+}
+
+func convertRequestToPostman(request model.RequestItem) *postmanReq {
+	postmanRequest := &postmanReq{
+		Method: strings.ToUpper(strings.TrimSpace(request.Method)),
+		URL:    postmanURL{Raw: buildRequestRawURL(request)},
+	}
+	if postmanRequest.Method == "" {
+		postmanRequest.Method = "GET"
+	}
+
+	if len(request.Headers) > 0 {
+		headers := make([]postmanKV, 0, len(request.Headers))
+		for _, header := range request.Headers {
+			if strings.TrimSpace(header.Key) == "" {
+				continue
+			}
+			headers = append(headers, postmanKV{
+				Key:   header.Key,
+				Value: header.Value,
+			})
+		}
+		postmanRequest.Header = headers
+	}
+
+	switch request.Body.Type {
+	case "json":
+		body := &postmanBody{
+			Mode: "raw",
+			Raw:  request.Body.JSON,
+		}
+		body.Options.Raw.Language = "json"
+		postmanRequest.Body = body
+	case "raw":
+		postmanRequest.Body = &postmanBody{
+			Mode: "raw",
+			Raw:  request.Body.Raw,
+		}
+	case "form-urlencoded":
+		formData := make([]postmanKV, 0, len(request.Body.FormUrlEncoded))
+		for _, field := range request.Body.FormUrlEncoded {
+			if strings.TrimSpace(field.Key) == "" {
+				continue
+			}
+			formData = append(formData, postmanKV{
+				Key:   field.Key,
+				Value: field.Value,
+			})
+		}
+		if len(formData) > 0 {
+			postmanRequest.Body = &postmanBody{
+				Mode:       "urlencoded",
+				URLEncoded: formData,
+			}
+		}
+	}
+
+	return postmanRequest
+}
+
+func buildRequestRawURL(request model.RequestItem) string {
+	raw := strings.TrimSpace(request.URL)
+	if len(request.Params) == 0 {
+		return raw
+	}
+
+	values := url.Values{}
+	for _, param := range request.Params {
+		key := strings.TrimSpace(param.Key)
+		if key == "" {
+			continue
+		}
+		values.Add(key, param.Value)
+	}
+	encoded := values.Encode()
+	if encoded == "" {
+		return raw
+	}
+	if strings.Contains(raw, "?") {
+		if strings.HasSuffix(raw, "?") || strings.HasSuffix(raw, "&") {
+			return raw + encoded
+		}
+		return raw + "&" + encoded
+	}
+	return raw + "?" + encoded
 }
 
 // ImportPostmanCollection 导入 Postman Collection v2.1 格式
@@ -293,12 +461,10 @@ func (s *RequestService) importPostmanItems(projectID, parentFolderID string, it
 				switch item.Request.Body.Mode {
 				case "raw":
 					req.Body = model.RequestBody{Type: "raw", Raw: item.Request.Body.Raw}
-					for _, opt := range item.Request.Body.Options {
-						if opt.Raw.Language == "json" {
-							req.Body.Type = "json"
-							req.Body.JSON = item.Request.Body.Raw
-							req.Body.Raw = ""
-						}
+					if strings.EqualFold(item.Request.Body.Options.Raw.Language, "json") {
+						req.Body.Type = "json"
+						req.Body.JSON = item.Request.Body.Raw
+						req.Body.Raw = ""
 					}
 				case "urlencoded":
 					var formData []model.KeyValue

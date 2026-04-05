@@ -246,3 +246,55 @@ func TestSendRequest_MaxResponseSizeOption(t *testing.T) {
 		t.Fatal("expected max response size exceeded error")
 	}
 }
+
+func TestSendRequest_ProvidesTimingAndSizeBreakdown(t *testing.T) {
+	arena := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Test", "yes")
+		_, _ = io.WriteString(w, `{"ok":true}`)
+	}))
+	defer arena.Close()
+
+	svc := NewHttpService()
+	resp, err := svc.SendRequest(model.SendRequestInput{
+		Method: "POST",
+		URL:    arena.URL + "/probe",
+		Body: model.RequestBody{
+			Type: "json",
+			JSON: `{"name":"mini"}`,
+		},
+		Auth: model.AuthConfig{Type: "none"},
+	})
+	if err != nil {
+		t.Fatalf("SendRequest returned error: %v", err)
+	}
+
+	if resp.SizeDetails.ResponseBody != int64(len(resp.Body)) {
+		t.Fatalf("expected response body size %d, got %d", len(resp.Body), resp.SizeDetails.ResponseBody)
+	}
+	if resp.SizeDetails.ResponseHeaders <= 0 {
+		t.Fatalf("expected response headers size > 0, got %d", resp.SizeDetails.ResponseHeaders)
+	}
+	if resp.SizeDetails.ResponseTotal != resp.Size {
+		t.Fatalf("expected response total size %d, got %d", resp.Size, resp.SizeDetails.ResponseTotal)
+	}
+	if resp.SizeDetails.RequestHeaders <= 0 {
+		t.Fatalf("expected request headers size > 0, got %d", resp.SizeDetails.RequestHeaders)
+	}
+	if resp.SizeDetails.RequestBody <= 0 {
+		t.Fatalf("expected request body size > 0, got %d", resp.SizeDetails.RequestBody)
+	}
+	if resp.SizeDetails.RequestTotal != resp.SizeDetails.RequestHeaders+resp.SizeDetails.RequestBody {
+		t.Fatalf("request total mismatch: total=%d headers=%d body=%d", resp.SizeDetails.RequestTotal, resp.SizeDetails.RequestHeaders, resp.SizeDetails.RequestBody)
+	}
+
+	if resp.Timings.Total < 0 || resp.Timings.Download < 0 || resp.Timings.WaitingTTFB < 0 {
+		t.Fatalf("timings should not be negative: %+v", resp.Timings)
+	}
+	if resp.Timings.Total < resp.Timings.Download {
+		t.Fatalf("total timing should be >= download timing: %+v", resp.Timings)
+	}
+	if resp.Duration != resp.Timings.Total {
+		t.Fatalf("duration should match timings total, duration=%f total=%f", resp.Duration, resp.Timings.Total)
+	}
+}

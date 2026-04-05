@@ -21,11 +21,11 @@ const SHORTCUTS = [
 
 const FONT_SIZES = [10, 11, 12, 13, 14, 16]
 
-type SettingsSection = "general" | "theme" | "shortcuts" | "about"
+type SettingsSection = "general" | "appearance" | "shortcuts" | "about"
 
 const SETTINGS_MENU: Array<{ id: SettingsSection; title: string; icon: AppIconName }> = [
   { id: "general", title: "通用", icon: "settings" },
-  { id: "theme", title: "主题", icon: "paintBoard" },
+  { id: "appearance", title: "外观", icon: "paintBoard" },
   { id: "shortcuts", title: "快捷键", icon: "keyboard" },
   { id: "about", title: "关于", icon: "info" },
 ]
@@ -283,17 +283,12 @@ export function SettingsPanel() {
                         </button>
                       </div>
                     }
-                  />
-                  <SettingsRow
-                    title="滚动条自动隐藏"
-                    description="静止一段时间后自动隐藏滚动条。"
-                    control={<ToggleSwitch checked={scrollbarAutoHide} onToggle={() => setScrollbarAutoHide(!scrollbarAutoHide)} />}
                     last
                   />
                 </section>
               )}
 
-              {activeSection === "theme" && (
+              {activeSection === "appearance" && (
                 <section className="space-y-3">
                   <div className="rounded-[11px] border border-[var(--border-color)] p-3.5">
                     <div className="mb-2 text-[13px] font-medium text-[var(--fg)]">外观主题</div>
@@ -316,7 +311,7 @@ export function SettingsPanel() {
                     </div>
                   </div>
                   <div className="rounded-[11px] border border-[var(--border-color)] p-3.5">
-                    <div className="mb-2 text-[13px] font-medium text-[var(--fg)]">编辑器字号</div>
+                    <div className="mb-2 text-[13px] font-medium text-[var(--fg)]">界面字体</div>
                     <div className="grid grid-cols-6 gap-2">
                       {FONT_SIZES.map((size) => (
                         <button
@@ -334,6 +329,15 @@ export function SettingsPanel() {
                         </button>
                       ))}
                     </div>
+                    <div className="mt-2 text-[11px] text-[var(--fg-muted)]">用于调整界面字号（菜单、标签、按钮与面板文本）。</div>
+                  </div>
+                  <div className="rounded-[11px] border border-[var(--border-color)] px-3.5">
+                    <SettingsRow
+                      title="滚动条自动隐藏"
+                      description="滚动时显示，静止后自动隐藏。"
+                      control={<ToggleSwitch checked={scrollbarAutoHide} onToggle={() => setScrollbarAutoHide(!scrollbarAutoHide)} />}
+                      last
+                    />
                   </div>
                 </section>
               )}

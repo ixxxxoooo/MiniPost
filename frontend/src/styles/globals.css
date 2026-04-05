@@ -109,7 +109,7 @@
   --accent-fg: #ffffff;
   --accent-hover: #409cff;
 
-  --surface: rgb(38, 38, 38);
+  --surface: rgb(33, 33, 33);
   --surface-secondary: rgb(48, 48, 48);
   --surface-elevated: rgb(48, 48, 48);
   --window-background: transparent;
@@ -125,7 +125,7 @@
   --button-border: rgb(48, 48, 48);
   --selected-bg: rgb(68, 68, 68);
 
-  --sidebar-bg: rgba(38, 38, 38, 0.92);
+  --sidebar-bg: rgba(33, 33, 33, 0.92);
   --sidebar-fg: #f5f5f7;
   --sidebar-border: rgb(48, 48, 48);
   --sidebar-accent: #0a84ff;
@@ -133,7 +133,7 @@
   --sidebar-hover: rgb(48, 48, 48);
   --sidebar-active: rgba(10, 132, 255, 0.18);
 
-  --toolbar-bg: rgba(38, 38, 38, 0.85);
+  --toolbar-bg: rgba(33, 33, 33, 0.85);
   --toolbar-border: rgb(48, 48, 48);
 
   --tab-bg: transparent;
@@ -307,16 +307,15 @@ input, textarea, [contenteditable] {
 
 html.scrollbar-auto-hide ::-webkit-scrollbar-thumb {
   background: transparent;
-  transition: background-color 0.2s ease 0.7s;
+  transition: background-color 0.2s ease;
 }
 
-html.scrollbar-auto-hide *:hover::-webkit-scrollbar-thumb,
-html.scrollbar-auto-hide ::-webkit-scrollbar-thumb:active {
+html.scrollbar-auto-hide.scrollbar-active ::-webkit-scrollbar-thumb,
+html.scrollbar-auto-hide.scrollbar-active ::-webkit-scrollbar-thumb:active {
   background: var(--fg-muted);
-  transition-delay: 0s;
 }
 
-html.scrollbar-auto-hide *:hover::-webkit-scrollbar-thumb:hover {
+html.scrollbar-auto-hide.scrollbar-active ::-webkit-scrollbar-thumb:hover {
   background: var(--fg-secondary);
 }
 
