@@ -287,7 +287,9 @@ export function Sidebar() {
 
   return (
     <div
-      className={cn("flex flex-col overflow-hidden relative", "bg-[var(--sidebar-bg)] border-r border-[var(--sidebar-border)]")}
+      className={cn(
+        "relative flex min-h-0 flex-col overflow-hidden border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)]"
+      )}
       style={{ width: sidebarWidth }}
     >
       {/* 自绘拖拽条 */}
@@ -392,7 +394,7 @@ export function Sidebar() {
       )}
 
       {/* 主内容区 */}
-      <div className="flex-1 overflow-y-auto py-0.5 px-1">
+      <div className="flex-1 min-h-0 overflow-y-auto py-0.5 px-1">
         {!currentProjectId ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center px-4">

@@ -40,8 +40,9 @@
 
   /* 表面颜色 */
   --surface: #ffffff;
-  --surface-secondary: #f5f5f7;
+  --surface-secondary: #f9f9f9;
   --surface-elevated: #ffffff;
+  --window-background: transparent;
 
   /* 前景色 */
   --fg: #1d1d1f;
@@ -49,22 +50,24 @@
   --fg-muted: #aeaeb2;
 
   /* 边框 */
-  --border-color: #d2d2d7;
-  --border-subtle: #e5e5ea;
+  --border-color: #ededed;
+  --border-subtle: #ededed;
   --window-border: transparent;
+  --button-bg: rgb(237, 237, 237);
+  --button-border: rgb(230, 230, 230);
 
   /* 侧边栏 */
-  --sidebar-bg: rgba(246, 246, 248, 0.92);
+  --sidebar-bg: rgba(249, 249, 249, 0.92);
   --sidebar-fg: #1d1d1f;
-  --sidebar-border: #d2d2d7;
+  --sidebar-border: #ededed;
   --sidebar-accent: #007aff;
   --sidebar-accent-fg: #ffffff;
   --sidebar-hover: rgba(0, 0, 0, 0.04);
   --sidebar-active: rgba(0, 122, 255, 0.12);
 
   /* 工具栏 */
-  --toolbar-bg: rgba(246, 246, 248, 0.85);
-  --toolbar-border: #d2d2d7;
+  --toolbar-bg: rgba(249, 249, 249, 0.85);
+  --toolbar-border: #ededed;
 
   /* 标签页 */
   --tab-bg: transparent;
@@ -101,6 +104,7 @@
   --surface: #252626;
   --surface-secondary: #363636;
   --surface-elevated: #464646;
+  --window-background: transparent;
 
   --fg: #f5f5f7;
   --fg-secondary: #b8b8be;
@@ -109,6 +113,8 @@
   --border-color: #5a5a5a;
   --border-subtle: #4a4a4a;
   --window-border: #666666;
+  --button-bg: #363636;
+  --button-border: #4a4a4a;
 
   --sidebar-bg: rgba(37, 38, 38, 0.92);
   --sidebar-fg: #f5f5f7;

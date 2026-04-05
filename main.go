@@ -32,7 +32,7 @@ func main() {
 		Frameless: true,
 		Mac: &mac.Options{
 			WebviewIsTransparent: true,
-			WindowIsTranslucent:  true,
+			WindowIsTranslucent:  false,
 			About: &mac.AboutInfo{
 				Title:   "MiniPost",
 				Message: "轻量级 HTTP API 调试工具",

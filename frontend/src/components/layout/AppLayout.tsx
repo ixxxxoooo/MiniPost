@@ -44,13 +44,13 @@ export function AppLayout() {
   }, [layoutDirection])
 
   return (
-    <div className="h-full w-full relative overflow-hidden bg-[var(--surface)]">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--surface)]">
       <Toolbar />
 
-      <div className="absolute top-[var(--size-toolbar)] bottom-0 left-0 right-0 flex overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         <Sidebar />
 
-        <div className="flex-1 relative min-w-0 flex flex-col overflow-hidden">
+        <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
           <TabBar />
 
           {activeTab ? (
@@ -103,7 +103,7 @@ export function AppLayout() {
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center bg-[var(--surface)]">
+            <div className="flex flex-1 min-h-0 items-center justify-center bg-[var(--surface)]">
               <div className="text-center">
                 <div className="text-[40px] mb-3 opacity-20">⚡</div>
                 <p className="text-[length:var(--size-font-sm)] text-[var(--fg-secondary)] font-medium">MiniPost</p>
