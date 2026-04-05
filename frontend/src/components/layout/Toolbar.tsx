@@ -4,11 +4,13 @@ import { AppIcon } from "@/components/ui/icon"
 import { Input } from "@/components/ui/input"
 import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
-import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
+import { useTabStore } from "@/stores/tabStore"
 import { ImportCurl } from "../../../wailsjs/go/main/App"
 import { WindowControls } from "./WindowControls"
 import { WorkspaceHeader } from "./WorkspaceHeader"
 import { cn } from "@/lib/utils"
+import type { HttpMethod } from "@/lib/constants"
+import type { model } from "../../../wailsjs/go/models"
 
 function useTitlebarDoubleClick() {
   const lastClickRef = useRef<{ time: number; x: number; y: number }>({
@@ -30,9 +32,8 @@ function useTitlebarDoubleClick() {
 
 export function Toolbar() {
   const { resolved, setTheme, setSettingsOpen } = useUIStore()
-  const { currentProjectId } = useProjectStore()
-  const activeTab = useTabStore(getProjectActiveTabFromState)
-  const updateTabRequest = useTabStore((s) => s.updateTabRequest)
+  const { currentProjectId, createRequest, saveRequestToBackend } = useProjectStore()
+  const openRequestTab = useTabStore((s) => s.openRequestTab)
   const [showCurlDialog, setShowCurlDialog] = useState(false)
   const [curlCommand, setCurlCommand] = useState("")
   const [curlError, setCurlError] = useState("")
@@ -67,20 +68,101 @@ export function Toolbar() {
   }, [showCurlDialog])
 
   const handleCurlImport = async () => {
-    if (!curlCommand.trim() || !activeTab) return
+    if (!curlCommand.trim()) return
     setCurlError("")
     try {
+      if (!currentProjectId) {
+        setCurlError("请先选择项目后再导入")
+        return
+      }
+
       const result = await ImportCurl(curlCommand.trim())
-      updateTabRequest(activeTab.id, {
-        method: result.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS",
-        url: result.url,
-        headers: (result.headers ?? []).map((h: { key: string; value: string }) => ({
-          id: crypto.randomUUID(), key: h.key, value: h.value, enabled: true,
-        })),
+      const createdRequest = await createRequest("", "Imported cURL")
+      if (!createdRequest) {
+        setCurlError("新建请求失败，请稍后重试")
+        return
+      }
+
+      const requestToSave = {
+        ...createdRequest,
+        method: (result.method || createdRequest.method) as HttpMethod,
+        url: result.url || createdRequest.url,
+        params: (result.params ?? []).map((p) => ({ key: p.key ?? "", value: p.value ?? "" })),
+        headers: (result.headers ?? []).map((h) => ({ key: h.key ?? "", value: h.value ?? "" })),
         body: result.body
-          ? { type: result.body.type as "none" | "raw" | "json" | "form-urlencoded", raw: result.body.raw, json: result.body.json }
+          ? {
+              type: result.body.type ?? "none",
+              raw: result.body.raw ?? "",
+              json: result.body.json ?? "",
+              formUrlEncoded: (result.body.formUrlEncoded ?? []).map((f) => ({
+                key: f.key ?? "",
+                value: f.value ?? "",
+              })),
+            }
+          : createdRequest.body,
+        auth: result.auth ?? createdRequest.auth,
+        updatedAt: new Date().toISOString(),
+      }
+
+      await saveRequestToBackend(requestToSave as model.RequestItem)
+
+      openRequestTab(currentProjectId, {
+        id: requestToSave.id,
+        name: requestToSave.name,
+        method: requestToSave.method as HttpMethod,
+        url: requestToSave.url,
+        params: (requestToSave.params ?? []).map((p) => ({
+          id: crypto.randomUUID(),
+          key: p.key,
+          value: p.value,
+          enabled: true,
+        })),
+        headers: (requestToSave.headers ?? []).map((h) => ({
+          id: crypto.randomUUID(),
+          key: h.key,
+          value: h.value,
+          enabled: true,
+        })),
+        body: requestToSave.body
+          ? {
+              type: requestToSave.body.type as "none" | "raw" | "json" | "form-urlencoded",
+              raw: requestToSave.body.raw,
+              json: requestToSave.body.json,
+              formUrlEncoded: (requestToSave.body.formUrlEncoded ?? []).map((f) => ({
+                id: crypto.randomUUID(),
+                key: f.key,
+                value: f.value,
+                enabled: true,
+              })),
+            }
           : { type: "none" as const },
+        auth: requestToSave.auth
+          ? {
+              type: requestToSave.auth.type as "none" | "basic" | "bearer" | "api-key",
+              basic: requestToSave.auth.basic
+                ? {
+                    username: requestToSave.auth.basic.username,
+                    password: requestToSave.auth.basic.password,
+                  }
+                : undefined,
+              bearer: requestToSave.auth.bearer
+                ? { token: requestToSave.auth.bearer.token }
+                : undefined,
+              apiKey: requestToSave.auth.apiKey
+                ? {
+                    key: requestToSave.auth.apiKey.key,
+                    value: requestToSave.auth.apiKey.value,
+                    addTo: (requestToSave.auth.apiKey.addTo as "header" | "query") || "header",
+                  }
+                : undefined,
+            }
+          : { type: "none" as const },
+        folderId: requestToSave.folderId,
+        projectId: requestToSave.projectId,
+        createdAt: requestToSave.createdAt,
+        updatedAt: requestToSave.updatedAt,
       })
+
       setCurlCommand("")
       setShowCurlDialog(false)
     } catch (err) {
@@ -224,7 +306,7 @@ export function Toolbar() {
                     "bg-[var(--accent)] text-white hover:brightness-110",
                     "disabled:opacity-40 disabled:pointer-events-none"
                   )}
-                  disabled={!curlCommand.trim() || !activeTab}
+                  disabled={!curlCommand.trim() || !currentProjectId}
                   onClick={() => void handleCurlImport()}
                 >
                   导入

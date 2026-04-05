@@ -1,14 +1,29 @@
-import { useRef, useEffect, useCallback } from "react"
-import { EditorView, keymap, placeholder as cmPlaceholder, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from "@codemirror/view"
-import { EditorState } from "@codemirror/state"
-import { json } from "@codemirror/lang-json"
-import { javascript } from "@codemirror/lang-javascript"
-import { xml } from "@codemirror/lang-xml"
-import { defaultKeymap, indentWithTab } from "@codemirror/commands"
-import { syntaxHighlighting, HighlightStyle, defaultHighlightStyle, bracketMatching, foldGutter, foldKeymap } from "@codemirror/language"
-import { searchKeymap, highlightSelectionMatches, openSearchPanel } from "@codemirror/search"
-import { tags as t } from "@lezer/highlight"
+import { useEffect, useMemo, useRef } from "react"
+import MonacoEditor, { loader, useMonaco } from "@monaco-editor/react"
+import * as Monaco from "monaco-editor"
+import type { editor as MonacoEditorType } from "monaco-editor"
+import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker"
+import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker"
+import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker"
+import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker"
+import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker"
 import { cn } from "@/lib/utils"
+
+// 在 Vite/Wails 环境下显式配置 Monaco loader 与 worker，避免运行时 Promise 拒绝和编辑器空白。
+loader.config({ monaco: Monaco })
+void loader.init().catch(() => undefined)
+
+if (typeof self !== "undefined") {
+  self.MonacoEnvironment = {
+    getWorker(_: unknown, label: string) {
+      if (label === "json") return new jsonWorker()
+      if (label === "css" || label === "scss" || label === "less") return new cssWorker()
+      if (label === "html" || label === "handlebars" || label === "razor" || label === "xml") return new htmlWorker()
+      if (label === "typescript" || label === "javascript") return new tsWorker()
+      return new editorWorker()
+    },
+  }
+}
 
 export type EditorLanguage = "json" | "javascript" | "xml" | "text"
 
@@ -26,6 +41,8 @@ interface CodeEditorProps {
   syntaxStyle?: "default" | "postman"
   /** 每次值变更时触发打开搜索面板 */
   searchSignal?: number
+  /** 是否启用自动换行 */
+  lineWrap?: boolean
 }
 
 export function stripJsonComments(text: string): string {
@@ -87,172 +104,16 @@ export function formatJsonWithComments(text: string): string {
   }
 }
 
-const editorThemeLight = EditorView.theme({
-  "&": {
-    backgroundColor: "var(--surface, #ffffff)",
-    color: "var(--fg, #1d1d1f)",
-    fontSize: "12px",
-  },
-  ".cm-content": {
-    fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
-    padding: "8px 0",
-    caretColor: "#007aff",
-  },
-  ".cm-gutters": {
-    backgroundColor: "var(--surface-secondary, #f9f9f9)",
-    borderRight: "1px solid var(--border-color, #ededed)",
-    color: "#aeaeb2",
-    fontSize: "11px",
-    minWidth: "36px",
-  },
-  ".cm-activeLineGutter": {
-    backgroundColor: "rgba(0, 0, 0, 0.04)",
-    color: "#6e6e73",
-  },
-  ".cm-activeLine": {
-    backgroundColor: "rgba(0, 122, 255, 0.04)",
-  },
-  "&.cm-focused .cm-cursor": {
-    borderLeftColor: "#007aff",
-  },
-  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-    backgroundColor: "rgba(0, 122, 255, 0.15) !important",
-  },
-  ".cm-selectionMatch": {
-    backgroundColor: "rgba(0, 122, 255, 0.1)",
-  },
-  ".cm-searchMatch": {
-    backgroundColor: "rgba(255, 200, 0, 0.3)",
-    borderRadius: "2px",
-  },
-  ".cm-searchMatch.cm-searchMatch-selected": {
-    backgroundColor: "rgba(255, 150, 0, 0.4)",
-  },
-  ".cm-foldGutter span": {
-    color: "#aeaeb2",
-    fontSize: "10px",
-  },
-  ".cm-matchingBracket": {
-    backgroundColor: "rgba(0, 122, 255, 0.12)",
-    outline: "1px solid rgba(0, 122, 255, 0.3)",
-  },
-  ".cm-panels": {
-    backgroundColor: "var(--surface-secondary, #f9f9f9)",
-    borderBottom: "1px solid var(--border-color, #ededed)",
-  },
-  ".cm-panel.cm-search": {
-    padding: "4px 8px",
-  },
-  ".cm-panel.cm-search input": {
-    border: "1px solid var(--border-color, #ccc)",
-    borderRadius: "4px",
-    padding: "2px 6px",
-    fontSize: "12px",
-  },
-  ".cm-panel.cm-search button": {
-    border: "1px solid var(--border-color, #ccc)",
-    borderRadius: "4px",
-    padding: "2px 8px",
-    fontSize: "11px",
-    cursor: "pointer",
-  },
-})
-
-const editorThemeDark = EditorView.theme({
-  "&": {
-    backgroundColor: "var(--surface, #1e1e1e)",
-    color: "var(--fg, #d4d4d4)",
-    fontSize: "12px",
-  },
-  ".cm-content": {
-    fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
-    padding: "8px 0",
-    caretColor: "#0a84ff",
-  },
-  ".cm-gutters": {
-    backgroundColor: "var(--surface-secondary, #252526)",
-    borderRight: "1px solid var(--border-color, #333)",
-    color: "#858585",
-    fontSize: "11px",
-    minWidth: "36px",
-  },
-  ".cm-activeLineGutter": {
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    color: "#c6c6c6",
-  },
-  ".cm-activeLine": {
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-  },
-  "&.cm-focused .cm-cursor": {
-    borderLeftColor: "#0a84ff",
-  },
-  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-    backgroundColor: "rgba(10, 132, 255, 0.25) !important",
-  },
-  ".cm-searchMatch": {
-    backgroundColor: "rgba(255, 200, 0, 0.2)",
-    borderRadius: "2px",
-  },
-  ".cm-searchMatch.cm-searchMatch-selected": {
-    backgroundColor: "rgba(255, 150, 0, 0.35)",
-  },
-  ".cm-matchingBracket": {
-    backgroundColor: "rgba(10, 132, 255, 0.15)",
-    outline: "1px solid rgba(10, 132, 255, 0.3)",
-  },
-  ".cm-panels": {
-    backgroundColor: "var(--surface-secondary, #252526)",
-    borderBottom: "1px solid var(--border-color, #333)",
-  },
-  ".cm-panel.cm-search": {
-    padding: "4px 8px",
-  },
-  ".cm-panel.cm-search input": {
-    border: "1px solid var(--border-color, #555)",
-    borderRadius: "4px",
-    padding: "2px 6px",
-    fontSize: "12px",
-    backgroundColor: "var(--surface, #1e1e1e)",
-    color: "var(--fg, #d4d4d4)",
-  },
-  ".cm-panel.cm-search button": {
-    border: "1px solid var(--border-color, #555)",
-    borderRadius: "4px",
-    padding: "2px 8px",
-    fontSize: "11px",
-    cursor: "pointer",
-    color: "var(--fg, #d4d4d4)",
-  },
-})
-
-const editorHighlightLight = HighlightStyle.define([
-  { tag: [t.propertyName], color: "#c02f1d" },
-  { tag: [t.string, t.special(t.string)], color: "#0a4fa8" },
-  { tag: [t.number, t.integer, t.float], color: "#0f7b45" },
-  { tag: [t.bool, t.null], color: "#8f2d56" },
-  { tag: [t.keyword, t.operatorKeyword], color: "#8b5cf6" },
-  { tag: [t.brace, t.squareBracket, t.paren, t.separator, t.punctuation], color: "#2f2f33" },
-  { tag: [t.variableName, t.name], color: "#2f2f33" },
-  { tag: [t.comment], color: "#99a1ab", fontStyle: "italic" },
-])
-
-const editorHighlightDark = HighlightStyle.define([
-  { tag: [t.propertyName], color: "#f28b82" },
-  { tag: [t.string, t.special(t.string)], color: "#80b7ff" },
-  { tag: [t.number, t.integer, t.float], color: "#8ddf99" },
-  { tag: [t.bool, t.null], color: "#f59cb5" },
-  { tag: [t.keyword, t.operatorKeyword], color: "#c6a6ff" },
-  { tag: [t.brace, t.squareBracket, t.paren, t.separator, t.punctuation], color: "#d3d7de" },
-  { tag: [t.variableName, t.name], color: "#d3d7de" },
-  { tag: [t.comment], color: "#8f99a8", fontStyle: "italic" },
-])
-
-function getLanguageExtension(language: EditorLanguage) {
+function toMonacoLanguage(language: EditorLanguage): string {
   switch (language) {
-    case "json": return json()
-    case "javascript": return javascript()
-    case "xml": return xml()
-    default: return []
+    case "json":
+      return "json"
+    case "javascript":
+      return "javascript"
+    case "xml":
+      return "xml"
+    default:
+      return "plaintext"
   }
 }
 
@@ -267,112 +128,162 @@ export function CodeEditor({
   fillParent = false,
   syntaxStyle = "default",
   searchSignal,
+  lineWrap = true,
 }: CodeEditorProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const viewRef = useRef<EditorView | null>(null)
-  const onChangeRef = useRef(onChange)
-  onChangeRef.current = onChange
-
-  const createExtensions = useCallback(() => {
-    const extensions = [
-      lineNumbers(),
-      highlightActiveLine(),
-      highlightActiveLineGutter(),
-      bracketMatching(),
-      foldGutter(),
-      highlightSelectionMatches(),
-      syntaxStyle === "postman"
-        ? syntaxHighlighting(isDark ? editorHighlightDark : editorHighlightLight, { fallback: true })
-        : syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-      keymap.of([...defaultKeymap, ...foldKeymap, ...searchKeymap, indentWithTab]),
-      EditorView.updateListener.of((update) => {
-        if (update.docChanged && onChangeRef.current) {
-          onChangeRef.current(update.state.doc.toString())
-        }
-      }),
-      EditorView.lineWrapping,
-      isDark ? editorThemeDark : editorThemeLight,
-    ]
-
-    if (readOnly) {
-      extensions.push(EditorState.readOnly.of(true))
-      extensions.push(EditorView.editable.of(false))
-    }
-
-    if (placeholder) {
-      extensions.push(cmPlaceholder(placeholder))
-    }
-
-    const langExt = getLanguageExtension(language)
-    if (Array.isArray(langExt)) {
-      extensions.push(...langExt)
-    } else {
-      extensions.push(langExt)
-    }
-
-    if (fillParent) {
-      extensions.push(EditorView.theme({
-        "&": { height: "100%" },
-        ".cm-scroller": { overflow: "auto" },
-      }))
-    }
-
-    return extensions
-  }, [language, placeholder, isDark, readOnly, fillParent, syntaxStyle])
+  const monaco = useMonaco()
+  const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null)
 
   useEffect(() => {
-    if (!containerRef.current) return
+    if (!monaco) return
 
-    const state = EditorState.create({
-      doc: value,
-      extensions: createExtensions(),
+    monaco.editor.defineTheme("minipost-light-default", {
+      base: "vs",
+      inherit: true,
+      colors: {
+        "editor.background": "#ffffff",
+        "editor.foreground": "#1d1d1f",
+        "editorLineNumber.foreground": "#a0a0a8",
+        "editorLineNumber.activeForeground": "#6e6e73",
+        "editor.lineHighlightBackground": "#f6f9ff",
+        "editor.selectionBackground": "#d8e7ff",
+      },
+      rules: [],
     })
 
-    const view = new EditorView({
-      state,
-      parent: containerRef.current,
+    monaco.editor.defineTheme("minipost-dark-default", {
+      base: "vs-dark",
+      inherit: true,
+      colors: {
+        "editor.background": "#212121",
+        "editor.foreground": "#d4d4d4",
+        "editorGutter.background": "#212121",
+        "editorWidget.background": "#212121",
+        "editorSuggestWidget.background": "#212121",
+        "peekViewEditor.background": "#212121",
+        "peekViewResult.background": "#212121",
+        "panel.background": "#212121",
+        "editorLineNumber.foreground": "#7d828a",
+        "editorLineNumber.activeForeground": "#c6c6c6",
+        "editor.lineHighlightBackground": "#212121",
+        "editor.selectionBackground": "#2d4f82",
+      },
+      rules: [],
     })
 
-    viewRef.current = view
+    monaco.editor.defineTheme("minipost-light-postman", {
+      base: "vs",
+      inherit: true,
+      colors: {
+        "editor.background": "#ffffff",
+        "editor.foreground": "#2f2f33",
+        "editorLineNumber.foreground": "#a0a0a8",
+        "editorLineNumber.activeForeground": "#6e6e73",
+        "editor.lineHighlightBackground": "#f3f8ff",
+        "editor.selectionBackground": "#d8e7ff",
+      },
+      rules: [
+        { token: "string.key.json", foreground: "C02F1D" },
+        { token: "string.value.json", foreground: "0A4FA8" },
+        { token: "number.json", foreground: "0F7B45" },
+        { token: "keyword.json", foreground: "8F2D56" },
+        { token: "string", foreground: "0A4FA8" },
+        { token: "number", foreground: "0F7B45" },
+        { token: "keyword", foreground: "8B5CF6" },
+      ],
+    })
 
-    return () => {
-      view.destroy()
-      viewRef.current = null
+    monaco.editor.defineTheme("minipost-dark-postman", {
+      base: "vs-dark",
+      inherit: true,
+      colors: {
+        "editor.background": "#212121",
+        "editor.foreground": "#d3d7de",
+        "editorGutter.background": "#212121",
+        "editorWidget.background": "#212121",
+        "editorSuggestWidget.background": "#212121",
+        "peekViewEditor.background": "#212121",
+        "peekViewResult.background": "#212121",
+        "panel.background": "#212121",
+        "editorLineNumber.foreground": "#7d828a",
+        "editorLineNumber.activeForeground": "#c6c6c6",
+        "editor.lineHighlightBackground": "#212121",
+        "editor.selectionBackground": "#2d4f82",
+      },
+      rules: [
+        { token: "string.key.json", foreground: "F28B82" },
+        { token: "string.value.json", foreground: "80B7FF" },
+        { token: "number.json", foreground: "8DDF99" },
+        { token: "keyword.json", foreground: "F59CB5" },
+        { token: "string", foreground: "80B7FF" },
+        { token: "number", foreground: "8DDF99" },
+        { token: "keyword", foreground: "C6A6FF" },
+      ],
+    })
+  }, [monaco])
+
+  const theme = useMemo(() => {
+    if (syntaxStyle === "postman") {
+      return isDark ? "minipost-dark-postman" : "minipost-light-postman"
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createExtensions])
+    return isDark ? "minipost-dark-default" : "minipost-light-default"
+  }, [isDark, syntaxStyle])
+
+  const options = useMemo<MonacoEditorType.IStandaloneEditorConstructionOptions>(() => ({
+    readOnly,
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    smoothScrolling: true,
+    automaticLayout: true,
+    contextmenu: true,
+    renderValidationDecorations: "off",
+    fontSize: 12,
+    lineHeight: 20,
+    fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
+    wordWrap: lineWrap ? "on" : "off",
+    lineNumbers: "on",
+    glyphMargin: false,
+    folding: true,
+    cursorBlinking: "smooth",
+    cursorSmoothCaretAnimation: "on",
+    padding: { top: 8, bottom: 8 },
+    suggestOnTriggerCharacters: !readOnly,
+    quickSuggestions: !readOnly,
+    occurrencesHighlight: "singleFile",
+    find: {
+      addExtraSpaceOnTop: false,
+      autoFindInSelection: "never",
+      seedSearchStringFromSelection: "always",
+    },
+    ...(placeholder ? { placeholder } : {}),
+  }), [lineWrap, placeholder, readOnly])
 
   useEffect(() => {
-    const view = viewRef.current
-    if (!view) return
-    const currentDoc = view.state.doc.toString()
-    if (currentDoc !== value) {
-      view.dispatch({
-        changes: { from: 0, to: currentDoc.length, insert: value },
-      })
-    }
-  }, [value])
-
-  useEffect(() => {
-    const view = viewRef.current
-    if (!view) return
     if (searchSignal === undefined) return
-    openSearchPanel(view)
-    view.focus()
+    const editor = editorRef.current
+    if (!editor) return
+    editor.focus()
+    void editor.getAction("actions.find")?.run()
   }, [searchSignal])
 
   return (
     <div
-      ref={containerRef}
       className={cn(
-        "overflow-hidden",
-        "[&_.cm-editor]:!outline-none",
-        fillParent && "h-full [&_.cm-editor]:h-full",
-        !fillParent && "border border-[var(--border-color)] rounded-[var(--radius-input)]",
+        "relative overflow-hidden min-h-0",
+        fillParent ? "h-full" : "min-h-[220px] border border-[var(--border-color)] rounded-[var(--radius-input)]",
         className
       )}
-    />
+    >
+      <MonacoEditor
+        height="100%"
+        language={toMonacoLanguage(language)}
+        value={value}
+        theme={theme}
+        options={options}
+        onMount={(editor) => {
+          editorRef.current = editor
+        }}
+        onChange={(nextValue) => onChange?.(nextValue ?? "")}
+      />
+    </div>
   )
 }
-
-export { openSearchPanel }

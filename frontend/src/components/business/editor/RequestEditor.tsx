@@ -10,6 +10,50 @@ import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
 import { useEnvironmentStore } from "@/stores/environmentStore"
 import { sendHttpRequest } from "@/services/httpService"
+import { useCookieStore } from "@/stores/cookieStore"
+import type { RequestData } from "@/types/request"
+
+function buildConsoleRequestBody(request: RequestData): string {
+  if (request.body.type === "json") return request.body.json ?? ""
+  if (request.body.type === "raw") return request.body.raw ?? ""
+  if (request.body.type === "form-urlencoded") {
+    const params = new URLSearchParams()
+    ;(request.body.formUrlEncoded ?? [])
+      .filter((item) => item.enabled && item.key.trim())
+      .forEach((item) => params.append(item.key, item.value))
+    return params.toString()
+  }
+  return ""
+}
+
+function buildConsoleRequestHeaders(request: RequestData, disableCookies: boolean): Record<string, string> {
+  const headers: Record<string, string> = {}
+  request.headers
+    .filter((h) => h.enabled && h.key.trim())
+    .forEach((h) => {
+      headers[h.key] = h.value
+    })
+
+  if (!headers["User-Agent"] && !headers["user-agent"]) {
+    headers["User-Agent"] = "MiniPost/1.0"
+  }
+
+  if (request.body.type === "json" && !headers["Content-Type"] && !headers["content-type"]) {
+    headers["Content-Type"] = "application/json"
+  }
+  if (request.body.type === "form-urlencoded" && !headers["Content-Type"] && !headers["content-type"]) {
+    headers["Content-Type"] = "application/x-www-form-urlencoded"
+  }
+
+  if (!disableCookies) {
+    const cookieHeader = useCookieStore.getState().getCookieHeader(request.url)
+    if (cookieHeader && !headers["Cookie"] && !headers["cookie"]) {
+      headers["Cookie"] = cookieHeader
+    }
+  }
+
+  return headers
+}
  
 function useRequestEditorActions() {
   const activeTab = useTabStore(getProjectActiveTabFromState)
@@ -40,13 +84,17 @@ function useRequestEditorActions() {
     setIsSending(true)
     setTabResponseError(activeTab.id, null)
 
-    const reqHeaders: Record<string, string> = {}
-    activeTab.request.headers.filter((h) => h.enabled && h.key).forEach((h) => { reqHeaders[h.key] = h.value })
+    const uiState = useUIStore.getState()
+    const reqHeaders = buildConsoleRequestHeaders(activeTab.request, uiState.disableCookies)
+    const reqBody = buildConsoleRequestBody(activeTab.request)
+    const requestProtocol = uiState.httpVersion === "http2" ? "HTTP/2.0" : "HTTP/1.1"
 
     const logId = addConsoleRequest({
       method: activeTab.request.method,
       url: activeTab.request.url,
       requestHeaders: reqHeaders,
+      requestBody: reqBody,
+      requestProtocol,
     })
 
     try {
@@ -58,10 +106,13 @@ function useRequestEditorActions() {
       setTabResponse(activeTab.id, result)
       updateConsoleResponse(logId, {
         status: result.statusCode,
+        statusText: result.statusText,
         duration: result.duration,
         size: result.size,
         responseHeaders: result.headers,
         responseBody: result.body,
+        responseProtocol: result.protocol,
+        warnings: result.warnings ?? [],
       })
       if (downloadAfter) {
         const { SaveResponseToFile } = await import("../../../../wailsjs/go/main/App")
@@ -169,17 +220,17 @@ export function RequestEditorBody() {
           <TabsTrigger value="auth">Auth</TabsTrigger>
         </TabsList>
 
-        <div className="flex-1 overflow-y-auto pt-1">
-          <TabsContent value="params" className="m-0">
+        <div className="flex-1 min-h-0 pt-1">
+          <TabsContent value="params" className="m-0 h-full min-h-0">
             <ParamsEditor />
           </TabsContent>
-          <TabsContent value="headers" className="m-0">
+          <TabsContent value="headers" className="m-0 h-full min-h-0">
             <HeadersEditor />
           </TabsContent>
-          <TabsContent value="body" className="m-0">
+          <TabsContent value="body" className="m-0 h-full min-h-0">
             <BodyEditor />
           </TabsContent>
-          <TabsContent value="auth" className="m-0">
+          <TabsContent value="auth" className="m-0 h-full min-h-0 overflow-auto">
             <AuthEditor />
           </TabsContent>
         </div>

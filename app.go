@@ -15,6 +15,8 @@ import (
 	"minipost/internal/pkg/logger"
 	"minipost/internal/repository"
 	"minipost/internal/service"
+
+	"gopkg.in/yaml.v3"
 )
 
 // App 应用主结构体，Wails 会将其方法暴露给前端
@@ -414,24 +416,45 @@ func (a *App) ImportSwagger(projectID, jsonStr string) error {
 }
 
 func (a *App) ImportFromFile(projectID, format, content string) error {
+	parseAsObject := func(raw string) (map[string]json.RawMessage, string, error) {
+		var data map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(raw), &data); err == nil {
+			return data, raw, nil
+		}
+
+		// fallback: YAML -> JSON
+		var yamlObj map[string]interface{}
+		if err := yaml.Unmarshal([]byte(raw), &yamlObj); err != nil {
+			return nil, "", fmt.Errorf("无法解析 JSON/YAML: %w", err)
+		}
+		normalized, err := json.Marshal(yamlObj)
+		if err != nil {
+			return nil, "", fmt.Errorf("YAML 转换失败: %w", err)
+		}
+		if err := json.Unmarshal(normalized, &data); err != nil {
+			return nil, "", fmt.Errorf("转换后的 JSON 解析失败: %w", err)
+		}
+		return data, string(normalized), nil
+	}
+
 	switch format {
 	case "postman":
 		return a.ImportPostmanCollection(projectID, content)
-	case "swagger":
+	case "swagger", "openapi":
 		return a.ImportSwagger(projectID, content)
 	default:
 		// 自动检测格式
-		var raw map[string]json.RawMessage
-		if err := json.Unmarshal([]byte(content), &raw); err != nil {
-			return fmt.Errorf("无法解析 JSON: %w", err)
+		raw, normalizedContent, err := parseAsObject(content)
+		if err != nil {
+			return err
 		}
 		if _, ok := raw["info"]; ok {
 			if _, ok2 := raw["item"]; ok2 {
-				return a.ImportPostmanCollection(projectID, content)
+				return a.ImportPostmanCollection(projectID, normalizedContent)
 			}
 		}
 		if _, ok := raw["paths"]; ok {
-			return a.ImportSwagger(projectID, content)
+			return a.ImportSwagger(projectID, normalizedContent)
 		}
 		return fmt.Errorf("无法识别文件格式，请选择正确的导入格式")
 	}
@@ -503,6 +526,26 @@ func (a *App) SaveFileDialogJSON(defaultFilename string, content string) error {
 		DefaultFilename: defaultFilename,
 		Filters: []wailsRuntime.FileFilter{
 			{DisplayName: "JSON 文件 (*.json)", Pattern: "*.json"},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if selection == "" {
+		return nil
+	}
+	return os.WriteFile(selection, []byte(content), 0644)
+}
+
+// SaveTextFile 打开保存文件对话框，保存文本内容（用于 cURL 等文本导出）
+func (a *App) SaveTextFile(defaultFilename string, content string) error {
+	selection, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
+		Title:           "保存文件",
+		DefaultFilename: defaultFilename,
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "Shell 脚本 (*.sh)", Pattern: "*.sh"},
+			{DisplayName: "Text 文件 (*.txt)", Pattern: "*.txt"},
+			{DisplayName: "所有文件", Pattern: "*.*"},
 		},
 	})
 	if err != nil {

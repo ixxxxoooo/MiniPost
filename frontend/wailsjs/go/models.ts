@@ -344,6 +344,56 @@ export namespace model {
 	        this.timestamp = source["timestamp"];
 	    }
 	}
+	export class SizeBreakdown {
+	    responseHeaders: number;
+	    responseBody: number;
+	    responseTotal: number;
+	    requestHeaders: number;
+	    requestBody: number;
+	    requestTotal: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SizeBreakdown(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.responseHeaders = source["responseHeaders"];
+	        this.responseBody = source["responseBody"];
+	        this.responseTotal = source["responseTotal"];
+	        this.requestHeaders = source["requestHeaders"];
+	        this.requestBody = source["requestBody"];
+	        this.requestTotal = source["requestTotal"];
+	    }
+	}
+	export class TimingBreakdown {
+	    prepare: number;
+	    socketInitialization: number;
+	    dnsLookup: number;
+	    tcpHandshake: number;
+	    sslHandshake: number;
+	    waitingTTFB: number;
+	    download: number;
+	    process: number;
+	    total: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimingBreakdown(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.prepare = source["prepare"];
+	        this.socketInitialization = source["socketInitialization"];
+	        this.dnsLookup = source["dnsLookup"];
+	        this.tcpHandshake = source["tcpHandshake"];
+	        this.sslHandshake = source["sslHandshake"];
+	        this.waitingTTFB = source["waitingTTFB"];
+	        this.download = source["download"];
+	        this.process = source["process"];
+	        this.total = source["total"];
+	    }
+	}
 	export class HttpResponse {
 	    statusCode: number;
 	    statusText: string;
@@ -352,6 +402,10 @@ export namespace model {
 	    duration: number;
 	    size: number;
 	    contentType: string;
+	    protocol?: string;
+	    warnings?: string[];
+	    timings: TimingBreakdown;
+	    sizeDetails: SizeBreakdown;
 	
 	    static createFrom(source: any = {}) {
 	        return new HttpResponse(source);
@@ -366,7 +420,29 @@ export namespace model {
 	        this.duration = source["duration"];
 	        this.size = source["size"];
 	        this.contentType = source["contentType"];
+	        this.protocol = source["protocol"];
+	        this.warnings = source["warnings"];
+	        this.timings = this.convertValues(source["timings"], TimingBreakdown);
+	        this.sizeDetails = this.convertValues(source["sizeDetails"], SizeBreakdown);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	
 	export class Project {
@@ -433,6 +509,8 @@ export namespace model {
 		    return a;
 		}
 	}
+	
+	
 
 }
 

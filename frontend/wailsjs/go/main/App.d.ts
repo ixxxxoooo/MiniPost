@@ -70,6 +70,8 @@ export function SaveRequestItem(arg1:model.RequestItem):Promise<void>;
 
 export function SaveResponseToFile(arg1:string,arg2:string):Promise<void>;
 
+export function SaveTextFile(arg1:string,arg2:string):Promise<void>;
+
 export function SendRequest(arg1:model.SendRequestInput):Promise<model.HttpResponse>;
 
 export function SendRequestWithEnv(arg1:model.SendRequestInput,arg2:string,arg3:string):Promise<model.HttpResponse>;

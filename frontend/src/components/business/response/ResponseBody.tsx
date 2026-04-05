@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react"
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 import { CodeEditor, type EditorLanguage } from "@/components/ui/CodeEditor"
@@ -100,7 +100,20 @@ function tryFormatJson(text: string): string {
   try {
     return JSON.stringify(JSON.parse(text), null, 2)
   } catch {
-    return text
+    // 支持 NDJSON / JSON Lines：每行一个独立 JSON 对象
+    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+    if (lines.length === 0) return text
+
+    const prettyLines: string[] = []
+    for (const line of lines) {
+      try {
+        prettyLines.push(JSON.stringify(JSON.parse(line), null, 2))
+      } catch {
+        return text
+      }
+    }
+
+    return prettyLines.join("\n")
   }
 }
 
@@ -590,7 +603,44 @@ function FormatDropdown({
   )
 }
 
+function FilterGlyph() {
+  return (
+    <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M2 2.5H10" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+        <path d="M2 6H8" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+        <path d="M2 9.5H6.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+      </svg>
+    </span>
+  )
+}
+
+function FormatGlyph() {
+  return (
+    <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M2 2.5H10" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+        <path d="M2 6H8.2" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+        <path d="M2 9.5H6.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+      </svg>
+    </span>
+  )
+}
+
+function WrapGlyph() {
+  return (
+    <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M2 3H9" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+        <path d="M2 6H8.7C9.7 6 10.5 6.8 10.5 7.8C10.5 8.8 9.7 9.6 8.7 9.6H5.9" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+        <path d="M7.4 11L5.8 9.6L7.4 8.2" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  )
+}
+
 export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
+  const rootRef = useRef<HTMLDivElement>(null)
   const responseFormatDetection = useUIStore((s) => s.responseFormatDetection)
   const defaultMode = useMemo(
     () => detectDefaultMode(contentType, body, responseFormatDetection),
@@ -602,6 +652,7 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
   const [filterOpen, setFilterOpen] = useState(false)
   const [filterExpr, setFilterExpr] = useState("")
   const [searchSignal, setSearchSignal] = useState<number | undefined>(undefined)
+  const [lineWrap, setLineWrap] = useState(true)
 
   useEffect(() => {
     setMode(defaultMode)
@@ -657,13 +708,52 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
     }
   }
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(() => {
     if (preview) setPreview(false)
     window.setTimeout(() => setSearchSignal(Date.now()), 0)
-  }
+  }, [preview])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return
+      const key = event.key.toLowerCase()
+      const active = document.activeElement as HTMLElement | null
+      const inResponseBody = !!(rootRef.current && active && rootRef.current.contains(active))
+      const isInputLike = !!active && (
+        active.tagName === "INPUT"
+        || active.tagName === "TEXTAREA"
+        || active.isContentEditable
+      )
+      const inEditor = !!active?.closest(".cm-editor, .monaco-editor")
+
+      if (key === "f") {
+        if (inResponseBody) {
+          event.preventDefault()
+          event.stopPropagation()
+          handleSearch()
+        }
+        return
+      }
+
+      if (key === "a") {
+        if (!isInputLike && !inEditor) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown, true)
+    return () => window.removeEventListener("keydown", onKeyDown, true)
+  }, [handleSearch])
 
   return (
-    <div className="h-full flex flex-col">
+    <div
+      ref={rootRef}
+      tabIndex={-1}
+      className="h-full flex flex-col outline-none"
+      onMouseDownCapture={() => rootRef.current?.focus({ preventScroll: true })}
+    >
       <div className="flex items-center justify-between h-[34px] px-3 flex-shrink-0">
         <div className="flex items-center gap-2">
           <FormatDropdown
@@ -694,10 +784,22 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
             type="button"
             className="h-6 w-6 rounded-[8px] border border-transparent bg-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
             onClick={handleFormat}
-            title="格式化响应"
           >
-            <AppIcon name="arrowLeftRight" size={12} />
+            <FormatGlyph />
           </button>
+          <button
+            type="button"
+            className={cn(
+              "h-6 w-6 rounded-[8px] border border-transparent bg-transparent transition-colors flex items-center justify-center",
+              lineWrap
+                ? "bg-[var(--selected-bg)] text-[var(--accent)]"
+                : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)]"
+            )}
+            onClick={() => setLineWrap((prev) => !prev)}
+          >
+            <WrapGlyph />
+          </button>
+          <span className="mx-0.5 h-3.5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
           <button
             type="button"
             className={cn(
@@ -707,25 +809,23 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
                 : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)]"
             )}
             onClick={() => setFilterOpen((prev) => !prev)}
-            title="过滤"
           >
-            <AppIcon name="sidebarCollapse" size={12} />
+            <FilterGlyph />
           </button>
           <button
             type="button"
             className="h-6 w-6 rounded-[8px] border border-transparent bg-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
             onClick={handleSearch}
-            title="搜索 (⌘F)"
           >
             <AppIcon name="search" size={12} />
           </button>
+          <span className="mx-0.5 h-3.5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
           <button
             type="button"
-            className="h-6 px-1.5 rounded-[8px] border border-transparent bg-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
+            className="no-press-feedback h-6 px-1.5 rounded-[8px] border border-transparent bg-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
             onClick={handleCopy}
-            title="复制响应"
           >
-            <AppIcon name="copy" size={12} className={cn(copied && "text-[var(--success)]")} />
+            <AppIcon name="copy" size={12} className={cn(copied && "text-[var(--accent)]")} />
           </button>
         </div>
       </div>
@@ -777,7 +877,7 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
             fillParent
             syntaxStyle="postman"
             searchSignal={searchSignal}
-            className="[&_.cm-gutters]:bg-transparent [&_.cm-gutters]:border-r-0 [&_.cm-activeLineGutter]:bg-transparent"
+            lineWrap={lineWrap}
           />
         )}
       </div>

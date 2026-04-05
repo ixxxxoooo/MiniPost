@@ -150,10 +150,10 @@ export function HistoryPanel() {
                     onClick={() => handleRestore(entry)}
                   >
                     <span className={cn(
-                      "text-[9px] font-mono font-bold w-[32px] text-right flex-shrink-0 uppercase mr-1.5",
+                      "text-[9px] font-mono font-bold w-[40px] text-right flex-shrink-0 uppercase mr-1.5",
                       METHOD_COLORS[(entry.method as HttpMethod)] || "text-[var(--fg-muted)]"
                     )}>
-                      {entry.method?.substring(0, 3) || "GET"}
+                      {entry.method || "GET"}
                     </span>
                     <span className="text-[11px] truncate flex-1 text-[var(--fg)]">
                       {entry.url || entry.name}

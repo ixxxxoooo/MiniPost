@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
@@ -7,6 +7,7 @@ import { ResponseBody } from "./ResponseBody"
 import { ResponseHeaders } from "./ResponseHeaders"
 import { ResponseCookies } from "./ResponseCookies"
 import { cn } from "@/lib/utils"
+import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -19,11 +20,26 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(2)}s`
 }
 
-function statusBadgeClass(code: number): string {
-  if (code >= 200 && code < 300) return "bg-[var(--success)]/12 text-[var(--success)]"
-  if (code >= 300 && code < 400) return "bg-[var(--info)]/12 text-[var(--info)]"
-  if (code >= 400 && code < 500) return "bg-[var(--danger)]/12 text-[var(--danger)]"
-  return "bg-[var(--danger)]/12 text-[var(--danger)]"
+function formatPhaseDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "0 ms"
+  if (ms < 10) return `${ms.toFixed(2)} ms`
+  if (ms < 100) return `${ms.toFixed(1)} ms`
+  return `${Math.round(ms)} ms`
+}
+
+function statusBadgeClass(code: number, isDark: boolean): string {
+  if (isDark) {
+    if (code >= 100 && code < 200) return "bg-[#2d2f34] text-[#aeb4bd]"
+    if (code >= 200 && code < 300) return "bg-[#123a2c] text-[#7ce0ad]"
+    if (code >= 300 && code < 400) return "bg-[#113342] text-[#72c7e4]"
+    if (code >= 400 && code < 500) return "bg-[#3f2f16] text-[#f3bf67]"
+    return "bg-[#402222] text-[#ff8a83]"
+  }
+  if (code >= 100 && code < 200) return "bg-[#f1f2f4] text-[#6f7782]"
+  if (code >= 200 && code < 300) return "bg-[#e6f6ec] text-[#2b8a57]"
+  if (code >= 300 && code < 400) return "bg-[#e6f3f8] text-[#2a7f95]"
+  if (code >= 400 && code < 500) return "bg-[#fbf2e6] text-[#a56412]"
+  return "bg-[#fbeceb] text-[#b44840]"
 }
 
 function statusDotClass(code: number): string {
@@ -87,6 +103,104 @@ function parseResponseCookies(headers: Record<string, string[]>): Array<{ name: 
     })
 }
 
+type ParsedRequestError = {
+  code: string
+  message: string
+  detail: string
+}
+
+type RequestErrorPresentation = {
+  title: string
+  badgeToneClass: string
+  badgeText: string
+  description: string
+  suggestion: string
+}
+
+type TimingRow = {
+  key: string
+  label: string
+  value: number
+  start: number
+  barClass: string
+}
+
+function parseRequestError(raw: string): ParsedRequestError {
+  const trimmed = raw.trim()
+  const match = trimmed.match(/^\[([A-Z0-9_]+)\]\s*([^:]+)(?::\s*(.*))?$/)
+  if (!match) {
+    return { code: "REQUEST_FAILED", message: "请求发送失败", detail: trimmed }
+  }
+  return {
+    code: match[1] || "REQUEST_FAILED",
+    message: (match[2] || "请求发送失败").trim(),
+    detail: (match[3] || "").trim(),
+  }
+}
+
+function getRequestErrorPresentation(parsed: ParsedRequestError): RequestErrorPresentation {
+  const detail = parsed.detail || parsed.message
+  const lower = detail.toLowerCase()
+
+  if (parsed.code === "DNS_LOOKUP_FAILED" || lower.includes("no such host")) {
+    return {
+      title: "Could not send request",
+      badgeToneClass: "bg-[#fbeceb] text-[#b44840]",
+      badgeText: `Error: ${detail}`,
+      description: "无法解析目标域名，DNS 查询失败。",
+      suggestion: "请检查域名拼写、网络 DNS 设置，或尝试切换网络后重试。",
+    }
+  }
+
+  if (parsed.code === "CONNECTION_REFUSED" || lower.includes("connection refused") || lower.includes("econnrefused")) {
+    return {
+      title: "Could not send request",
+      badgeToneClass: "bg-[#fbeceb] text-[#b44840]",
+      badgeText: `Error: ${detail}`,
+      description: "连接被目标地址拒绝，服务可能未启动或端口不可达。",
+      suggestion: "请检查目标服务状态、端口、代理或防火墙策略。",
+    }
+  }
+
+  if (parsed.code === "REQUEST_TIMEOUT" || lower.includes("timeout") || lower.includes("deadline exceeded")) {
+    return {
+      title: "Could not send request",
+      badgeToneClass: "bg-[#fbf2e6] text-[#a56412]",
+      badgeText: `Error: ${detail}`,
+      description: "请求在超时时间内未完成。",
+      suggestion: "请增大请求超时、检查网络连通性，或确认服务是否响应较慢。",
+    }
+  }
+
+  if (parsed.code === "TLS_HANDSHAKE_FAILED" || lower.includes("x509") || lower.includes("certificate") || lower.includes("tls")) {
+    return {
+      title: "Could not send request",
+      badgeToneClass: "bg-[#fbf2e6] text-[#a56412]",
+      badgeText: `Error: ${detail}`,
+      description: "TLS 握手或证书校验失败。",
+      suggestion: "请检查证书有效期、证书链配置，或在调试时临时关闭 SSL 校验。",
+    }
+  }
+
+  if (parsed.code === "CONNECTION_CLOSED" || lower.includes("eof")) {
+    return {
+      title: "Could not send request",
+      badgeToneClass: "bg-[#fbeceb] text-[#b44840]",
+      badgeText: `Error: ${detail}`,
+      description: "连接在请求过程中被提前关闭。",
+      suggestion: "这通常与网络链路、代理拦截或目标服务异常有关，请查看控制台日志定位。",
+    }
+  }
+
+  return {
+    title: "Could not send request",
+    badgeToneClass: "bg-[#fbeceb] text-[#b44840]",
+    badgeText: `Error: ${detail}`,
+    description: "请求未能成功发送。",
+    suggestion: "请检查 URL、协议、代理、证书或超时设置后重试。",
+  }
+}
+
 function LoadingTopShimmer() {
   return (
     <div className="absolute left-0 top-0 h-[2px] w-full overflow-hidden bg-[var(--border-subtle)]/60">
@@ -104,6 +218,87 @@ export function ResponseViewer() {
   const response = activeTab?.response ?? null
   const responseError = activeTab?.responseError ?? null
   const safeHeaders = response?.headers ?? {}
+  const requestHeaderEntries = (activeTab?.request.headers ?? [])
+    .filter((h) => h.enabled && h.key.trim())
+    .map((h) => [h.key, h.value] as const)
+  const parsedError = responseError ? parseRequestError(responseError) : null
+  const errorPresentation = parsedError ? getRequestErrorPresentation(parsedError) : null
+
+  const timingRows = useMemo<TimingRow[]>(() => {
+    if (!response) return []
+    const timings = response.timings
+    const phaseRows: Array<Omit<TimingRow, "start">> = [
+      { key: "prepare", label: "Prepare", value: timings?.prepare ?? 0, barClass: "bg-[#b7bdc6]" },
+      { key: "socketInitialization", label: "Socket Initialization", value: timings?.socketInitialization ?? 0, barClass: "bg-[#f2be42]" },
+      { key: "dnsLookup", label: "DNS Lookup", value: timings?.dnsLookup ?? 0, barClass: "bg-[#f2be42]" },
+      { key: "tcpHandshake", label: "TCP Handshake", value: timings?.tcpHandshake ?? 0, barClass: "bg-[#4c89e3]" },
+      { key: "sslHandshake", label: "SSL Handshake", value: timings?.sslHandshake ?? 0, barClass: "bg-[#3d78cf]" },
+      { key: "waitingTTFB", label: "Waiting (TTFB)", value: timings?.waitingTTFB ?? response.duration, barClass: "bg-[#ef8f67]" },
+      { key: "download", label: "Download", value: timings?.download ?? 0, barClass: "bg-[#5ca379]" },
+      { key: "process", label: "Process", value: timings?.process ?? 0, barClass: "bg-[#a5adb8]" },
+    ]
+    let cursor = 0
+    return phaseRows.map((row) => {
+      const normalizedValue = Math.max(0, row.value)
+      const next = { ...row, value: normalizedValue, start: cursor }
+      cursor += normalizedValue
+      return next
+    })
+  }, [response])
+
+  const timingTotal = useMemo(() => {
+    if (!response) return 1
+    if (response.timings && response.timings.total > 0) return response.timings.total
+    const sum = timingRows.reduce((acc, row) => acc + row.value, 0)
+    if (sum > 0) return sum
+    return Math.max(1, response.duration)
+  }, [response, timingRows])
+
+  const timingVisualRows = useMemo(() => {
+    if (timingRows.length === 0) return []
+    const minVisiblePercent = 1.2
+    const rowsWithDisplay = timingRows.map((row) => {
+      const rawPercent = row.value > 0 ? (row.value / timingTotal) * 100 : 0
+      const displayPercent = row.value > 0 ? Math.max(minVisiblePercent, rawPercent) : 0
+      return {
+        ...row,
+        displayPercent,
+      }
+    })
+    const totalDisplay = rowsWithDisplay.reduce((acc, row) => acc + row.displayPercent, 0)
+    const scale = totalDisplay > 100 ? 100 / totalDisplay : 1
+    let cursor = 0
+    return rowsWithDisplay.map((row) => {
+      const width = row.displayPercent * scale
+      const visualStart = cursor
+      cursor += width
+      return {
+        ...row,
+        visualStart,
+        visualWidth: width,
+      }
+    })
+  }, [timingRows, timingTotal])
+
+  const sizeDetails = useMemo(() => {
+    if (!response) return null
+    const details = response.sizeDetails
+    const responseBody = details?.responseBody ?? response.size
+    const responseHeaders = details?.responseHeaders ?? Math.max(0, (details?.responseTotal ?? response.size) - responseBody)
+    const responseTotal = details?.responseTotal ?? (responseHeaders + responseBody)
+    const requestHeaders = details?.requestHeaders ?? 0
+    const requestBody = details?.requestBody ?? 0
+    const requestTotal = details?.requestTotal ?? (requestHeaders + requestBody)
+
+    return {
+      responseHeaders,
+      responseBody,
+      responseTotal,
+      requestHeaders,
+      requestBody,
+      requestTotal,
+    }
+  }, [response])
 
   useEffect(() => {
     if (responseError) {
@@ -142,7 +337,7 @@ export function ResponseViewer() {
         </div>
       )}
 
-      <Tabs value={activeTabValue} onValueChange={setActiveTabValue} className="flex-1 flex flex-col overflow-hidden">
+      <Tabs value={activeTabValue} onValueChange={setActiveTabValue} className="flex-1 flex flex-col min-h-0">
         <div className="flex items-center h-[32px] px-[var(--size-padding-sm)]">
           <TabsList className="flex-1 justify-start">
             <TabsTrigger value="body">Body</TabsTrigger>
@@ -162,8 +357,19 @@ export function ResponseViewer() {
 
           {!isSending && response && !responseError && (
             <div className="ml-auto flex items-center gap-2 text-[11px] text-[var(--fg-muted)]">
+              {response.warnings && response.warnings.length > 0 && (
+                <>
+                  <span className="inline-flex h-5 items-center rounded-[7px] bg-[#fbf2e6] px-1.5 text-[10px] font-medium text-[#a56412]">
+                    Warning: {response.warnings[0]}
+                  </span>
+                  <span className="text-[var(--fg-muted)]">•</span>
+                </>
+              )}
               <div className="relative group/status">
-                <span className={cn("px-2 py-0.5 rounded-[8px] font-medium", statusBadgeClass(response.statusCode))}>
+                <span className={cn(
+                  "inline-flex h-5 items-center rounded-[7px] px-1.5 text-[10px] font-semibold [font-variant-numeric:tabular-nums]",
+                  statusBadgeClass(response.statusCode, isDark)
+                )}>
                   {response.statusCode} {response.statusText}
                 </span>
                 <div
@@ -187,9 +393,113 @@ export function ResponseViewer() {
                 </div>
               </div>
               <span className="text-[var(--fg-muted)]">•</span>
-              <span className="text-[var(--fg-muted)] [font-variant-numeric:tabular-nums]">{formatDuration(response.duration)}</span>
+              <div className="relative group/time">
+                <span className="text-[var(--fg-muted)] [font-variant-numeric:tabular-nums] cursor-default">
+                  {formatDuration(response.duration)}
+                </span>
+                <div
+                  className={cn(
+                    "pointer-events-none absolute right-0 top-[calc(100%+8px)] z-20 w-[min(460px,calc(100vw-20px))] rounded-[10px] border shadow-[var(--shadow-lg)]",
+                    "max-h-[calc(100vh-140px)] overflow-auto bg-[var(--surface)] border-[var(--border-color)] px-3 py-2 opacity-0 translate-y-1",
+                    "transition-all duration-150 group-hover/time:opacity-100 group-hover/time:translate-y-0"
+                  )}
+                >
+                  <div className="mb-1 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-[13px] font-semibold text-[var(--fg)]">
+                      <AppIcon name="clock" size={14} className="text-[var(--fg-muted)]" />
+                      <span>Response Time</span>
+                    </div>
+                    <div className="text-[12px] font-semibold text-[var(--fg)] [font-variant-numeric:tabular-nums]">
+                      {formatDuration(response.duration)}
+                    </div>
+                  </div>
+                  <div className="space-y-0.5">
+                    {timingVisualRows.map((row) => {
+                      const startPercent = Math.max(0, Math.min(100, row.visualStart))
+                      const clampedWidth = Math.max(0, Math.min(row.visualWidth, 100 - startPercent))
+                      const isTTFB = row.key === "waitingTTFB"
+                      return (
+                        <div key={row.key} className="grid grid-cols-[120px_minmax(140px,1fr)_68px] items-center gap-1.5">
+                          <span className="text-[10px] text-[var(--fg-secondary)] truncate">{row.label}</span>
+                          <div className="relative h-[20px]">
+                            <div className="absolute left-0 top-0 bottom-0 w-px bg-[var(--border-color)]" />
+                            <div className="absolute right-0 top-0 bottom-0 w-px bg-[var(--border-color)]" />
+                            {clampedWidth > 0 && (
+                              isTTFB ? (
+                                <div
+                                  className="absolute top-1/2 -translate-y-1/2 h-[12px] border border-dashed border-[#e67f71] bg-[#fde9e5]/70"
+                                  style={{ left: `${startPercent}%`, width: `${clampedWidth}%` }}
+                                />
+                              ) : (
+                                <div
+                                  className={cn("absolute top-1/2 -translate-y-1/2 h-[12px]", row.barClass)}
+                                  style={{ left: `${startPercent}%`, width: `${clampedWidth}%` }}
+                                />
+                              )
+                            )}
+                          </div>
+                          <span className="text-right text-[10px] text-[var(--fg-muted)] [font-variant-numeric:tabular-nums]">
+                            {formatPhaseDuration(row.value)}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
               <span className="text-[var(--fg-muted)]">•</span>
-              <span className="text-[var(--fg-muted)] [font-variant-numeric:tabular-nums]">{formatSize(response.size)}</span>
+              <div className="relative group/size">
+                <span className="text-[var(--fg-muted)] [font-variant-numeric:tabular-nums] cursor-default">
+                  {formatSize(response.size)}
+                </span>
+                <div
+                  className={cn(
+                    "pointer-events-none absolute right-0 top-[calc(100%+8px)] z-20 w-[min(280px,calc(100vw-24px))] rounded-[10px] border shadow-[var(--shadow-lg)]",
+                    "bg-[var(--surface)] border-[var(--border-color)] px-3 py-2.5 opacity-0 translate-y-1",
+                    "transition-all duration-150 group-hover/size:opacity-100 group-hover/size:translate-y-0"
+                  )}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-[var(--fg)]">
+                        <AppIcon name="download" size={14} className="text-[#2f6fd3]" />
+                        <span>Response Size</span>
+                      </span>
+                      <span className="text-[13px] font-semibold text-[var(--fg)] [font-variant-numeric:tabular-nums]">
+                        {formatSize(sizeDetails?.responseTotal ?? response.size)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[12px] text-[var(--fg-secondary)]">
+                      <span>Headers</span>
+                      <span className="[font-variant-numeric:tabular-nums]">{formatSize(sizeDetails?.responseHeaders ?? 0)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[12px] text-[var(--fg-secondary)]">
+                      <span>Body</span>
+                      <span className="[font-variant-numeric:tabular-nums]">{formatSize(sizeDetails?.responseBody ?? response.size)}</span>
+                    </div>
+                  </div>
+                  <div className="my-2 h-px bg-[var(--border-subtle)]" />
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-[var(--fg)]">
+                        <AppIcon name="upload" size={14} className="text-[#a8821f]" />
+                        <span>Request Size</span>
+                      </span>
+                      <span className="text-[13px] font-semibold text-[var(--fg)] [font-variant-numeric:tabular-nums]">
+                        {formatSize(sizeDetails?.requestTotal ?? 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[12px] text-[var(--fg-secondary)]">
+                      <span>Headers</span>
+                      <span className="[font-variant-numeric:tabular-nums]">{formatSize(sizeDetails?.requestHeaders ?? 0)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[12px] text-[var(--fg-secondary)]">
+                      <span>Body</span>
+                      <span className="[font-variant-numeric:tabular-nums]">{formatSize(sizeDetails?.requestBody ?? 0)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <span className="text-[var(--fg-muted)]">•</span>
               <span className="max-w-[180px] truncate font-mono text-[var(--fg-muted)]">{response.contentType}</span>
             </div>
@@ -200,18 +510,61 @@ export function ResponseViewer() {
           <div className="h-full p-[var(--size-padding-sm)]">
             <div className="h-full overflow-hidden">
               {responseError ? (
-                <div className="h-full rounded-[10px] border border-[var(--danger)]/20 bg-[var(--danger)]/6 p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-[7px] bg-[var(--danger)]/14">
-                      <AppIcon name="clear" size={12} className="text-[var(--danger)]" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-semibold text-[var(--danger)]">Request Error</div>
-                      <div className="mt-1 whitespace-pre-wrap break-words text-[12px] leading-5 text-[var(--fg-secondary)]">
-                        {responseError}
-                      </div>
-                      <div className="mt-3 text-[11px] text-[var(--fg-muted)]">
-                        请检查 URL、协议、代理、证书或超时设置后重试。
+                <div className="h-full overflow-auto">
+                  <div className="mx-auto flex h-full w-full max-w-[980px] items-center justify-center px-3">
+                    <div className="w-full max-w-[860px] py-2">
+                      <div className="flex items-start gap-2.5">
+                        <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-[999px] bg-[var(--danger)]/12">
+                          <AppIcon name="info" size={11} className="text-[var(--danger)]" />
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="text-[14px] font-semibold text-[var(--fg)] leading-5">
+                            无法发送请求
+                          </div>
+                          <div className="flex items-center gap-2 text-[12px] font-mono">
+                            <span className={cn("font-semibold uppercase", METHOD_COLORS[(activeTab?.request.method as HttpMethod)] || "text-[var(--fg-muted)]")}>
+                              {activeTab?.request.method || "GET"}
+                            </span>
+                            <span className="text-[var(--fg)] break-all">{activeTab?.request.url || ""}</span>
+                          </div>
+
+                          <div className={cn("inline-flex max-w-full items-center rounded-[8px] px-2.5 py-1.5 text-[12px] break-all", errorPresentation?.badgeToneClass || "bg-[#fbeceb] text-[#b44840]")}>
+                            Error: {errorPresentation?.badgeText?.replace(/^Error:\s*/i, "") || responseError}
+                          </div>
+
+                          <div className="text-[12px] leading-6 text-[var(--fg-secondary)]">
+                            <span>{errorPresentation?.description}</span>
+                            <span className="ml-2">{errorPresentation?.suggestion}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[11px] text-[var(--fg-muted)]">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1.5 rounded-[7px] px-2 py-1 hover:bg-[var(--surface-secondary)] hover:text-[var(--fg-secondary)]"
+                              onClick={() => useUIStore.setState({ consoleOpen: true })}
+                            >
+                              <AppIcon name="commandLine" size={12} />
+                              View in console
+                            </button>
+                            <span>•</span>
+                            <span>Code: {parsedError?.code || "REQUEST_FAILED"}</span>
+                          </div>
+
+                          <details open>
+                            <summary className="cursor-pointer select-none text-[11px] text-[var(--fg-secondary)]">Request Headers</summary>
+                            <div className="mt-1.5 ml-3 space-y-1 text-[11px] text-[var(--fg-secondary)] font-mono">
+                              {requestHeaderEntries.length > 0 ? (
+                                requestHeaderEntries.map(([key, value]) => (
+                                  <div key={key}>
+                                    <span className="text-[var(--fg)]">{key}</span>: "{value}"
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-[var(--fg-muted)]">无请求头</div>
+                              )}
+                            </div>
+                          </details>
+                        </div>
                       </div>
                     </div>
                   </div>

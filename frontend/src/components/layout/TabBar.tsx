@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { createPortal } from "react-dom"
 import { AppIcon } from "@/components/ui/icon"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { useTabStore, getProjectActiveTabIdFromState, getProjectTabsFromState } from "@/stores/tabStore"
@@ -23,12 +24,10 @@ export function TabBar() {
   const activeTabId = useTabStore(getProjectActiveTabIdFromState)
   const setActiveTab = useTabStore((s) => s.setActiveTab)
   const removeTab = useTabStore((s) => s.removeTab)
-  const updateTab = useTabStore((s) => s.updateTab)
   const closeOtherTabs = useTabStore((s) => s.closeOtherTabs)
   const closeAllTabs = useTabStore((s) => s.closeAllTabs)
   const addNewUnsavedTab = useTabStore((s) => s.addNewUnsavedTab)
   const currentProjectId = useProjectStore((s) => s.currentProjectId)
-  const renameRequest = useProjectStore((s) => s.renameRequest)
   const editingEnvironmentId = useUIStore((s) => s.editingEnvironmentId)
   const openEnvironmentTabIds = useUIStore((s) => s.openEnvironmentTabIds)
   const setEditingEnvironmentId = useUIStore((s) => s.setEditingEnvironmentId)
@@ -37,11 +36,10 @@ export function TabBar() {
   const { environments, activeEnvironmentId, setActiveEnvironment, loadEnvironments, createEnvironment } = useEnvironmentStore()
 
   const [contextMenu, setContextMenu] = useState<TabContextMenuState | null>(null)
-  const [renamingTabId, setRenamingTabId] = useState<string | null>(null)
-  const [renameValue, setRenameValue] = useState("")
   const [hasOverflow, setHasOverflow] = useState(false)
   const [showTabList, setShowTabList] = useState(false)
   const [showEnvDropdown, setShowEnvDropdown] = useState(false)
+  const [envSearchQuery, setEnvSearchQuery] = useState("")
   const [creatingEnvironment, setCreatingEnvironment] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -118,27 +116,6 @@ export function TabBar() {
     return () => document.removeEventListener("mousedown", handler)
   }, [showEnvDropdown])
 
-  const startRename = (tabId: string, currentTitle: string) => {
-    setRenamingTabId(tabId)
-    setRenameValue(currentTitle)
-    setContextMenu(null)
-  }
-
-  const handleRenameSubmit = async () => {
-    if (!renamingTabId || !renameValue.trim()) {
-      setRenamingTabId(null)
-      return
-    }
-    const tab = tabs.find((t) => t.id === renamingTabId)
-    if (tab) {
-      updateTab(renamingTabId, { title: renameValue.trim() })
-      if (tab.requestId) {
-        await renameRequest(tab.requestId, renameValue.trim())
-      }
-    }
-    setRenamingTabId(null)
-  }
-
   const handleAddTab = () => {
     if (!currentProjectId) return
     setEditingEnvironmentId(null)
@@ -199,6 +176,11 @@ export function TabBar() {
     const longest = labels.reduce((max, label) => Math.max(max, label.length), 0)
     return Math.max(172, Math.min(360, 76 + longest * DROPDOWN_CHAR_WIDTH))
   }, [creatingEnvironment, environments])
+  const filteredEnvironments = useMemo(() => {
+    const query = envSearchQuery.trim().toLowerCase()
+    if (!query) return environments
+    return environments.filter((env) => env.name.toLowerCase().includes(query))
+  }, [envSearchQuery, environments])
   const tabListWidth = useMemo(() => {
     const tabLabels = tabs.map((tab) => `${tab.request.method || "GET"} ${tab.title || "Untitled"}`)
     const envLabels = openEnvironmentTabs.map((tab) => `Environment ${tab.name}`)
@@ -233,7 +215,13 @@ export function TabBar() {
                 "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]",
                 activeEnvironmentId && "text-[var(--accent)]"
               )}
-              onClick={() => setShowEnvDropdown(!showEnvDropdown)}
+              onClick={() => {
+                setShowEnvDropdown((prev) => {
+                  const next = !prev
+                  if (next) setEnvSearchQuery("")
+                  return next
+                })
+              }}
               title="切换环境"
             >
               <AppIcon name="globe" size={11} strokeWidth={1.8} />
@@ -245,6 +233,34 @@ export function TabBar() {
                 className={cn("absolute right-0 top-full mt-1 z-[250] p-1", DROPDOWN_PANEL_CLASS)}
                 style={{ width: `${envDropdownWidth}px` }}
               >
+                <div className="mb-1 flex items-center gap-1 border-b border-[var(--border-subtle)] pb-1">
+                  <div className="relative flex-1">
+                    <AppIcon
+                      name="search"
+                      size={10}
+                      className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[var(--fg-muted)]"
+                    />
+                    <input
+                      value={envSearchQuery}
+                      onChange={(event) => setEnvSearchQuery(event.target.value)}
+                      placeholder="搜索环境..."
+                      className={cn(
+                        "h-7 w-full rounded-[7px] border border-[var(--border-color)] bg-[var(--surface)] pl-6 pr-2",
+                        "text-[11px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
+                      )}
+                    />
+                  </div>
+                  <button
+                    className={cn(
+                      "h-7 rounded-[7px] border px-2.5 text-[11px] transition-colors",
+                      "border-[var(--border-color)] bg-[var(--surface)] text-[var(--fg)] hover:bg-[var(--surface-secondary)]"
+                    )}
+                    onClick={() => void handleQuickCreateEnvironment()}
+                    disabled={creatingEnvironment}
+                  >
+                    {creatingEnvironment ? "创建中" : "新建"}
+                  </button>
+                </div>
                 <button
                   className={cn(
                     DROPDOWN_ITEM_CLASS,
@@ -254,16 +270,8 @@ export function TabBar() {
                 >
                   <AppIcon name="globe" size={11} /> No Environment
                 </button>
-                <button
-                  className={cn(DROPDOWN_ITEM_CLASS, "text-[var(--fg)]")}
-                  onClick={() => void handleQuickCreateEnvironment()}
-                  disabled={creatingEnvironment}
-                >
-                  <AppIcon name="add" size={11} />
-                  {creatingEnvironment ? "创建中..." : "新建环境"}
-                </button>
                 <div className="h-px bg-[var(--border-subtle)] my-0.5" />
-                {environments.map((env) => (
+                {filteredEnvironments.map((env) => (
                   <div key={env.id} className="group relative">
                     <button
                       className={cn(
@@ -284,6 +292,11 @@ export function TabBar() {
                     </button>
                   </div>
                 ))}
+                {filteredEnvironments.length === 0 && (
+                  <div className="px-3 py-2 text-[10px] text-[var(--fg-muted)]">
+                    未找到匹配环境
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -325,71 +338,63 @@ export function TabBar() {
       >
         {tabs.map((tab) => {
           const isActive = !editingEnvironmentId && tab.id === activeTabId
-          const isRenaming = renamingTabId === tab.id
+          const tabUrl = tab.request.url?.trim() || "未设置请求地址"
           return (
-            <div
-              key={tab.id}
-              data-tab-id={tab.id}
-              className={cn(
-                "flex items-center gap-[var(--size-gap-sm)] px-2.5 h-[calc(var(--size-tab)-2px)]",
-                "text-[length:var(--size-font-2xs)] cursor-pointer select-none",
+            <Tooltip key={tab.id} delayDuration={260}>
+              <TooltipTrigger asChild>
+                <div
+                  data-tab-id={tab.id}
+                  className={cn(
+                    "flex items-center gap-[var(--size-gap-sm)] px-2.5 h-[calc(var(--size-tab)-2px)]",
+                    "text-[length:var(--size-font-2xs)] cursor-pointer select-none",
                 "border-r border-[var(--border-color)] transition-colors group min-w-0 flex-shrink-0",
                 isActive
-                  ? "bg-[var(--surface)] text-[var(--fg)] border-b-2 border-b-[var(--accent)]"
+                  ? "bg-[var(--surface)] text-[var(--fg)] border-r-transparent border-b-2 border-b-[var(--accent)]"
                   : "text-[var(--fg)] opacity-80 hover:opacity-100 hover:bg-[var(--tab-hover-bg)]"
               )}
-              title={`${tab.request.method} ${tab.title}`}
-              onPointerDown={(e) => {
-                if (isRenaming) return
-                if (e.button === 0) {
-                  e.preventDefault()
-                  setEditingEnvironmentId(null)
-                  setActiveTab(tab.id)
-                }
-                if (e.button === 1 && tab.closable) { e.preventDefault(); removeTab(tab.id) }
-              }}
-              onDoubleClick={() => startRename(tab.id, tab.title)}
-              onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id }) }}
-            >
-              <span className={cn(
-                "text-[9px] font-mono font-bold uppercase flex-shrink-0",
-                METHOD_COLORS[tab.request.method as HttpMethod] || "text-[var(--fg-muted)]"
-              )}>
-                {tab.request.method?.substring(0, 3) || "GET"}
-              </span>
-              {isRenaming ? (
-                <input
-                  className="bg-transparent text-[length:var(--size-font-2xs)] text-[var(--fg)] border-b border-[var(--accent)] outline-none w-[80px]"
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void handleRenameSubmit()
-                    if (e.key === "Escape") setRenamingTabId(null)
+                  onPointerDown={(e) => {
+                    if (e.button === 0) {
+                      e.preventDefault()
+                      setEditingEnvironmentId(null)
+                      setActiveTab(tab.id)
+                    }
+                    if (e.button === 1 && tab.closable) { e.preventDefault(); removeTab(tab.id) }
                   }}
-                  onBlur={() => void handleRenameSubmit()}
-                  autoFocus
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                />
-              ) : (
-                <span className="truncate max-w-[100px]">{tab.title}</span>
-              )}
-              {tab.dirty && (
-                <span className="w-1 h-1 rounded-full bg-[var(--accent)] flex-shrink-0" />
-              )}
-              {tab.closable && !isRenaming && (
-                <button
-                  className={cn(
-                    "flex items-center justify-center flex-shrink-0 transition-opacity",
-                    "opacity-0 group-hover:opacity-100",
-                    "text-[var(--fg-muted)] hover:text-[var(--fg)]"
-                  )}
-                  onClick={(e) => { e.stopPropagation(); removeTab(tab.id) }}
+                  onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id }) }}
                 >
-                  <AppIcon name="clear" size={10} />
-                </button>
-              )}
-            </div>
+                  <span className={cn(
+                    "text-[9px] font-mono font-bold uppercase flex-shrink-0 min-w-[40px] text-right",
+                    METHOD_COLORS[tab.request.method as HttpMethod] || "text-[var(--fg-muted)]"
+                  )}>
+                    {tab.request.method || "GET"}
+                  </span>
+                  <span className="truncate max-w-[100px]">{tab.title}</span>
+                  {tab.dirty && (
+                    <span className="w-1 h-1 rounded-full bg-[var(--accent)] flex-shrink-0" />
+                  )}
+                  {tab.closable && (
+                    <button
+                      className={cn(
+                        "flex items-center justify-center flex-shrink-0 transition-opacity",
+                        "opacity-0 group-hover:opacity-100",
+                        "text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                      )}
+                      onClick={(e) => { e.stopPropagation(); removeTab(tab.id) }}
+                    >
+                      <AppIcon name="clear" size={10} />
+                    </button>
+                  )}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="start" sideOffset={6} className="max-w-[460px] px-2.5 py-2">
+                <div className="text-[13px] leading-[1.35] text-[var(--fg)] break-words">
+                  {tab.title}
+                </div>
+                <div className="mt-1 text-[12px] leading-[1.35] text-[var(--fg-muted)] break-all">
+                  {tabUrl}
+                </div>
+              </TooltipContent>
+            </Tooltip>
           )
         })}
         {openEnvironmentTabs.map((environmentTab) => {
@@ -403,7 +408,7 @@ export function TabBar() {
                 "text-[length:var(--size-font-2xs)] cursor-pointer select-none",
                 "border-r border-[var(--border-color)] transition-colors group min-w-0 flex-shrink-0",
                 isEnvironmentTabActive
-                  ? "bg-[var(--surface)] text-[var(--fg)] border-b-2 border-b-[var(--accent)]"
+                  ? "bg-[var(--surface)] text-[var(--fg)] border-r-transparent border-b-2 border-b-[var(--accent)]"
                   : "text-[var(--fg)] opacity-80 hover:opacity-100 hover:bg-[var(--tab-hover-bg)]"
               )}
               title={`Environment ${environmentTab.name}`}
@@ -519,10 +524,10 @@ export function TabBar() {
                   }}
                 >
                   <span className={cn(
-                    "text-[9px] font-mono font-bold uppercase flex-shrink-0 w-[28px]",
+                    "text-[9px] font-mono font-bold uppercase flex-shrink-0 w-[40px] text-right",
                     METHOD_COLORS[tab.request.method as HttpMethod] || "text-[var(--fg-muted)]"
                   )}>
-                    {tab.request.method?.substring(0, 3) || "GET"}
+                    {tab.request.method || "GET"}
                   </span>
                   <span className="truncate text-[var(--fg)]">{tab.title}</span>
                   {tab.dirty && <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] flex-shrink-0" />}
@@ -543,7 +548,13 @@ export function TabBar() {
               "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]",
               activeEnvironmentId && "text-[var(--accent)]"
             )}
-            onClick={() => setShowEnvDropdown(!showEnvDropdown)}
+            onClick={() => {
+              setShowEnvDropdown((prev) => {
+                const next = !prev
+                if (next) setEnvSearchQuery("")
+                return next
+              })
+            }}
             title="切换环境"
           >
             <AppIcon name="globe" size={11} strokeWidth={1.8} />
@@ -555,6 +566,34 @@ export function TabBar() {
               className={cn("absolute right-0 top-full mt-1 z-[250] p-1", DROPDOWN_PANEL_CLASS)}
               style={{ width: `${envDropdownWidth}px` }}
             >
+              <div className="mb-1 flex items-center gap-1 border-b border-[var(--border-subtle)] pb-1">
+                <div className="relative flex-1">
+                  <AppIcon
+                    name="search"
+                    size={10}
+                    className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[var(--fg-muted)]"
+                  />
+                  <input
+                    value={envSearchQuery}
+                    onChange={(event) => setEnvSearchQuery(event.target.value)}
+                    placeholder="搜索环境..."
+                    className={cn(
+                      "h-7 w-full rounded-[7px] border border-[var(--border-color)] bg-[var(--surface)] pl-6 pr-2",
+                      "text-[11px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
+                    )}
+                  />
+                </div>
+                <button
+                  className={cn(
+                    "h-7 rounded-[7px] border px-2.5 text-[11px] transition-colors",
+                    "border-[var(--border-color)] bg-[var(--surface)] text-[var(--fg)] hover:bg-[var(--surface-secondary)]"
+                  )}
+                  onClick={() => void handleQuickCreateEnvironment()}
+                  disabled={creatingEnvironment}
+                >
+                  {creatingEnvironment ? "创建中" : "新建"}
+                </button>
+              </div>
               <button
                 className={cn(
                   DROPDOWN_ITEM_CLASS,
@@ -564,16 +603,8 @@ export function TabBar() {
               >
                 <AppIcon name="globe" size={11} /> No Environment
               </button>
-              <button
-                className={cn(DROPDOWN_ITEM_CLASS, "text-[var(--fg)]")}
-                onClick={() => void handleQuickCreateEnvironment()}
-                disabled={creatingEnvironment}
-              >
-                <AppIcon name="add" size={11} />
-                {creatingEnvironment ? "创建中..." : "新建环境"}
-              </button>
               <div className="h-px bg-[var(--border-subtle)] my-0.5" />
-              {environments.map((env) => (
+              {filteredEnvironments.map((env) => (
                 <div key={env.id} className="group relative">
                   <button
                     className={cn(
@@ -594,9 +625,9 @@ export function TabBar() {
                   </button>
                 </div>
               ))}
-              {environments.length === 0 && (
+              {filteredEnvironments.length === 0 && (
                 <div className="px-3 py-2 text-[10px] text-[var(--fg-muted)]">
-                  暂无环境，请在侧边栏环境管理中创建
+                  未找到匹配环境
                 </div>
               )}
             </div>
@@ -613,12 +644,6 @@ export function TabBar() {
           )}
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <button
-            className="w-full whitespace-nowrap px-2.5 py-1.5 rounded-[7px] text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] flex items-center gap-2"
-            onClick={() => { if (contextTab) startRename(contextTab.id, contextTab.title) }}
-          >
-            <AppIcon name="pencil" size={12} /> 重命名
-          </button>
           {contextTab?.closable && (
             <button
               className="w-full whitespace-nowrap px-2.5 py-1.5 rounded-[7px] text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] flex items-center gap-2"

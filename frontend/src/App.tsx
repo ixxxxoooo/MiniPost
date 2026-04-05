@@ -8,6 +8,54 @@ import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { info, error as logError } from "@/lib/logger"
 
+const WINDOW_STATE_STORAGE_KEY = "minipost:window-state"
+const WINDOW_MIN_WIDTH = 900
+const WINDOW_MIN_HEIGHT = 600
+
+type PersistedWindowState = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+function normalizeWindowState(input: Partial<PersistedWindowState>): PersistedWindowState | null {
+  const x = Number(input.x)
+  const y = Number(input.y)
+  const width = Number(input.width)
+  const height = Number(input.height)
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) {
+    return null
+  }
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.max(WINDOW_MIN_WIDTH, Math.round(width)),
+    height: Math.max(WINDOW_MIN_HEIGHT, Math.round(height)),
+  }
+}
+
+function readWindowState(): PersistedWindowState | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(WINDOW_STATE_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<PersistedWindowState>
+    return normalizeWindowState(parsed)
+  } catch {
+    return null
+  }
+}
+
+function persistWindowState(state: PersistedWindowState) {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(WINDOW_STATE_STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // ignore persistence errors
+  }
+}
+
 function App() {
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
   const editingEnvironmentId = useUIStore((s) => s.editingEnvironmentId)
@@ -22,6 +70,83 @@ function App() {
     useProjectStore.getState().loadProjects()
       .then(() => info("App", "项目列表加载完成"))
       .catch((err) => logError("App", "项目列表加载失败", { error: String(err) }))
+  }, [])
+
+  useEffect(() => {
+    let canceled = false
+    const restoreWindowState = async () => {
+      const stored = readWindowState()
+      if (!stored) return
+      try {
+        const runtime = await import("../wailsjs/runtime/runtime")
+        if (canceled) return
+        runtime.WindowSetSize(stored.width, stored.height)
+        runtime.WindowSetPosition(stored.x, stored.y)
+      } catch {
+        // ignore restore failures
+      }
+    }
+    void restoreWindowState()
+    return () => {
+      canceled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let disposed = false
+    let pollTimer: ReturnType<typeof setInterval> | null = null
+    let saving = false
+    let removeBeforeUnload: (() => void) | null = null
+
+    const startWindowStatePersistence = async () => {
+      try {
+        const runtime = await import("../wailsjs/runtime/runtime")
+        if (disposed) return
+
+        const saveWindowState = async () => {
+          if (disposed || saving) return
+          saving = true
+          try {
+            const maximised = await runtime.WindowIsMaximised()
+            if (maximised) return
+            const [size, position] = await Promise.all([runtime.WindowGetSize(), runtime.WindowGetPosition()])
+            const normalized = normalizeWindowState({
+              x: position.x,
+              y: position.y,
+              width: size.w,
+              height: size.h,
+            })
+            if (normalized) {
+              persistWindowState(normalized)
+            }
+          } catch {
+            // ignore persistence failures
+          } finally {
+            saving = false
+          }
+        }
+
+        const onBeforeUnload = () => {
+          void saveWindowState()
+        }
+        window.addEventListener("beforeunload", onBeforeUnload)
+        removeBeforeUnload = () => window.removeEventListener("beforeunload", onBeforeUnload)
+
+        pollTimer = setInterval(() => {
+          void saveWindowState()
+        }, 1200)
+      } catch {
+        // ignore setup failures
+      }
+    }
+
+    void startWindowStatePersistence()
+
+    return () => {
+      disposed = true
+      if (pollTimer) clearInterval(pollTimer)
+      if (removeBeforeUnload) removeBeforeUnload()
+    }
   }, [])
 
   const handleNewRequest = useCallback(async () => {
@@ -103,21 +228,34 @@ function App() {
     window.dispatchEvent(new CustomEvent("minipost:send"))
   }, [activeTab])
 
+  const handleOpenImport = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("minipost:open-import"))
+  }, [])
+
+  useEffect(() => {
+    const onNewRequest = () => {
+      void handleNewRequest()
+    }
+    window.addEventListener("minipost:new-request", onNewRequest as EventListener)
+    return () => window.removeEventListener("minipost:new-request", onNewRequest as EventListener)
+  }, [handleNewRequest])
+
   const shortcuts = useMemo(
     () => ({
       "mod+b": toggleSidebar,
       "mod+n": handleNewRequest,
+      "mod+o": handleOpenImport,
       "mod+s": handleSave,
       "mod+w": handleCloseTab,
       "mod+enter": handleSend,
     }),
-    [toggleSidebar, handleNewRequest, handleSave, handleCloseTab, handleSend]
+    [toggleSidebar, handleNewRequest, handleOpenImport, handleSave, handleCloseTab, handleSend]
   )
 
   useKeyboardShortcuts(shortcuts)
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delayDuration={120} skipDelayDuration={80}>
       <div className="window-frame fixed inset-0 bg-transparent">
         <div className="window-shell h-full w-full bg-[var(--surface)]">
           <AppLayout />

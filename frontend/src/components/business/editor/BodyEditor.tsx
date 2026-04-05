@@ -28,6 +28,7 @@ export function BodyEditor() {
 
   const { body } = activeTab.request
   const tabId = activeTab.id
+  const isCodeBody = body.type === "json" || body.type === "raw"
 
   const setBodyType = (type: BodyType) => {
     updateTabRequest(tabId, { body: { ...body, type } })
@@ -50,7 +51,7 @@ export function BodyEditor() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Body 类型选择 */}
       <div className="flex items-center gap-1 px-[var(--size-padding-sm)] py-1.5 flex-shrink-0">
         {ALL_BODY_TYPES.map((t) => (
@@ -71,7 +72,7 @@ export function BodyEditor() {
         {body.type === "json" && (
           <div className="ml-auto flex items-center gap-1">
             <button
-              className="text-2xs text-[var(--accent)] hover:underline px-1.5 py-0.5"
+              className="text-2xs text-[var(--accent)] hover:text-[var(--accent)]/90 px-1.5 py-0.5"
               onClick={handleFormatJson}
             >
               Beautify
@@ -82,7 +83,7 @@ export function BodyEditor() {
           <div className="ml-auto flex items-center gap-1">
             <RawFormatSelector />
             <button
-              className="text-2xs text-[var(--accent)] hover:underline px-1.5 py-0.5"
+              className="text-2xs text-[var(--accent)] hover:text-[var(--accent)]/90 px-1.5 py-0.5"
               onClick={handleFormatRaw}
             >
               Beautify
@@ -92,7 +93,7 @@ export function BodyEditor() {
       </div>
 
       {/* Body 内容 */}
-      <div className="flex-1 overflow-auto min-h-0">
+      <div className={cn("flex-1 min-h-0", isCodeBody ? "overflow-hidden" : "overflow-auto")}>
         {body.type === "none" && (
           <div className="text-center py-8 text-2xs text-[var(--fg-muted)]">
             此请求没有请求体
