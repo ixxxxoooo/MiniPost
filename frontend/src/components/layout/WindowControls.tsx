@@ -1,4 +1,104 @@
 import { useState } from "react"
+import { cn } from "@/lib/utils"
+
+type ControlType = "close" | "minimise" | "maximise"
+
+const CONTROL_STYLES: Record<ControlType, { bg: string; border: string; icon: string }> = {
+  close: {
+    bg: "#ff5f57",
+    border: "#e0443e",
+    icon: "#6b0f12",
+  },
+  minimise: {
+    bg: "#ffbd2e",
+    border: "#dea123",
+    icon: "#6a4708",
+  },
+  maximise: {
+    bg: "#28c840",
+    border: "#1ea133",
+    icon: "#0f5f1d",
+  },
+}
+
+function ControlIcon({ type }: { type: ControlType }) {
+  if (type === "close") {
+    return (
+      <svg width="6" height="6" viewBox="0 0 6 6" fill="none" aria-hidden="true">
+        <path
+          d="M1 1L5 5M5 1L1 5"
+          stroke={CONTROL_STYLES.close.icon}
+          strokeWidth="1"
+          strokeLinecap="round"
+        />
+      </svg>
+    )
+  }
+
+  if (type === "minimise") {
+    return (
+      <svg width="6" height="6" viewBox="0 0 6 6" fill="none" aria-hidden="true">
+        <path
+          d="M1 3H5"
+          stroke={CONTROL_STYLES.minimise.icon}
+          strokeWidth="1"
+          strokeLinecap="round"
+        />
+      </svg>
+    )
+  }
+
+  return (
+    <svg width="6" height="6" viewBox="0 0 6 6" fill="none" aria-hidden="true">
+      <path
+        d="M1.25 4.75L4.75 1.25"
+        stroke={CONTROL_STYLES.maximise.icon}
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <path
+        d="M2.5 1.25H4.75V3.5"
+        stroke={CONTROL_STYLES.maximise.icon}
+        strokeWidth="1"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+interface TrafficLightButtonProps {
+  hovered: boolean
+  onClick: () => void
+  title: string
+  type: ControlType
+}
+
+function TrafficLightButton({ hovered, onClick, title, type }: TrafficLightButtonProps) {
+  const style = CONTROL_STYLES[type]
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex h-[12px] w-[12px] items-center justify-center rounded-full",
+        "border transition-all duration-150 ease-out focus:outline-none"
+      )}
+      style={{
+        backgroundColor: style.bg,
+        borderColor: style.border,
+        boxShadow: "inset 0 0.5px 0 rgba(255,255,255,0.35)",
+      }}
+      title={title}
+      aria-label={title}
+      type="button"
+    >
+      <span className={cn("transition-opacity duration-150", hovered ? "opacity-100" : "opacity-0")}>
+        <ControlIcon type={type} />
+      </span>
+    </button>
+  )
+}
 
 export function WindowControls() {
   const [hovered, setHovered] = useState(false)
@@ -6,55 +106,24 @@ export function WindowControls() {
   const handleClose = () => {
     import("../../../wailsjs/runtime/runtime").then((r) => r.Quit())
   }
+
   const handleMinimise = () => {
     import("../../../wailsjs/runtime/runtime").then((r) => r.WindowMinimise())
   }
+
   const handleMaximise = () => {
     import("../../../wailsjs/runtime/runtime").then((r) => r.WindowToggleMaximise())
   }
 
   return (
     <div
-      className="flex items-center gap-[7px] px-3 titlebar-no-drag flex-shrink-0"
+      className="titlebar-no-drag flex flex-shrink-0 items-center gap-[8px] px-3"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <button
-        onClick={handleClose}
-        className="w-[12px] h-[12px] rounded-full flex items-center justify-center transition-colors focus:outline-none"
-        style={{ backgroundColor: hovered ? "#ff5f57" : "var(--fg-muted)" }}
-        title="关闭"
-      >
-        {hovered && (
-          <svg width="6" height="6" viewBox="0 0 6 6" fill="none">
-            <path d="M0.5 0.5L5.5 5.5M5.5 0.5L0.5 5.5" stroke="#4a0002" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
-        )}
-      </button>
-      <button
-        onClick={handleMinimise}
-        className="w-[12px] h-[12px] rounded-full flex items-center justify-center transition-colors focus:outline-none"
-        style={{ backgroundColor: hovered ? "#febc2e" : "var(--fg-muted)" }}
-        title="最小化"
-      >
-        {hovered && (
-          <svg width="6" height="2" viewBox="0 0 6 2" fill="none">
-            <path d="M0.5 1H5.5" stroke="#995700" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
-        )}
-      </button>
-      <button
-        onClick={handleMaximise}
-        className="w-[12px] h-[12px] rounded-full flex items-center justify-center transition-colors focus:outline-none"
-        style={{ backgroundColor: hovered ? "#28c840" : "var(--fg-muted)" }}
-        title="最大化/还原"
-      >
-        {hovered && (
-          <svg width="6" height="6" viewBox="0 0 6 6" fill="none">
-            <path d="M1 4.5L3 1.5L5 4.5" stroke="#006500" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
-      </button>
+      <TrafficLightButton hovered={hovered} onClick={handleClose} title="关闭" type="close" />
+      <TrafficLightButton hovered={hovered} onClick={handleMinimise} title="最小化" type="minimise" />
+      <TrafficLightButton hovered={hovered} onClick={handleMaximise} title="最大化/还原" type="maximise" />
     </div>
   )
 }

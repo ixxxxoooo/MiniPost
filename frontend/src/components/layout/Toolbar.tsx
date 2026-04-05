@@ -1,8 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react"
-import {
-  Sun, Moon, Monitor, PanelLeftClose, PanelLeft, Globe, Import,
-  Settings, ArrowDownUp, ArrowLeftRight,
-} from "lucide-react"
+import { AppIcon } from "@/components/ui/icon"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
@@ -52,8 +49,7 @@ export function Toolbar() {
   return (
     <div
       className={cn(
-        "absolute top-0 left-0 right-0 h-[var(--size-toolbar)] z-40",
-        "flex items-center border-b titlebar-drag",
+        "relative z-40 flex h-[var(--size-toolbar)] flex-shrink-0 items-center overflow-hidden border-b titlebar-drag",
         "bg-[var(--toolbar-bg)] border-[var(--toolbar-border)]"
       )}
       style={{ paddingRight: "var(--size-padding-sm)" }}
@@ -70,9 +66,9 @@ export function Toolbar() {
           title={sidebarCollapsed ? "展开侧边栏 (⌘B)" : "折叠侧边栏 (⌘B)"}
         >
           {sidebarCollapsed ? (
-            <PanelLeft className="h-[var(--size-btn-icon-sm)] w-[var(--size-btn-icon-sm)]" />
+            <AppIcon name="sidebarExpand" size={14} className="text-[var(--fg-secondary)]" />
           ) : (
-            <PanelLeftClose className="h-[var(--size-btn-icon-sm)] w-[var(--size-btn-icon-sm)]" />
+            <AppIcon name="sidebarCollapse" size={14} className="text-[var(--fg-secondary)]" />
           )}
         </button>
 
@@ -84,9 +80,9 @@ export function Toolbar() {
           title={layoutDirection === "vertical" ? "切换为左右布局" : "切换为上下布局"}
         >
           {layoutDirection === "vertical" ? (
-            <ArrowLeftRight className="h-[var(--size-btn-icon-sm)] w-[var(--size-btn-icon-sm)]" />
+            <AppIcon name="arrowLeftRight" size={14} className="text-[var(--fg-secondary)]" />
           ) : (
-            <ArrowDownUp className="h-[var(--size-btn-icon-sm)] w-[var(--size-btn-icon-sm)]" />
+            <AppIcon name="arrowUpDown" size={14} className="text-[var(--fg-secondary)]" />
           )}
         </button>
       </div>
@@ -146,7 +142,7 @@ export function Toolbar() {
 
         {currentProjectId && environments.length > 0 && (
           <>
-            <Globe className="h-[var(--size-btn-icon-sm)] w-[var(--size-btn-icon-sm)] text-[var(--fg-muted)]" />
+            <AppIcon name="globe" size={14} className="text-[var(--fg-muted)]" />
             <Select
               value={activeEnvironmentId ?? "none"}
               onValueChange={(v) => setActiveEnvironment(v === "none" ? null : v)}
@@ -169,7 +165,7 @@ export function Toolbar() {
           onClick={() => setShowCurlInput(!showCurlInput)}
           title="导入 cURL"
         >
-          <Import className="h-[var(--size-btn-icon-sm)] w-[var(--size-btn-icon-sm)] text-[var(--fg-secondary)]" />
+          <AppIcon name="upload" size={14} className="text-[var(--fg-secondary)]" />
         </button>
 
         <button
@@ -178,8 +174,8 @@ export function Toolbar() {
           title={resolved === "dark" ? "切换为浅色主题" : "切换为深色主题"}
         >
           {resolved === "dark"
-            ? <Sun className="h-[var(--size-btn-icon-sm)] w-[var(--size-btn-icon-sm)] text-[var(--fg-secondary)]" />
-            : <Moon className="h-[var(--size-btn-icon-sm)] w-[var(--size-btn-icon-sm)] text-[var(--fg-secondary)]" />
+            ? <AppIcon name="sun" size={14} className="text-[var(--fg-secondary)]" />
+            : <AppIcon name="moon" size={14} className="text-[var(--fg-secondary)]" />
           }
         </button>
       </div>
