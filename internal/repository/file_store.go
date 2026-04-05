@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -15,6 +16,91 @@ const (
 	schemaVersion  = 1
 	maxHistorySize = 500
 )
+
+func normalizeIndex(index int, length int) int {
+	if index < 0 {
+		return 0
+	}
+	if index > length {
+		return length
+	}
+	return index
+}
+
+func sortNodesByOrder(items []model.CollectionNode) []model.CollectionNode {
+	sorted := append([]model.CollectionNode(nil), items...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if sorted[i].SortOrder == sorted[j].SortOrder {
+			if sorted[i].NodeType == sorted[j].NodeType {
+				return sorted[i].NodeID < sorted[j].NodeID
+			}
+			return sorted[i].NodeType < sorted[j].NodeType
+		}
+		return sorted[i].SortOrder < sorted[j].SortOrder
+	})
+	return sorted
+}
+
+func sortFoldersByOrder(items []model.Folder) []model.Folder {
+	sorted := append([]model.Folder(nil), items...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if sorted[i].SortOrder == sorted[j].SortOrder {
+			return sorted[i].ID < sorted[j].ID
+		}
+		return sorted[i].SortOrder < sorted[j].SortOrder
+	})
+	return sorted
+}
+
+func sortRequestsByOrder(items []model.RequestItem) []model.RequestItem {
+	sorted := append([]model.RequestItem(nil), items...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if sorted[i].SortOrder == sorted[j].SortOrder {
+			return sorted[i].ID < sorted[j].ID
+		}
+		return sorted[i].SortOrder < sorted[j].SortOrder
+	})
+	return sorted
+}
+
+func insertNodeAt(items []model.CollectionNode, item model.CollectionNode, index int) []model.CollectionNode {
+	index = normalizeIndex(index, len(items))
+	items = append(items, model.CollectionNode{})
+	copy(items[index+1:], items[index:])
+	items[index] = item
+	return items
+}
+
+func reindexNodes(items []model.CollectionNode) []model.CollectionNode {
+	for i := range items {
+		items[i].SortOrder = i
+	}
+	return items
+}
+
+func isDescendantFolder(nodes []model.CollectionNode, potentialChildID, ancestorID string) bool {
+	if potentialChildID == "" || ancestorID == "" {
+		return false
+	}
+	parentByID := make(map[string]string, len(nodes))
+	for _, node := range nodes {
+		if node.NodeType == model.CollectionNodeTypeFolder {
+			parentByID[node.NodeID] = node.ParentFolderID
+		}
+	}
+	current := potentialChildID
+	for current != "" {
+		if current == ancestorID {
+			return true
+		}
+		next, ok := parentByID[current]
+		if !ok {
+			break
+		}
+		current = next
+	}
+	return false
+}
 
 // FileStore 基于 JSON 文件的本地存储实现
 type FileStore struct {
@@ -133,7 +219,16 @@ func (fs *FileStore) DeleteProject(id string) error {
 	return os.RemoveAll(filepath.Join(fs.baseDir, "projects", id))
 }
 
-// ---- 文件夹 ----
+// ---- 集合树 ----
+
+type treeFile struct {
+	SchemaVersion int                    `json:"schemaVersion"`
+	Nodes         []model.CollectionNode `json:"nodes"`
+}
+
+func (fs *FileStore) treePath(projectID string) string {
+	return filepath.Join(fs.baseDir, "projects", projectID, "tree.json")
+}
 
 type foldersFile struct {
 	SchemaVersion int            `json:"schemaVersion"`
@@ -144,10 +239,16 @@ func (fs *FileStore) foldersPath(projectID string) string {
 	return filepath.Join(fs.baseDir, "projects", projectID, "folders.json")
 }
 
-func (fs *FileStore) ListFolders(projectID string) ([]model.Folder, error) {
-	fs.mu.RLock()
-	defer fs.mu.RUnlock()
+type requestsFile struct {
+	SchemaVersion int                 `json:"schemaVersion"`
+	Requests      []model.RequestItem `json:"requests"`
+}
 
+func (fs *FileStore) requestsPath(projectID string) string {
+	return filepath.Join(fs.baseDir, "projects", projectID, "requests.json")
+}
+
+func (fs *FileStore) loadFoldersUnlocked(projectID string) ([]model.Folder, error) {
 	var data foldersFile
 	if err := fs.readJSON(fs.foldersPath(projectID), &data); err != nil {
 		if os.IsNotExist(err) {
@@ -158,71 +259,382 @@ func (fs *FileStore) ListFolders(projectID string) ([]model.Folder, error) {
 	return data.Folders, nil
 }
 
+func (fs *FileStore) loadRequestsUnlocked(projectID string) ([]model.RequestItem, error) {
+	var data requestsFile
+	if err := fs.readJSON(fs.requestsPath(projectID), &data); err != nil {
+		if os.IsNotExist(err) {
+			return []model.RequestItem{}, nil
+		}
+		return nil, err
+	}
+	return data.Requests, nil
+}
+
+func (fs *FileStore) saveFoldersUnlocked(projectID string, folders []model.Folder) error {
+	return fs.writeJSON(fs.foldersPath(projectID), &foldersFile{
+		SchemaVersion: schemaVersion,
+		Folders:       folders,
+	})
+}
+
+func (fs *FileStore) saveRequestsUnlocked(projectID string, requests []model.RequestItem) error {
+	return fs.writeJSON(fs.requestsPath(projectID), &requestsFile{
+		SchemaVersion: schemaVersion,
+		Requests:      requests,
+	})
+}
+
+func (fs *FileStore) buildTreeNodesFromLegacy(projectID string, folders []model.Folder, requests []model.RequestItem) []model.CollectionNode {
+	folderGroups := make(map[string][]model.Folder)
+	for _, folder := range folders {
+		folderGroups[folder.ParentID] = append(folderGroups[folder.ParentID], folder)
+	}
+	for parentID := range folderGroups {
+		folderGroups[parentID] = sortFoldersByOrder(folderGroups[parentID])
+	}
+
+	requestGroups := make(map[string][]model.RequestItem)
+	for _, req := range requests {
+		requestGroups[req.FolderID] = append(requestGroups[req.FolderID], req)
+	}
+	for folderID := range requestGroups {
+		requestGroups[folderID] = sortRequestsByOrder(requestGroups[folderID])
+	}
+
+	parentSet := make(map[string]struct{})
+	for parentID := range folderGroups {
+		parentSet[parentID] = struct{}{}
+	}
+	for parentID := range requestGroups {
+		parentSet[parentID] = struct{}{}
+	}
+
+	var nodes []model.CollectionNode
+	for parentID := range parentSet {
+		order := 0
+		for _, folder := range folderGroups[parentID] {
+			nodes = append(nodes, model.CollectionNode{
+				NodeID:         folder.ID,
+				NodeType:       model.CollectionNodeTypeFolder,
+				ProjectID:      projectID,
+				ParentFolderID: parentID,
+				SortOrder:      order,
+			})
+			order++
+		}
+		for _, req := range requestGroups[parentID] {
+			nodes = append(nodes, model.CollectionNode{
+				NodeID:         req.ID,
+				NodeType:       model.CollectionNodeTypeRequest,
+				ProjectID:      projectID,
+				ParentFolderID: parentID,
+				SortOrder:      order,
+			})
+			order++
+		}
+	}
+
+	return sortNodesByOrder(nodes)
+}
+
+func (fs *FileStore) syncEntitiesWithTree(projectID string, folders []model.Folder, requests []model.RequestItem, nodes []model.CollectionNode) ([]model.Folder, []model.RequestItem) {
+	folderByID := make(map[string]model.Folder, len(folders))
+	for _, folder := range folders {
+		folderByID[folder.ID] = folder
+	}
+	requestByID := make(map[string]model.RequestItem, len(requests))
+	for _, req := range requests {
+		requestByID[req.ID] = req
+	}
+
+	sortedNodes := sortNodesByOrder(nodes)
+	orderByParent := make(map[string]int)
+	for _, node := range sortedNodes {
+		sortOrder := orderByParent[node.ParentFolderID]
+		orderByParent[node.ParentFolderID] = sortOrder + 1
+		if node.NodeType == model.CollectionNodeTypeFolder {
+			folder, ok := folderByID[node.NodeID]
+			if !ok {
+				continue
+			}
+			folder.ParentID = node.ParentFolderID
+			folder.SortOrder = sortOrder
+			folderByID[node.NodeID] = folder
+			continue
+		}
+		req, ok := requestByID[node.NodeID]
+		if !ok {
+			continue
+		}
+		req.FolderID = node.ParentFolderID
+		req.SortOrder = sortOrder
+		requestByID[node.NodeID] = req
+	}
+
+	nextFolders := make([]model.Folder, 0, len(folderByID))
+	for _, folder := range folderByID {
+		nextFolders = append(nextFolders, folder)
+	}
+	nextRequests := make([]model.RequestItem, 0, len(requestByID))
+	for _, req := range requestByID {
+		nextRequests = append(nextRequests, req)
+	}
+	return nextFolders, nextRequests
+}
+
+func (fs *FileStore) loadTreeNodesUnlocked(projectID string, folders []model.Folder, requests []model.RequestItem) ([]model.CollectionNode, error) {
+	var data treeFile
+	if err := fs.readJSON(fs.treePath(projectID), &data); err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		nodes := fs.buildTreeNodesFromLegacy(projectID, folders, requests)
+		if err := fs.writeJSON(fs.treePath(projectID), &treeFile{SchemaVersion: schemaVersion, Nodes: nodes}); err != nil {
+			return nil, err
+		}
+		return nodes, nil
+	}
+	return sortNodesByOrder(data.Nodes), nil
+}
+
+func (fs *FileStore) saveTreeNodesUnlocked(projectID string, nodes []model.CollectionNode) error {
+	return fs.writeJSON(fs.treePath(projectID), &treeFile{
+		SchemaVersion: schemaVersion,
+		Nodes:         sortNodesByOrder(nodes),
+	})
+}
+
+func (fs *FileStore) getCollectionDataUnlocked(projectID string) (*model.CollectionData, error) {
+	folders, err := fs.loadFoldersUnlocked(projectID)
+	if err != nil {
+		return nil, err
+	}
+	requests, err := fs.loadRequestsUnlocked(projectID)
+	if err != nil {
+		return nil, err
+	}
+	nodes, err := fs.loadTreeNodesUnlocked(projectID, folders, requests)
+	if err != nil {
+		return nil, err
+	}
+	folders, requests = fs.syncEntitiesWithTree(projectID, folders, requests, nodes)
+	return &model.CollectionData{
+		Folders:   folders,
+		Requests:  requests,
+		TreeNodes: nodes,
+	}, nil
+}
+
+func (fs *FileStore) saveCollectionDataUnlocked(projectID string, data *model.CollectionData) error {
+	folders, requests := fs.syncEntitiesWithTree(projectID, data.Folders, data.Requests, data.TreeNodes)
+	if err := fs.saveFoldersUnlocked(projectID, folders); err != nil {
+		return err
+	}
+	if err := fs.saveRequestsUnlocked(projectID, requests); err != nil {
+		return err
+	}
+	if err := fs.saveTreeNodesUnlocked(projectID, data.TreeNodes); err != nil {
+		return err
+	}
+	data.Folders = folders
+	data.Requests = requests
+	data.TreeNodes = sortNodesByOrder(data.TreeNodes)
+	return nil
+}
+
+func (fs *FileStore) ListFolders(projectID string) ([]model.Folder, error) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	data, err := fs.getCollectionDataUnlocked(projectID)
+	if err != nil {
+		return nil, err
+	}
+	if err := fs.saveCollectionDataUnlocked(projectID, data); err != nil {
+		return nil, err
+	}
+	return data.Folders, nil
+}
+
 func (fs *FileStore) SaveFolder(folder *model.Folder) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
-	path := fs.foldersPath(folder.ProjectID)
-	var data foldersFile
-	_ = fs.readJSON(path, &data)
+	data, err := fs.getCollectionDataUnlocked(folder.ProjectID)
+	if err != nil {
+		return err
+	}
 
 	found := false
-	for i, f := range data.Folders {
-		if f.ID == folder.ID {
-			data.Folders[i] = *folder
+	for i, existing := range data.Folders {
+		if existing.ID == folder.ID {
+			data.Folders[i].Name = folder.Name
 			found = true
 			break
 		}
 	}
 	if !found {
 		data.Folders = append(data.Folders, *folder)
+		data.TreeNodes = append(data.TreeNodes, model.CollectionNode{
+			NodeID:         folder.ID,
+			NodeType:       model.CollectionNodeTypeFolder,
+			ProjectID:      folder.ProjectID,
+			ParentFolderID: folder.ParentID,
+			SortOrder:      len(sortNodesByOrder(filterNodesByParentAndType(data.TreeNodes, folder.ParentID, ""))),
+		})
 	}
 
-	data.SchemaVersion = schemaVersion
-	return fs.writeJSON(path, &data)
+	return fs.saveCollectionDataUnlocked(folder.ProjectID, data)
+}
+
+func filterNodesByParentAndType(nodes []model.CollectionNode, parentFolderID string, nodeType model.CollectionNodeType) []model.CollectionNode {
+	var filtered []model.CollectionNode
+	for _, node := range nodes {
+		if node.ParentFolderID != parentFolderID {
+			continue
+		}
+		if nodeType != "" && node.NodeType != nodeType {
+			continue
+		}
+		filtered = append(filtered, node)
+	}
+	return sortNodesByOrder(filtered)
+}
+
+func (fs *FileStore) MoveCollectionNode(projectID, nodeID string, nodeType model.CollectionNodeType, targetParentFolderID string, targetIndex int) error {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	data, err := fs.getCollectionDataUnlocked(projectID)
+	if err != nil {
+		return err
+	}
+
+	movingIndex := -1
+	for i := range data.TreeNodes {
+		if data.TreeNodes[i].NodeID == nodeID && data.TreeNodes[i].NodeType == nodeType {
+			movingIndex = i
+			break
+		}
+	}
+	if movingIndex < 0 {
+		return fmt.Errorf("节点 %s 不存在", nodeID)
+	}
+
+	if nodeType == model.CollectionNodeTypeFolder {
+		if targetParentFolderID == nodeID {
+			return fmt.Errorf("不能将文件夹移动到自身")
+		}
+		if isDescendantFolder(data.TreeNodes, targetParentFolderID, nodeID) {
+			return fmt.Errorf("不能将文件夹移动到其子文件夹中")
+		}
+	}
+
+	moving := data.TreeNodes[movingIndex]
+	moving.ParentFolderID = targetParentFolderID
+
+	var siblings []model.CollectionNode
+	var remaining []model.CollectionNode
+	for i, node := range data.TreeNodes {
+		if i == movingIndex {
+			continue
+		}
+		if node.ParentFolderID == targetParentFolderID {
+			siblings = append(siblings, node)
+			continue
+		}
+		remaining = append(remaining, node)
+	}
+
+	siblings = sortNodesByOrder(siblings)
+	siblings = insertNodeAt(siblings, moving, targetIndex)
+	siblings = reindexNodes(siblings)
+	data.TreeNodes = append(remaining, siblings...)
+	return fs.saveCollectionDataUnlocked(projectID, data)
+}
+
+func (fs *FileStore) MoveFolder(projectID, folderID, targetParentID string, targetIndex int) error {
+	return fs.MoveCollectionNode(projectID, folderID, model.CollectionNodeTypeFolder, targetParentID, targetIndex)
+}
+
+func collectDescendantFolderIDs(nodes []model.CollectionNode, folderID string) map[string]struct{} {
+	ids := map[string]struct{}{folderID: {}}
+	changed := true
+	for changed {
+		changed = false
+		for _, node := range nodes {
+			if node.NodeType != model.CollectionNodeTypeFolder {
+				continue
+			}
+			if _, ok := ids[node.ParentFolderID]; ok {
+				if _, exists := ids[node.NodeID]; !exists {
+					ids[node.NodeID] = struct{}{}
+					changed = true
+				}
+			}
+		}
+	}
+	return ids
 }
 
 func (fs *FileStore) DeleteFolder(projectID, folderID string) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
-	path := fs.foldersPath(projectID)
-	var data foldersFile
-	if err := fs.readJSON(path, &data); err != nil {
+	data, err := fs.getCollectionDataUnlocked(projectID)
+	if err != nil {
 		return err
 	}
 
-	var filtered []model.Folder
-	for _, f := range data.Folders {
-		if f.ID != folderID {
-			filtered = append(filtered, f)
+	folderIDs := collectDescendantFolderIDs(data.TreeNodes, folderID)
+	requestIDs := make(map[string]struct{})
+	for _, node := range data.TreeNodes {
+		if node.NodeType == model.CollectionNodeTypeRequest {
+			if _, ok := folderIDs[node.ParentFolderID]; ok {
+				requestIDs[node.NodeID] = struct{}{}
+			}
 		}
 	}
-	data.Folders = filtered
-	data.SchemaVersion = schemaVersion
-	return fs.writeJSON(path, &data)
-}
 
-// ---- 请求 ----
-
-type requestsFile struct {
-	SchemaVersion int                 `json:"schemaVersion"`
-	Requests      []model.RequestItem `json:"requests"`
-}
-
-func (fs *FileStore) requestsPath(projectID string) string {
-	return filepath.Join(fs.baseDir, "projects", projectID, "requests.json")
+	var nextFolders []model.Folder
+	for _, folder := range data.Folders {
+		if _, ok := folderIDs[folder.ID]; ok {
+			continue
+		}
+		nextFolders = append(nextFolders, folder)
+	}
+	var nextRequests []model.RequestItem
+	for _, req := range data.Requests {
+		if _, ok := requestIDs[req.ID]; ok {
+			continue
+		}
+		nextRequests = append(nextRequests, req)
+	}
+	var nextNodes []model.CollectionNode
+	for _, node := range data.TreeNodes {
+		if _, ok := folderIDs[node.NodeID]; ok && node.NodeType == model.CollectionNodeTypeFolder {
+			continue
+		}
+		if _, ok := requestIDs[node.NodeID]; ok && node.NodeType == model.CollectionNodeTypeRequest {
+			continue
+		}
+		nextNodes = append(nextNodes, node)
+	}
+	data.Folders = nextFolders
+	data.Requests = nextRequests
+	data.TreeNodes = nextNodes
+	return fs.saveCollectionDataUnlocked(projectID, data)
 }
 
 func (fs *FileStore) ListRequests(projectID string) ([]model.RequestItem, error) {
-	fs.mu.RLock()
-	defer fs.mu.RUnlock()
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
 
-	var data requestsFile
-	if err := fs.readJSON(fs.requestsPath(projectID), &data); err != nil {
-		if os.IsNotExist(err) {
-			return []model.RequestItem{}, nil
-		}
+	data, err := fs.getCollectionDataUnlocked(projectID)
+	if err != nil {
+		return nil, err
+	}
+	if err := fs.saveCollectionDataUnlocked(projectID, data); err != nil {
 		return nil, err
 	}
 	return data.Requests, nil
@@ -245,13 +657,14 @@ func (fs *FileStore) SaveRequest(request *model.RequestItem) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
-	path := fs.requestsPath(request.ProjectID)
-	var data requestsFile
-	_ = fs.readJSON(path, &data)
+	data, err := fs.getCollectionDataUnlocked(request.ProjectID)
+	if err != nil {
+		return err
+	}
 
 	found := false
-	for i, r := range data.Requests {
-		if r.ID == request.ID {
+	for i, existing := range data.Requests {
+		if existing.ID == request.ID {
 			data.Requests[i] = *request
 			found = true
 			break
@@ -259,31 +672,62 @@ func (fs *FileStore) SaveRequest(request *model.RequestItem) error {
 	}
 	if !found {
 		data.Requests = append(data.Requests, *request)
+		data.TreeNodes = append(data.TreeNodes, model.CollectionNode{
+			NodeID:         request.ID,
+			NodeType:       model.CollectionNodeTypeRequest,
+			ProjectID:      request.ProjectID,
+			ParentFolderID: request.FolderID,
+			SortOrder:      len(filterNodesByParentAndType(data.TreeNodes, request.FolderID, "")),
+		})
 	}
 
-	data.SchemaVersion = schemaVersion
-	return fs.writeJSON(path, &data)
+	return fs.saveCollectionDataUnlocked(request.ProjectID, data)
 }
 
 func (fs *FileStore) DeleteRequest(projectID, requestID string) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
-	path := fs.requestsPath(projectID)
-	var data requestsFile
-	if err := fs.readJSON(path, &data); err != nil {
+	data, err := fs.getCollectionDataUnlocked(projectID)
+	if err != nil {
 		return err
 	}
 
-	var filtered []model.RequestItem
-	for _, r := range data.Requests {
-		if r.ID != requestID {
-			filtered = append(filtered, r)
+	var nextRequests []model.RequestItem
+	for _, req := range data.Requests {
+		if req.ID == requestID {
+			continue
 		}
+		nextRequests = append(nextRequests, req)
 	}
-	data.Requests = filtered
-	data.SchemaVersion = schemaVersion
-	return fs.writeJSON(path, &data)
+	var nextNodes []model.CollectionNode
+	for _, node := range data.TreeNodes {
+		if node.NodeType == model.CollectionNodeTypeRequest && node.NodeID == requestID {
+			continue
+		}
+		nextNodes = append(nextNodes, node)
+	}
+	data.Requests = nextRequests
+	data.TreeNodes = nextNodes
+	return fs.saveCollectionDataUnlocked(projectID, data)
+}
+
+func (fs *FileStore) MoveRequest(projectID, requestID, targetFolderID string, targetIndex int) error {
+	return fs.MoveCollectionNode(projectID, requestID, model.CollectionNodeTypeRequest, targetFolderID, targetIndex)
+}
+
+func (fs *FileStore) GetCollectionData(projectID string) (*model.CollectionData, error) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	data, err := fs.getCollectionDataUnlocked(projectID)
+	if err != nil {
+		return nil, err
+	}
+	if err := fs.saveCollectionDataUnlocked(projectID, data); err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 // ---- 环境变量 ----
@@ -390,11 +834,7 @@ func (fs *FileStore) AddHistory(projectID string, entry *model.HistoryEntry) err
 	_ = fs.readJSON(path, &data)
 
 	entry.Timestamp = time.Now().UTC().Format(time.RFC3339)
-
-	// 新记录插入到最前面
 	data.Entries = append([]model.HistoryEntry{*entry}, data.Entries...)
-
-	// 限制历史记录数量
 	if len(data.Entries) > maxHistorySize {
 		data.Entries = data.Entries[:maxHistorySize]
 	}

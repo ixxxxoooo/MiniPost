@@ -1,19 +1,34 @@
-import { Send, Loader2, Save } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
 import { HTTP_METHODS, METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { AppIcon } from "@/components/ui/icon"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
 import { cn } from "@/lib/utils"
 
 interface UrlBarProps {
-  onSend: () => void
+  onSend: (downloadAfter?: boolean) => void
+  onCancel: () => void
   onSave: () => void
 }
 
-export function UrlBar({ onSend, onSave }: UrlBarProps) {
+export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
   const { isSending } = useUIStore()
+  const [showSendMenu, setShowSendMenu] = useState(false)
+  const sendMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showSendMenu) return
+    const handler = (e: MouseEvent) => {
+      if (sendMenuRef.current && !sendMenuRef.current.contains(e.target as Node)) {
+        setShowSendMenu(false)
+      }
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [showSendMenu])
 
   if (!activeTab) return null
 
@@ -27,12 +42,7 @@ export function UrlBar({ onSend, onSave }: UrlBarProps) {
       )}
       style={{ height: "40px" }}
     >
-      {activeTab.dirty && (
-        <div className="w-1.5 h-1.5 rounded-full bg-[var(--warning)] flex-shrink-0" title="未保存" />
-      )}
-
       <div className="flex flex-1 items-center overflow-hidden rounded-[10px] border border-[var(--button-border)] bg-[var(--surface)] focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]/20">
-        {/* 方法选择 */}
         <Select value={request.method} onValueChange={(value) => updateTabRequest(activeTab.id, { method: value as HttpMethod })}>
           <SelectTrigger
             className={cn(
@@ -44,13 +54,13 @@ export function UrlBar({ onSend, onSave }: UrlBarProps) {
           >
             <SelectValue placeholder="方法" />
           </SelectTrigger>
-          <SelectContent className="rounded-[10px] border-[var(--button-border)] bg-[var(--surface-elevated)] p-1 shadow-[var(--shadow-lg)]">
+          <SelectContent>
             {HTTP_METHODS.map((method) => (
               <SelectItem
                 key={method}
                 value={method}
                 className={cn(
-                  "rounded-[8px] py-1.5 pl-7 pr-2 text-[11px] font-mono font-semibold",
+                  "rounded-[8px] py-1.5 px-2 text-[11px] font-mono font-semibold",
                   METHOD_COLORS[method]
                 )}
               >
@@ -60,7 +70,6 @@ export function UrlBar({ onSend, onSave }: UrlBarProps) {
           </SelectContent>
         </Select>
 
-        {/* URL 输入 */}
         <input
           value={request.url}
           onChange={(e) => updateTabRequest(activeTab.id, { url: e.target.value })}
@@ -76,38 +85,81 @@ export function UrlBar({ onSend, onSave }: UrlBarProps) {
         />
       </div>
 
-      {/* 保存按钮 */}
       <button
         className={cn(
-          "h-[var(--size-btn)] w-[var(--size-btn)] flex items-center justify-center rounded-[var(--radius-btn)]",
-          "hover:bg-[var(--sidebar-hover)] transition-colors",
-          activeTab.dirty ? "text-[var(--warning)]" : "text-[var(--fg-muted)]"
+          "h-[var(--size-btn)] px-3 flex items-center justify-center gap-1 rounded-[var(--radius-btn)]",
+          "text-[length:var(--size-font-2xs)] font-medium transition-colors",
+          "hover:bg-[var(--sidebar-hover)]",
+          activeTab.dirty ? "text-[var(--fg-secondary)]" : "text-[var(--fg-muted)]"
         )}
         onClick={onSave}
         disabled={!activeTab.dirty}
         title="保存 (⌘S)"
       >
-        <Save className="h-[var(--size-btn-icon-sm)] w-[var(--size-btn-icon-sm)]" />
+        <AppIcon name="save" size={12} strokeWidth={1.9} />
+        Save
       </button>
 
-      {/* 发送按钮 */}
-      <button
-        onClick={onSend}
-        disabled={isSending || !request.url.trim()}
-        className={cn(
-          "h-[var(--size-btn)] px-3 flex items-center gap-1.5 rounded-[var(--radius-btn)]",
-          "bg-[var(--accent)] text-[var(--accent-fg)] text-[length:var(--size-font-xs)] font-medium",
-          "hover:bg-[var(--accent-hover)] transition-colors",
-          "disabled:opacity-50 disabled:pointer-events-none flex-shrink-0"
-        )}
-      >
+      {/* 发送/取消按钮组 */}
+      <div className="relative flex items-center flex-shrink-0 w-[112px]" ref={sendMenuRef}>
         {isSending ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <button
+            onClick={onCancel}
+            className={cn(
+              "no-press-feedback h-[30px] w-full flex items-center justify-center gap-1.5 rounded-[8px]",
+              "bg-[#f87171] text-white text-[13px] font-medium",
+              "hover:bg-[#ef6666] active:bg-[#e65c5c] transition-[background-color,color]"
+            )}
+          >
+            Cancel
+          </button>
         ) : (
-          <Send className="h-3.5 w-3.5" />
+          <>
+            <button
+              onClick={() => onSend()}
+              disabled={!request.url.trim()}
+              className={cn(
+                "no-press-feedback h-[30px] flex-1 flex items-center justify-center gap-1.5 rounded-l-[8px]",
+                "bg-[#3b82f6] text-white text-[13px] font-medium",
+                "hover:bg-[#3477e6] active:bg-[#2f6ed6] transition-[background-color,color]",
+                "disabled:opacity-50 disabled:pointer-events-none"
+              )}
+            >
+              Send
+            </button>
+            <button
+              onClick={() => setShowSendMenu(!showSendMenu)}
+              disabled={!request.url.trim()}
+              className={cn(
+                "no-press-feedback relative h-[30px] w-[28px] flex items-center justify-center rounded-r-[8px]",
+                "before:pointer-events-none before:absolute before:left-0 before:top-[6px] before:h-[18px] before:w-px before:bg-white/25",
+                "bg-[#3b82f6] text-white",
+                "hover:bg-[#3477e6] active:bg-[#2f6ed6] transition-[background-color,color]",
+                "disabled:opacity-50 disabled:pointer-events-none"
+              )}
+            >
+              <AppIcon name="arrowDown" size={10} />
+            </button>
+          </>
         )}
-        发送
-      </button>
+
+        {showSendMenu && (
+          <div
+            className={cn(
+              "absolute right-0 top-full mt-1 z-50 py-1 rounded-[var(--radius-menu)] shadow-lg border",
+              "w-max bg-[var(--surface-elevated)] border-[var(--border-color)]"
+            )}
+          >
+            <button
+              className="no-press-feedback w-full whitespace-nowrap px-3 py-1.5 text-[11px] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] flex items-center gap-2 transition-[background-color,color] rounded-[7px] mx-1"
+              onClick={() => { setShowSendMenu(false); onSend(true) }}
+            >
+              <AppIcon name="download" size={12} />
+              Send and Download
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

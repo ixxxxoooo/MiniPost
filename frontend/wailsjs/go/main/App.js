@@ -38,12 +38,40 @@ export function DeleteRequestItem(arg1, arg2) {
   return window['go']['main']['App']['DeleteRequestItem'](arg1, arg2);
 }
 
+export function DuplicateFolder(arg1, arg2) {
+  return window['go']['main']['App']['DuplicateFolder'](arg1, arg2);
+}
+
+export function DuplicateRequest(arg1, arg2) {
+  return window['go']['main']['App']['DuplicateRequest'](arg1, arg2);
+}
+
+export function ExportProjectJSON(arg1) {
+  return window['go']['main']['App']['ExportProjectJSON'](arg1);
+}
+
+export function GetCollectionData(arg1) {
+  return window['go']['main']['App']['GetCollectionData'](arg1);
+}
+
 export function GetHistory(arg1) {
   return window['go']['main']['App']['GetHistory'](arg1);
 }
 
 export function ImportCurl(arg1) {
   return window['go']['main']['App']['ImportCurl'](arg1);
+}
+
+export function ImportFromFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ImportFromFile'](arg1, arg2, arg3);
+}
+
+export function ImportPostmanCollection(arg1, arg2) {
+  return window['go']['main']['App']['ImportPostmanCollection'](arg1, arg2);
+}
+
+export function ImportSwagger(arg1, arg2) {
+  return window['go']['main']['App']['ImportSwagger'](arg1, arg2);
 }
 
 export function ListEnvironments(arg1) {
@@ -62,6 +90,26 @@ export function ListRequests(arg1) {
   return window['go']['main']['App']['ListRequests'](arg1);
 }
 
+export function MoveCollectionNode(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['MoveCollectionNode'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function MoveFolder(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['MoveFolder'](arg1, arg2, arg3, arg4);
+}
+
+export function MoveRequestItem(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['MoveRequestItem'](arg1, arg2, arg3, arg4);
+}
+
+export function OpenFileDialogAny() {
+  return window['go']['main']['App']['OpenFileDialogAny']();
+}
+
+export function OpenFileDialogJSON() {
+  return window['go']['main']['App']['OpenFileDialogJSON']();
+}
+
 export function RenameFolder(arg1, arg2, arg3) {
   return window['go']['main']['App']['RenameFolder'](arg1, arg2, arg3);
 }
@@ -70,12 +118,24 @@ export function RenameProject(arg1, arg2) {
   return window['go']['main']['App']['RenameProject'](arg1, arg2);
 }
 
+export function RenameRequest(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RenameRequest'](arg1, arg2, arg3);
+}
+
 export function SaveEnvironment(arg1) {
   return window['go']['main']['App']['SaveEnvironment'](arg1);
 }
 
+export function SaveFileDialogJSON(arg1, arg2) {
+  return window['go']['main']['App']['SaveFileDialogJSON'](arg1, arg2);
+}
+
 export function SaveRequestItem(arg1) {
   return window['go']['main']['App']['SaveRequestItem'](arg1);
+}
+
+export function SaveResponseToFile(arg1, arg2) {
+  return window['go']['main']['App']['SaveResponseToFile'](arg1, arg2);
 }
 
 export function SendRequest(arg1) {

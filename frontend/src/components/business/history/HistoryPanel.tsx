@@ -1,23 +1,29 @@
-import { useEffect, useState, useCallback } from "react"
-import { Clock, Trash2 } from "lucide-react"
+import { useEffect, useState, useCallback, useMemo } from "react"
+import { AppIcon } from "@/components/ui/icon"
 import { cn } from "@/lib/utils"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { historyService } from "@/services/historyService"
 import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore } from "@/stores/tabStore"
+import { useUIStore } from "@/stores/uiStore"
 import { createDefaultRequest } from "@/types/request"
 import type { model } from "../../../../wailsjs/go/models"
 
-function formatTime(timestamp: string): string {
+function formatTimeOnly(timestamp: string): string {
+  const d = new Date(timestamp)
+  return d.toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" })
+}
+
+function getDateKey(timestamp: string): string {
   const d = new Date(timestamp)
   const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "刚刚"
-  if (mins < 60) return `${mins}分钟前`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}小时前`
-  return d.toLocaleDateString("zh-CN", { month: "short", day: "numeric" })
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterday = new Date(today.getTime() - 86400000)
+  const target = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+
+  if (target.getTime() === today.getTime()) return "今天"
+  if (target.getTime() === yesterday.getTime()) return "昨天"
+  return d.toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short" })
 }
 
 function getStatusColor(code: number): string {
@@ -26,11 +32,18 @@ function getStatusColor(code: number): string {
   return "text-[var(--warning)]"
 }
 
+interface DayGroup {
+  label: string
+  entries: model.HistoryEntry[]
+}
+
 export function HistoryPanel() {
   const { currentProjectId } = useProjectStore()
   const { openRequestTab } = useTabStore()
+  const setEditingEnvironmentId = useUIStore((s) => s.setEditingEnvironmentId)
   const [entries, setEntries] = useState<model.HistoryEntry[]>([])
   const [loading, setLoading] = useState(false)
+  const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set())
 
   const loadHistory = useCallback(async () => {
     if (!currentProjectId) return
@@ -43,9 +56,30 @@ export function HistoryPanel() {
     }
   }, [currentProjectId])
 
+  useEffect(() => { loadHistory() }, [loadHistory])
   useEffect(() => {
-    loadHistory()
+    const interval = setInterval(loadHistory, 3000)
+    return () => clearInterval(interval)
   }, [loadHistory])
+
+  const dayGroups = useMemo<DayGroup[]>(() => {
+    const groups = new Map<string, model.HistoryEntry[]>()
+    for (const entry of entries) {
+      const key = getDateKey(entry.timestamp)
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(entry)
+    }
+    return Array.from(groups.entries()).map(([label, items]) => ({ label, entries: items }))
+  }, [entries])
+
+  const toggleDay = (label: string) => {
+    setCollapsedDays((prev) => {
+      const next = new Set(prev)
+      if (next.has(label)) next.delete(label)
+      else next.add(label)
+      return next
+    })
+  }
 
   const handleClear = async () => {
     if (!currentProjectId) return
@@ -56,6 +90,7 @@ export function HistoryPanel() {
 
   const handleRestore = (entry: model.HistoryEntry) => {
     if (!currentProjectId) return
+    setEditingEnvironmentId(null)
     const request = createDefaultRequest({
       method: entry.method as HttpMethod,
       url: entry.url,
@@ -76,7 +111,7 @@ export function HistoryPanel() {
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-2 py-1">
         <div className="flex items-center gap-1 text-2xs text-[var(--fg-muted)] font-medium">
-          <Clock className="h-3 w-3" />
+          <AppIcon name="clock" size={12} />
           <span>历史</span>
           {entries.length > 0 && <span>({entries.length})</span>}
         </div>
@@ -85,7 +120,7 @@ export function HistoryPanel() {
             className="flex items-center gap-0.5 h-5 px-1.5 rounded-[var(--radius-sm)] text-2xs text-[var(--fg-muted)] hover:text-[var(--danger)] hover:bg-[var(--sidebar-hover)] transition-colors"
             onClick={handleClear}
           >
-            <Trash2 className="h-2.5 w-2.5" /> 清空
+            <AppIcon name="delete" size={10} /> 清空
           </button>
         )}
       </div>
@@ -96,29 +131,44 @@ export function HistoryPanel() {
         ) : entries.length === 0 ? (
           <div className="text-center py-6 text-2xs text-[var(--fg-muted)]">暂无历史记录</div>
         ) : (
-          entries.map((entry) => (
-            <div
-              key={entry.id}
-              className="flex items-center h-[24px] px-2 mx-1 rounded-[var(--radius-btn)] cursor-pointer hover:bg-[var(--sidebar-hover)] group"
-              onClick={() => handleRestore(entry)}
-            >
-              <span className={cn(
-                "text-[9px] font-mono font-bold w-[32px] text-right flex-shrink-0 uppercase mr-1.5",
-                METHOD_COLORS[(entry.method as HttpMethod)] || "text-[var(--fg-muted)]"
-              )}>
-                {entry.method?.substring(0, 3) || "GET"}
-              </span>
-              <span className="text-[length:var(--size-font-2xs)] truncate flex-1 text-[var(--fg)]">
-                {entry.url || entry.name}
-              </span>
-              <span className={cn("text-2xs font-mono flex-shrink-0 ml-1", getStatusColor(entry.statusCode))}>
-                {entry.statusCode}
-              </span>
-              <span className="text-2xs text-[var(--fg-muted)] ml-1.5 flex-shrink-0">
-                {formatTime(entry.timestamp)}
-              </span>
-            </div>
-          ))
+          dayGroups.map((group) => {
+            const isCollapsed = collapsedDays.has(group.label)
+            return (
+              <div key={group.label}>
+                <div
+                  className="flex items-center gap-1 px-2 py-1 cursor-pointer select-none hover:bg-[var(--sidebar-hover)] transition-colors"
+                  onClick={() => toggleDay(group.label)}
+                >
+                  <AppIcon name={isCollapsed ? "arrowRight" : "arrowDown"} size={8} className="text-[var(--fg-muted)]" />
+                  <span className="text-[10px] font-medium text-[var(--fg-secondary)]">{group.label}</span>
+                  <span className="text-[10px] text-[var(--fg-muted)]">({group.entries.length})</span>
+                </div>
+                {!isCollapsed && group.entries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex items-center h-[24px] px-2 pl-5 mx-1 rounded-[var(--radius-btn)] cursor-pointer hover:bg-[var(--sidebar-hover)] group"
+                    onClick={() => handleRestore(entry)}
+                  >
+                    <span className={cn(
+                      "text-[9px] font-mono font-bold w-[32px] text-right flex-shrink-0 uppercase mr-1.5",
+                      METHOD_COLORS[(entry.method as HttpMethod)] || "text-[var(--fg-muted)]"
+                    )}>
+                      {entry.method?.substring(0, 3) || "GET"}
+                    </span>
+                    <span className="text-[11px] truncate flex-1 text-[var(--fg)]">
+                      {entry.url || entry.name}
+                    </span>
+                    <span className={cn("text-[10px] font-mono flex-shrink-0 ml-1", getStatusColor(entry.statusCode))}>
+                      {entry.statusCode}
+                    </span>
+                    <span className="text-[10px] text-[var(--fg-muted)] ml-1.5 flex-shrink-0">
+                      {formatTimeOnly(entry.timestamp)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )
+          })
         )}
       </div>
     </div>

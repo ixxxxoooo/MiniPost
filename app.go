@@ -2,6 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"minipost/internal/model"
 	"minipost/internal/pkg/httputil"
@@ -54,7 +59,6 @@ func (a *App) shutdown(ctx context.Context) {
 
 // ---- HTTP 请求 ----
 
-// SendRequestWithEnv 带环境变量解析的请求发送
 func (a *App) SendRequestWithEnv(input model.SendRequestInput, projectID, envID string) (*model.HttpResponse, error) {
 	logger.Debug("SendRequestWithEnv 调用",
 		"method", input.Method,
@@ -159,6 +163,26 @@ func (a *App) DeleteProject(id string) error {
 	return nil
 }
 
+// ---- 集合管理 ----
+
+func (a *App) GetCollectionData(projectID string) (*model.CollectionData, error) {
+	data, err := a.requestSvc.GetCollectionData(projectID)
+	if err != nil {
+		logger.Error("获取集合数据失败", "projectID", projectID, "error", err.Error())
+		return nil, err
+	}
+	return data, nil
+}
+
+func (a *App) MoveCollectionNode(projectID, nodeID string, nodeType model.CollectionNodeType, targetParentFolderID string, targetIndex int) error {
+	if err := a.requestSvc.MoveCollectionNode(projectID, nodeID, nodeType, targetParentFolderID, targetIndex); err != nil {
+		logger.Error("移动集合节点失败", "nodeID", nodeID, "nodeType", nodeType, "targetParentFolderID", targetParentFolderID, "targetIndex", targetIndex, "error", err.Error())
+		return err
+	}
+	logger.Info("移动集合节点成功", "nodeID", nodeID, "nodeType", nodeType, "targetParentFolderID", targetParentFolderID, "targetIndex", targetIndex)
+	return nil
+}
+
 // ---- 文件夹管理 ----
 
 func (a *App) ListFolders(projectID string) ([]model.Folder, error) {
@@ -196,6 +220,15 @@ func (a *App) DeleteFolder(projectID, folderID string) error {
 		return err
 	}
 	logger.Info("删除文件夹成功", "folderID", folderID)
+	return nil
+}
+
+func (a *App) MoveFolder(projectID, folderID, targetParentID string, targetIndex int) error {
+	if err := a.requestSvc.MoveFolder(projectID, folderID, targetParentID, targetIndex); err != nil {
+		logger.Error("移动文件夹失败", "folderID", folderID, "targetParentID", targetParentID, "targetIndex", targetIndex, "error", err.Error())
+		return err
+	}
+	logger.Info("移动文件夹成功", "folderID", folderID, "targetParentID", targetParentID, "targetIndex", targetIndex)
 	return nil
 }
 
@@ -239,6 +272,15 @@ func (a *App) DeleteRequestItem(projectID, requestID string) error {
 	return nil
 }
 
+func (a *App) MoveRequestItem(projectID, requestID, targetFolderID string, targetIndex int) error {
+	if err := a.requestSvc.MoveRequest(projectID, requestID, targetFolderID, targetIndex); err != nil {
+		logger.Error("移动请求失败", "requestID", requestID, "targetFolderID", targetFolderID, "targetIndex", targetIndex, "error", err.Error())
+		return err
+	}
+	logger.Info("移动请求成功", "requestID", requestID, "targetFolderID", targetFolderID, "targetIndex", targetIndex)
+	return nil
+}
+
 // ---- 环境变量 ----
 
 func (a *App) ListEnvironments(projectID string) ([]model.Environment, error) {
@@ -279,9 +321,95 @@ func (a *App) DeleteEnvironment(projectID, envID string) error {
 	return nil
 }
 
+// ---- 重命名请求 ----
+
+func (a *App) RenameRequest(projectID, requestID, name string) error {
+	if err := a.requestSvc.RenameRequest(projectID, requestID, name); err != nil {
+		logger.Error("重命名请求失败", "requestID", requestID, "name", name, "error", err.Error())
+		return err
+	}
+	logger.Info("重命名请求成功", "requestID", requestID, "name", name)
+	return nil
+}
+
+// ---- 复制 ----
+
+func (a *App) DuplicateRequest(projectID, requestID string) (*model.RequestItem, error) {
+	req, err := a.requestSvc.DuplicateRequest(projectID, requestID)
+	if err != nil {
+		logger.Error("复制请求失败", "requestID", requestID, "error", err.Error())
+		return nil, err
+	}
+	logger.Info("复制请求成功", "sourceID", requestID, "newID", req.ID)
+	return req, nil
+}
+
+func (a *App) DuplicateFolder(projectID, folderID string) (*model.Folder, error) {
+	folder, err := a.requestSvc.DuplicateFolder(projectID, folderID)
+	if err != nil {
+		logger.Error("复制文件夹失败", "folderID", folderID, "error", err.Error())
+		return nil, err
+	}
+	logger.Info("复制文件夹成功", "sourceID", folderID, "newID", folder.ID)
+	return folder, nil
+}
+
+// ---- 导入导出 ----
+
+func (a *App) ExportProjectJSON(projectID string) (string, error) {
+	data, err := a.requestSvc.ExportProjectJSON(projectID)
+	if err != nil {
+		logger.Error("导出项目失败", "projectID", projectID, "error", err.Error())
+		return "", err
+	}
+	logger.Info("导出项目成功", "projectID", projectID, "size", len(data))
+	return string(data), nil
+}
+
+func (a *App) ImportPostmanCollection(projectID, jsonStr string) error {
+	if err := a.requestSvc.ImportPostmanCollection(projectID, []byte(jsonStr)); err != nil {
+		logger.Error("导入 Postman 集合失败", "projectID", projectID, "error", err.Error())
+		return err
+	}
+	logger.Info("导入 Postman 集合成功", "projectID", projectID)
+	return nil
+}
+
+func (a *App) ImportSwagger(projectID, jsonStr string) error {
+	if err := a.requestSvc.ImportSwagger(projectID, []byte(jsonStr)); err != nil {
+		logger.Error("导入 Swagger 失败", "projectID", projectID, "error", err.Error())
+		return err
+	}
+	logger.Info("导入 Swagger 成功", "projectID", projectID)
+	return nil
+}
+
+func (a *App) ImportFromFile(projectID, format, content string) error {
+	switch format {
+	case "postman":
+		return a.ImportPostmanCollection(projectID, content)
+	case "swagger":
+		return a.ImportSwagger(projectID, content)
+	default:
+		// 自动检测格式
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(content), &raw); err != nil {
+			return fmt.Errorf("无法解析 JSON: %w", err)
+		}
+		if _, ok := raw["info"]; ok {
+			if _, ok2 := raw["item"]; ok2 {
+				return a.ImportPostmanCollection(projectID, content)
+			}
+		}
+		if _, ok := raw["paths"]; ok {
+			return a.ImportSwagger(projectID, content)
+		}
+		return fmt.Errorf("无法识别文件格式，请选择正确的导入格式")
+	}
+}
+
 // ---- 导入 ----
 
-// ImportCurl 解析 cURL 命令为请求数据
 func (a *App) ImportCurl(curlCommand string) (*model.SendRequestInput, error) {
 	logger.Debug("ImportCurl 调用", "cmdLength", len(curlCommand))
 	result, err := httputil.ParseCurlCommand(curlCommand)
@@ -312,4 +440,80 @@ func (a *App) ClearHistory(projectID string) error {
 	}
 	logger.Info("清除历史记录成功", "projectID", projectID)
 	return nil
+}
+
+// ---- 文件对话框 ----
+
+// OpenFileDialogJSON 打开文件选择对话框（仅 JSON 文件）
+func (a *App) OpenFileDialogJSON() (string, error) {
+	selection, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title: "选择文件",
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "JSON 文件 (*.json)", Pattern: "*.json"},
+			{DisplayName: "YAML 文件 (*.yaml;*.yml)", Pattern: "*.yaml;*.yml"},
+			{DisplayName: "所有文件", Pattern: "*.*"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if selection == "" {
+		return "", nil
+	}
+	data, err := os.ReadFile(selection)
+	if err != nil {
+		return "", fmt.Errorf("读取文件失败: %w", err)
+	}
+	return string(data), nil
+}
+
+// SaveFileDialogJSON 打开保存文件对话框，将内容写入选择的文件
+func (a *App) SaveFileDialogJSON(defaultFilename string, content string) error {
+	selection, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
+		Title:           "保存文件",
+		DefaultFilename: defaultFilename,
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "JSON 文件 (*.json)", Pattern: "*.json"},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if selection == "" {
+		return nil
+	}
+	return os.WriteFile(selection, []byte(content), 0644)
+}
+
+// OpenFileDialogAny 打开通用文件选择对话框（所有文件类型）
+func (a *App) OpenFileDialogAny() (string, error) {
+	selection, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title: "选择文件",
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "所有文件", Pattern: "*.*"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	return selection, nil
+}
+
+// SaveResponseToFile 保存响应体到用户选择的文件
+func (a *App) SaveResponseToFile(defaultFilename string, content string) error {
+	selection, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
+		Title:           "保存响应",
+		DefaultFilename: defaultFilename,
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "JSON 文件 (*.json)", Pattern: "*.json"},
+			{DisplayName: "所有文件", Pattern: "*.*"},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if selection == "" {
+		return nil
+	}
+	return os.WriteFile(selection, []byte(content), 0644)
 }

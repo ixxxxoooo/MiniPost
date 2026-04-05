@@ -22,6 +22,7 @@ export const METHOD_COLORS: Record<HttpMethod, string> = {
 
 export const BODY_TYPES = [
   "none",
+  "form-data",
   "raw",
   "json",
   "form-urlencoded",

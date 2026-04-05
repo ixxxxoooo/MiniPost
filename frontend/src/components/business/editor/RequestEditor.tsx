@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react"
+import { useEffect, useCallback, useRef } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { UrlBar } from "./UrlBar"
 import { ParamsEditor } from "./ParamsEditor"
@@ -10,9 +10,8 @@ import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
 import { useEnvironmentStore } from "@/stores/environmentStore"
 import { sendHttpRequest } from "@/services/httpService"
-import { cn } from "@/lib/utils"
-
-export function RequestEditor() {
+ 
+function useRequestEditorActions() {
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const setTabResponse = useTabStore((s) => s.setTabResponse)
   const setTabResponseError = useTabStore((s) => s.setTabResponseError)
@@ -21,11 +20,34 @@ export function RequestEditor() {
   const { currentProjectId, saveRequestToBackend } = useProjectStore()
   const { activeEnvironmentId } = useEnvironmentStore()
 
-  const handleSend = async () => {
+  const { addConsoleRequest, updateConsoleResponse, updateConsoleError } = useUIStore()
+  const abortRef = useRef<AbortController | null>(null)
+
+  const handleCancel = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort()
+      abortRef.current = null
+    }
+    setIsSending(false)
+  }, [setIsSending])
+
+  const handleSend = async (downloadAfter = false) => {
     if (!activeTab || !activeTab.request.url.trim()) return
+
+    if (abortRef.current) abortRef.current.abort()
+    abortRef.current = new AbortController()
 
     setIsSending(true)
     setTabResponseError(activeTab.id, null)
+
+    const reqHeaders: Record<string, string> = {}
+    activeTab.request.headers.filter((h) => h.enabled && h.key).forEach((h) => { reqHeaders[h.key] = h.value })
+
+    const logId = addConsoleRequest({
+      method: activeTab.request.method,
+      url: activeTab.request.url,
+      requestHeaders: reqHeaders,
+    })
 
     try {
       const result = await sendHttpRequest(
@@ -34,9 +56,25 @@ export function RequestEditor() {
         activeEnvironmentId ?? undefined,
       )
       setTabResponse(activeTab.id, result)
+      updateConsoleResponse(logId, {
+        status: result.statusCode,
+        duration: result.duration,
+        size: result.size,
+        responseHeaders: result.headers,
+        responseBody: result.body,
+      })
+      if (downloadAfter) {
+        const { SaveResponseToFile } = await import("../../../../wailsjs/go/main/App")
+        const filename = `response-${Date.now()}.json`
+        await SaveResponseToFile(filename, result.body)
+      }
     } catch (err) {
-      setTabResponseError(activeTab.id, err instanceof Error ? err.message : String(err))
+      if ((err as Error)?.name === "AbortError") return
+      const msg = err instanceof Error ? err.message : String(err)
+      setTabResponseError(activeTab.id, msg)
+      updateConsoleError(logId, msg)
     } finally {
+      abortRef.current = null
       setIsSending(false)
     }
   }
@@ -81,14 +119,37 @@ export function RequestEditor() {
     return () => window.removeEventListener("minipost:save", listener)
   }, [handleSave])
 
+  useEffect(() => {
+    const listener = () => void handleSend()
+    window.addEventListener("minipost:send", listener)
+    return () => window.removeEventListener("minipost:send", listener)
+  }, [handleSend])
+
+  return {
+    activeTab,
+    handleSend,
+    handleCancel,
+    handleSave,
+  }
+}
+
+export function RequestEditorToolbar() {
+  const { activeTab, handleSend, handleCancel, handleSave } = useRequestEditorActions()
+
+  if (!activeTab) return null
+
+  return <UrlBar onSend={handleSend} onCancel={handleCancel} onSave={handleSave} />
+}
+
+export function RequestEditorBody() {
+  const activeTab = useTabStore(getProjectActiveTabFromState)
+
   if (!activeTab) return null
 
   const { request } = activeTab
 
   return (
-    <div className="flex h-full flex-col bg-[var(--surface)]">
-      <UrlBar onSend={handleSend} onSave={handleSave} />
-
+    <div className="flex h-full flex-col bg-[var(--surface)] overflow-hidden">
       <Tabs defaultValue="params" className="flex-1 flex flex-col overflow-hidden">
         <TabsList className="w-full justify-start px-[var(--size-padding-sm)] py-1">
           <TabsTrigger value="params">
@@ -107,7 +168,7 @@ export function RequestEditor() {
           <TabsTrigger value="auth">Auth</TabsTrigger>
         </TabsList>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto pt-1">
           <TabsContent value="params" className="m-0">
             <ParamsEditor />
           </TabsContent>
@@ -122,6 +183,17 @@ export function RequestEditor() {
           </TabsContent>
         </div>
       </Tabs>
+    </div>
+  )
+}
+
+export function RequestEditor() {
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-[var(--surface)]">
+      <RequestEditorToolbar />
+      <div className="flex-1 min-h-0">
+        <RequestEditorBody />
+      </div>
     </div>
   )
 }

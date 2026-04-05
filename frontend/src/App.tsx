@@ -9,10 +9,13 @@ import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { info, error as logError } from "@/lib/logger"
 
 function App() {
-  const { toggleSidebar } = useUIStore()
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar)
+  const editingEnvironmentId = useUIStore((s) => s.editingEnvironmentId)
+  const closeActiveEnvironmentTab = useUIStore((s) => s.closeActiveEnvironmentTab)
   const { currentProjectId, createRequest } = useProjectStore()
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const openRequestTab = useTabStore((s) => s.openRequestTab)
+  const removeTab = useTabStore((s) => s.removeTab)
 
   useEffect(() => {
     info("App", "React App 组件已挂载, 开始加载项目列表")
@@ -82,8 +85,22 @@ function App() {
   }, [currentProjectId, createRequest, openRequestTab])
 
   const handleSave = useCallback(() => {
-    if (!activeTab) return
+    if (!editingEnvironmentId && !activeTab) return
     window.dispatchEvent(new CustomEvent("minipost:save"))
+  }, [activeTab, editingEnvironmentId])
+
+  const handleCloseTab = useCallback(() => {
+    if (editingEnvironmentId) {
+      closeActiveEnvironmentTab()
+      return
+    }
+    if (!activeTab?.closable) return
+    removeTab(activeTab.id)
+  }, [activeTab, closeActiveEnvironmentTab, editingEnvironmentId, removeTab])
+
+  const handleSend = useCallback(() => {
+    if (!activeTab) return
+    window.dispatchEvent(new CustomEvent("minipost:send"))
   }, [activeTab])
 
   const shortcuts = useMemo(
@@ -91,8 +108,10 @@ function App() {
       "mod+b": toggleSidebar,
       "mod+n": handleNewRequest,
       "mod+s": handleSave,
+      "mod+w": handleCloseTab,
+      "mod+enter": handleSend,
     }),
-    [toggleSidebar, handleNewRequest, handleSave]
+    [toggleSidebar, handleNewRequest, handleSave, handleCloseTab, handleSend]
   )
 
   useKeyboardShortcuts(shortcuts)

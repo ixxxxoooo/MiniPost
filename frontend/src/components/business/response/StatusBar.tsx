@@ -1,4 +1,4 @@
-import { Clock, HardDrive } from "lucide-react"
+import { AppIcon } from "@/components/ui/icon"
 import { cn } from "@/lib/utils"
 import type { HttpResponse } from "@/types/response"
 
@@ -42,7 +42,7 @@ export function StatusBar({ response }: StatusBarProps) {
 
       {/* 耗时 */}
       <div className="flex items-center gap-0.5 text-[var(--fg-muted)]">
-        <Clock className="h-2.5 w-2.5" />
+        <AppIcon name="clock" size={10} />
         <span className="text-2xs font-mono">
           {response.duration < 1000
             ? `${Math.round(response.duration)}ms`
@@ -52,7 +52,7 @@ export function StatusBar({ response }: StatusBarProps) {
 
       {/* 大小 */}
       <div className="flex items-center gap-0.5 text-[var(--fg-muted)]">
-        <HardDrive className="h-2.5 w-2.5" />
+        <AppIcon name="cube" size={10} />
         <span className="text-2xs font-mono">{formatSize(response.size)}</span>
       </div>
 
