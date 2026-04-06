@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 import { AppIcon } from "@/components/ui/icon"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore, getProjectTabsFromState, getProjectActiveTabIdFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
@@ -33,7 +34,7 @@ export function WorkspaceHeader() {
   const projectTabs = useTabStore(getProjectTabsFromState)
   const activeTabId = useTabStore(getProjectActiveTabIdFromState)
   const setActiveTab = useTabStore((s) => s.setActiveTab)
-  const { editingEnvironmentId, setEditingEnvironmentId } = useUIStore()
+  const { editingEnvironmentId, setEditingEnvironmentId, workspaceView, setWorkspaceView } = useUIStore()
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null)
@@ -110,6 +111,7 @@ export function WorkspaceHeader() {
   }, [currentProjectId, currentTarget])
 
   const jumpToTarget = (target: NavigationTarget) => {
+    setWorkspaceView("project")
     navigatingRef.current = true
     if (target.type === "environment") {
       setEditingEnvironmentId(target.id)
@@ -183,10 +185,8 @@ export function WorkspaceHeader() {
     const name = searchQuery.trim()
     if (!name) return
 
-    await createProject(name)
-    const { projects: updatedProjects } = useProjectStore.getState()
-    const project = updatedProjects[updatedProjects.length - 1]
-    if (project) {
+    const project = await createProject(name)
+    if (project?.id) {
       await selectProject(project.id)
     }
 
@@ -196,6 +196,7 @@ export function WorkspaceHeader() {
 
   const handleSelectProject = async (projectId: string) => {
     if (projectId === currentProjectId) {
+      setWorkspaceView("project")
       setOpen(false)
       return
     }
@@ -244,44 +245,66 @@ export function WorkspaceHeader() {
   return (
     <>
       <div className="titlebar-no-drag flex items-center gap-1" ref={ref} onMouseDown={(event) => event.stopPropagation()}>
-        <button
-          className={cn(
-            "flex h-[24px] w-[24px] items-center justify-center rounded-[7px] border transition-colors",
-            "border-transparent bg-[var(--surface-secondary)] text-[var(--fg-secondary)]",
-            canGoBack ? "hover:bg-[var(--button-bg)]" : "opacity-40 cursor-not-allowed"
-          )}
-          title="后退"
-          type="button"
-          onClick={handleGoBack}
-          disabled={!canGoBack}
-        >
-          <AppIcon name="arrowLeft" size={14} strokeWidth={1.9} />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className={cn(
+                "flex h-[24px] w-[24px] items-center justify-center rounded-[7px] border transition-colors",
+                "border-transparent bg-[var(--surface-secondary)] text-[var(--fg-secondary)]",
+                canGoBack ? "hover:bg-[var(--button-bg)]" : "opacity-40 cursor-not-allowed"
+              )}
+              type="button"
+              onClick={handleGoBack}
+              disabled={!canGoBack}
+            >
+              <AppIcon name="arrowLeft" size={14} strokeWidth={1.9} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>后退</TooltipContent>
+        </Tooltip>
 
-        <button
-          className={cn(
-            "flex h-[24px] w-[24px] items-center justify-center rounded-[7px] border transition-colors",
-            "border-transparent bg-[var(--surface-secondary)] text-[var(--fg-secondary)]",
-            canGoForward ? "hover:bg-[var(--button-bg)]" : "opacity-40 cursor-not-allowed"
-          )}
-          title="前进"
-          type="button"
-          onClick={handleGoForward}
-          disabled={!canGoForward}
-        >
-          <AppIcon name="arrowRight" size={14} strokeWidth={1.9} />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className={cn(
+                "flex h-[24px] w-[24px] items-center justify-center rounded-[7px] border transition-colors",
+                "border-transparent bg-[var(--surface-secondary)] text-[var(--fg-secondary)]",
+                canGoForward ? "hover:bg-[var(--button-bg)]" : "opacity-40 cursor-not-allowed"
+              )}
+              type="button"
+              onClick={handleGoForward}
+              disabled={!canGoForward}
+            >
+              <AppIcon name="arrowRight" size={14} strokeWidth={1.9} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>前进</TooltipContent>
+        </Tooltip>
 
-        <button
-          className={cn(
-            "flex h-[24px] w-[24px] items-center justify-center rounded-[7px] border transition-colors",
-            "border-transparent bg-[var(--surface-secondary)] text-[var(--fg-secondary)] hover:bg-[var(--button-bg)]"
-          )}
-          title="主页"
-          type="button"
-        >
-          <AppIcon name="home" size={15} strokeWidth={1.65} />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className={cn(
+                "flex h-[24px] w-[24px] items-center justify-center rounded-[7px] border transition-colors",
+                workspaceView === "home"
+                  ? "border-[var(--button-border)] bg-[var(--selected-bg)] text-[var(--accent)]"
+                  : "border-transparent bg-[var(--surface-secondary)] text-[var(--fg-secondary)] hover:bg-[var(--button-bg)]"
+              )}
+              type="button"
+              onClick={() => {
+                setEditingEnvironmentId(null)
+                if (workspaceView === "home") {
+                  setWorkspaceView(currentProjectId ? "project" : "home")
+                  return
+                }
+                setWorkspaceView("home")
+              }}
+            >
+              <AppIcon name="home" size={15} strokeWidth={1.65} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{workspaceView === "home" ? "关闭主页" : "打开主页"}</TooltipContent>
+        </Tooltip>
 
         <div className="relative" style={{ width: `${triggerWidth}px`, maxWidth: `${BUTTON_MAX_WIDTH}px` }}>
           <button
@@ -367,11 +390,9 @@ export function WorkspaceHeader() {
                         }}
                         type="button"
                       >
-                        <AppIcon
-                          name="folder"
-                          size={13}
-                          strokeWidth={1.8}
-                          className="text-[var(--fg-secondary)] flex-shrink-0"
+                        <span
+                          className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: project.themeColor || "var(--accent)" }}
                         />
                         <div className="min-w-0 flex-1 text-left">
                           <div className="truncate text-[12px] font-medium">{project.name}</div>
@@ -381,22 +402,30 @@ export function WorkspaceHeader() {
                         <span className="text-[9px] font-medium text-[var(--fg-muted)] flex-shrink-0">当前</span>
                       )}
                       <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 flex-shrink-0 transition-opacity">
-                        <button
-                          className="h-5 w-5 flex items-center justify-center rounded-[4px] hover:bg-[var(--button-bg)] transition-colors"
-                          onClick={(e) => { e.stopPropagation(); void handleExportProject(project.id) }}
-                          title="导出项目"
-                          type="button"
-                        >
-                          <AppIcon name="download" size={11} className="text-[var(--fg-muted)]" />
-                        </button>
-                        <button
-                          className="h-5 w-5 flex items-center justify-center rounded-[4px] hover:bg-[var(--button-bg)] transition-colors"
-                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ id: project.id, name: project.name }) }}
-                          title="删除项目"
-                          type="button"
-                        >
-                          <AppIcon name="delete" size={11} className="text-[var(--fg-muted)]" />
-                        </button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              className="h-5 w-5 flex items-center justify-center rounded-[4px] hover:bg-[var(--button-bg)] transition-colors"
+                              onClick={(e) => { e.stopPropagation(); void handleExportProject(project.id) }}
+                              type="button"
+                            >
+                              <AppIcon name="download" size={11} className="text-[var(--fg-muted)]" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>导出项目</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              className="h-5 w-5 flex items-center justify-center rounded-[4px] hover:bg-[var(--button-bg)] transition-colors"
+                              onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ id: project.id, name: project.name }) }}
+                              type="button"
+                            >
+                              <AppIcon name="delete" size={11} className="text-[var(--fg-muted)]" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>删除项目</TooltipContent>
+                        </Tooltip>
                       </div>
                     </div>
                   )

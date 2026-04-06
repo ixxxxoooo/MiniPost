@@ -20,6 +20,8 @@ import {
   DuplicateFolder,
   ExportProjectJSON,
   ImportFromFile,
+  UpdateProjectDescription,
+  UpdateProjectTheme,
 } from "../../wailsjs/go/main/App"
 import type { model } from "../../wailsjs/go/models"
 
@@ -29,6 +31,8 @@ export const projectService = {
   listProjects: () => ListProjects(),
   createProject: (name: string) => CreateProject(name),
   renameProject: (id: string, name: string) => RenameProject(id, name),
+  updateProjectDescription: (id: string, description: string) => UpdateProjectDescription(id, description),
+  updateProjectTheme: (id: string, color: string) => UpdateProjectTheme(id, color),
   deleteProject: (id: string) => DeleteProject(id),
   exportProjectJSON: (projectID: string) => ExportProjectJSON(projectID),
 }

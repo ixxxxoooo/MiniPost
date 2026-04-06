@@ -185,6 +185,26 @@ func (a *App) RenameProject(id, name string) (*model.Project, error) {
 	return project, nil
 }
 
+func (a *App) UpdateProjectTheme(id, color string) (*model.Project, error) {
+	project, err := a.projectSvc.UpdateProjectTheme(id, color)
+	if err != nil {
+		logger.Error("更新项目主题色失败", "id", id, "color", color, "error", err.Error())
+		return nil, err
+	}
+	logger.Info("更新项目主题色成功", "id", id, "themeColor", project.ThemeColor)
+	return project, nil
+}
+
+func (a *App) UpdateProjectDescription(id, description string) (*model.Project, error) {
+	project, err := a.projectSvc.UpdateProjectDescription(id, description)
+	if err != nil {
+		logger.Error("更新项目描述失败", "id", id, "error", err.Error())
+		return nil, err
+	}
+	logger.Info("更新项目描述成功", "id", id)
+	return project, nil
+}
+
 func (a *App) DeleteProject(id string) error {
 	if err := a.projectSvc.DeleteProject(id); err != nil {
 		logger.Error("删除项目失败", "id", id, "error", err.Error())

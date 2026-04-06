@@ -4,6 +4,7 @@ export type Theme = "light" | "dark" | "system"
 export type LayoutDirection = "vertical" | "horizontal"
 export type HttpVersion = "auto" | "http1" | "http2"
 export type ResponseFormatDetection = "auto" | "json"
+export type WorkspaceView = "project" | "home"
 
 export interface ConsoleEntry {
   id: string
@@ -52,6 +53,7 @@ interface UIState {
   autoBackupIntervalMinutes: number
   editingEnvironmentId: string | null
   openEnvironmentTabIds: string[]
+  workspaceView: WorkspaceView
 
   setTheme: (theme: Theme) => void
   setSidebarWidth: (width: number) => void
@@ -80,6 +82,7 @@ interface UIState {
   closeEnvironmentTab: (id: string) => void
   closeActiveEnvironmentTab: () => void
   clearEnvironmentTabs: () => void
+  setWorkspaceView: (view: WorkspaceView) => void
   addConsoleRequest: (entry: Pick<ConsoleEntry, "method" | "url" | "requestHeaders" | "requestBody" | "requestProtocol">) => string
   updateConsoleResponse: (id: string, data: Pick<ConsoleEntry, "status" | "statusText" | "duration" | "size" | "responseHeaders" | "responseBody" | "responseProtocol" | "warnings">) => void
   updateConsoleError: (id: string, error: string) => void
@@ -392,6 +395,7 @@ export const useUIStore = create<UIState>((set) => ({
   scrollbarAutoHide: readScrollbarAutoHide(),
   editingEnvironmentId: null,
   openEnvironmentTabIds: [],
+  workspaceView: "project",
 
   setTheme: (theme) => {
     const resolved = theme === "system" ? getSystemTheme() : theme
@@ -539,6 +543,7 @@ export const useUIStore = create<UIState>((set) => ({
     editingEnvironmentId: null,
     openEnvironmentTabIds: [],
   }),
+  setWorkspaceView: (workspaceView) => set({ workspaceView }),
   addConsoleRequest: (entry) => {
     const id = crypto.randomUUID()
     set((s) => ({

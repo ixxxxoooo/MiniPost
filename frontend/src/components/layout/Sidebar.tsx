@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect } from "react"
 import { createPortal } from "react-dom"
 import { AppIcon } from "@/components/ui/icon"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { useProjectStore } from "@/stores/projectStore"
@@ -950,20 +951,28 @@ export function Sidebar() {
               <>
                 <span className="text-[length:var(--size-font-2xs)] truncate min-w-0 flex-1 pr-2 group-hover:pr-11 transition-[padding] duration-150 text-[var(--sidebar-fg)]">{folder.name}</span>
                 <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto flex items-center gap-0.5 transition-opacity">
-                  <button
-                    className={MENU_BTN}
-                    onClick={(e) => { e.stopPropagation(); handleNewRequest(folder.id) }}
-                    title="新建请求"
-                  >
-                    <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
-                  </button>
-                  <button
-                    className={MENU_BTN}
-                    onClick={(e) => { e.stopPropagation(); openDropdownMenu(e, "folder", folder.id, folder.name) }}
-                    title="更多操作"
-                  >
-                    <AppIcon name="more" size={12} className="text-[var(--fg-muted)]" />
-                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        className={MENU_BTN}
+                        onClick={(e) => { e.stopPropagation(); handleNewRequest(folder.id) }}
+                      >
+                        <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>新建请求</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        className={MENU_BTN}
+                        onClick={(e) => { e.stopPropagation(); openDropdownMenu(e, "folder", folder.id, folder.name) }}
+                      >
+                        <AppIcon name="more" size={12} className="text-[var(--fg-muted)]" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>更多操作</TooltipContent>
+                  </Tooltip>
                 </div>
               </>
             )}
@@ -1022,24 +1031,37 @@ export function Sidebar() {
               <span className={cn(
                 "text-[length:var(--size-font-2xs)] truncate min-w-0 flex-1 pr-2 group-hover:pr-11 transition-[padding] duration-150",
                 isSelected ? "text-[var(--sidebar-accent)] font-medium" : "text-[var(--sidebar-fg)]"
-              )} title={request.name}>
-                {request.name}
+              )}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="block truncate">{request.name}</span>
+                  </TooltipTrigger>
+                  <TooltipContent>{request.name}</TooltipContent>
+                </Tooltip>
               </span>
               <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto flex items-center gap-0.5 transition-opacity">
-                <button
-                  className={MENU_BTN}
-                  onClick={(e) => { e.stopPropagation(); handleNewRequest(request.folderId || "") }}
-                  title="新建请求"
-                >
-                  <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
-                </button>
-                <button
-                  className={MENU_BTN}
-                  onClick={(e) => { e.stopPropagation(); openDropdownMenu(e, "request", request.id, request.name) }}
-                  title="更多操作"
-                >
-                  <AppIcon name="more" size={12} className="text-[var(--fg-muted)]" />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className={MENU_BTN}
+                      onClick={(e) => { e.stopPropagation(); handleNewRequest(request.folderId || "") }}
+                    >
+                      <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>新建请求</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className={MENU_BTN}
+                      onClick={(e) => { e.stopPropagation(); openDropdownMenu(e, "request", request.id, request.name) }}
+                    >
+                      <AppIcon name="more" size={12} className="text-[var(--fg-muted)]" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>更多操作</TooltipContent>
+                </Tooltip>
               </div>
             </>
           )}
@@ -1116,27 +1138,39 @@ export function Sidebar() {
               </button>
             )}
           </div>
-          <button
-            className="h-[var(--size-btn-sm)] w-[var(--size-btn-sm)] flex items-center justify-center rounded-[var(--radius-btn)] hover:bg-[var(--sidebar-hover)] transition-colors flex-shrink-0"
-            onClick={openImportDialog}
-            title="导入"
-          >
-            <AppIcon name="fileImport" size={14} className="text-[var(--fg-secondary)]" />
-          </button>
-          <button
-            className="h-[var(--size-btn-sm)] w-[var(--size-btn-sm)] flex items-center justify-center rounded-[var(--radius-btn)] hover:bg-[var(--sidebar-hover)] transition-colors flex-shrink-0"
-            onClick={() => handleNewFolder()}
-            title="新建文件夹"
-          >
-            <AppIcon name="folderAdd" size={14} className="text-[var(--fg-secondary)]" />
-          </button>
-          <button
-            className="h-[var(--size-btn-sm)] w-[var(--size-btn-sm)] flex items-center justify-center rounded-[var(--radius-btn)] hover:bg-[var(--sidebar-hover)] transition-colors flex-shrink-0"
-            onClick={() => handleNewRequest()}
-            title="新建请求 (⌘N)"
-          >
-            <AppIcon name="add" size={14} className="text-[var(--fg-secondary)]" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="h-[var(--size-btn-sm)] w-[var(--size-btn-sm)] flex items-center justify-center rounded-[var(--radius-btn)] hover:bg-[var(--sidebar-hover)] transition-colors flex-shrink-0"
+                onClick={openImportDialog}
+              >
+                <AppIcon name="fileImport" size={14} className="text-[var(--fg-secondary)]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>导入</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="h-[var(--size-btn-sm)] w-[var(--size-btn-sm)] flex items-center justify-center rounded-[var(--radius-btn)] hover:bg-[var(--sidebar-hover)] transition-colors flex-shrink-0"
+                onClick={() => handleNewFolder()}
+              >
+                <AppIcon name="folderAdd" size={14} className="text-[var(--fg-secondary)]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>新建文件夹</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="h-[var(--size-btn-sm)] w-[var(--size-btn-sm)] flex items-center justify-center rounded-[var(--radius-btn)] hover:bg-[var(--sidebar-hover)] transition-colors flex-shrink-0"
+                onClick={() => handleNewRequest()}
+              >
+                <AppIcon name="add" size={14} className="text-[var(--fg-secondary)]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>新建请求 (⌘N)</TooltipContent>
+          </Tooltip>
         </div>
       )}
 
@@ -1165,20 +1199,28 @@ export function Sidebar() {
                 {rootFolderName}
               </span>
               <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 flex-shrink-0 transition-opacity ml-1">
-                <button
-                  className={MENU_BTN}
-                  onClick={(e) => { e.stopPropagation(); void handleNewRequest("") }}
-                  title="在根目录新建请求"
-                >
-                  <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
-                </button>
-                <button
-                  className={MENU_BTN}
-                  onClick={(e) => { e.stopPropagation(); void handleNewFolder("") }}
-                  title="在根目录新建文件夹"
-                >
-                  <AppIcon name="folderAdd" size={12} className="text-[var(--fg-muted)]" />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className={MENU_BTN}
+                      onClick={(e) => { e.stopPropagation(); void handleNewRequest("") }}
+                    >
+                      <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>在根目录新建请求</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className={MENU_BTN}
+                      onClick={(e) => { e.stopPropagation(); void handleNewFolder("") }}
+                    >
+                      <AppIcon name="folderAdd" size={12} className="text-[var(--fg-muted)]" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>在根目录新建文件夹</TooltipContent>
+                </Tooltip>
               </div>
             </div>
             {rootNodes.map((node) => renderNode(node, 0))}

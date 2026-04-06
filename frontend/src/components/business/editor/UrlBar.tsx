@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { HTTP_METHODS, METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AppIcon } from "@/components/ui/icon"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
@@ -148,18 +149,22 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
               style={{ width: `${Math.max(6, Math.min(56, nameDraft.trim().length || 8))}ch` }}
             />
           ) : (
-            <button
-              type="button"
-              onClick={() => setIsEditingName(true)}
-              className={cn(
-                "inline-flex h-6 max-w-[560px] items-center rounded-[6px] px-1.5",
-                "text-left text-[12px] font-semibold text-[var(--fg)]",
-                "hover:bg-[var(--selected-bg)] transition-colors"
-              )}
-              title="单击编辑请求名称"
-            >
-              <span className="block truncate">{requestName}</span>
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingName(true)}
+                  className={cn(
+                    "inline-flex h-6 max-w-[560px] items-center rounded-[6px] px-1.5",
+                    "text-left text-[12px] font-semibold text-[var(--fg)]",
+                    "hover:bg-[var(--selected-bg)] transition-colors"
+                  )}
+                >
+                  <span className="block truncate">{requestName}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>单击编辑请求名称</TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>
@@ -213,20 +218,24 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
           />
         </div>
 
-        <button
-          className={cn(
-            "h-[var(--size-btn)] px-3 flex items-center justify-center gap-1 rounded-[var(--radius-btn)]",
-            "text-[length:var(--size-font-2xs)] font-medium transition-colors",
-            "hover:bg-[var(--sidebar-hover)]",
-            activeTab.dirty ? "text-[var(--fg-secondary)]" : "text-[var(--fg-muted)]"
-          )}
-          onClick={onSave}
-          disabled={!activeTab.dirty}
-          title="保存 (⌘S)"
-        >
-          <AppIcon name="save" size={12} strokeWidth={1.9} />
-          Save
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className={cn(
+                "h-[var(--size-btn)] px-3 flex items-center justify-center gap-1 rounded-[var(--radius-btn)]",
+                "text-[length:var(--size-font-2xs)] font-medium transition-colors",
+                "hover:bg-[var(--sidebar-hover)]",
+                activeTab.dirty ? "text-[var(--fg-secondary)]" : "text-[var(--fg-muted)]"
+              )}
+              onClick={onSave}
+              disabled={!activeTab.dirty}
+            >
+              <AppIcon name="save" size={12} strokeWidth={1.9} />
+              Save
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>保存 (⌘S)</TooltipContent>
+        </Tooltip>
 
         {/* 发送/取消按钮组 */}
         <div className="relative flex items-center flex-shrink-0 w-[112px]" ref={sendMenuRef}>
@@ -248,8 +257,8 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
                 disabled={!request.url.trim()}
                 className={cn(
                   "no-press-feedback h-[30px] flex-1 flex items-center justify-center gap-1.5 rounded-l-[8px]",
-                  "bg-[#3b82f6] text-white text-[13px] font-medium",
-                  "hover:bg-[#3477e6] active:bg-[#2f6ed6] transition-[background-color,color]",
+                  "bg-[var(--accent)] text-[var(--accent-fg)] text-[13px] font-medium",
+                  "hover:bg-[var(--accent-hover)] active:brightness-[0.96] transition-[background-color,color,filter]",
                   "disabled:opacity-50 disabled:pointer-events-none"
                 )}
               >
@@ -261,8 +270,8 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
                 className={cn(
                   "no-press-feedback relative h-[30px] w-[28px] flex items-center justify-center rounded-r-[8px]",
                   "before:pointer-events-none before:absolute before:left-0 before:top-[6px] before:h-[18px] before:w-px before:bg-white/25",
-                  "bg-[#3b82f6] text-white",
-                  "hover:bg-[#3477e6] active:bg-[#2f6ed6] transition-[background-color,color]",
+                  "bg-[var(--accent)] text-[var(--accent-fg)]",
+                  "hover:bg-[var(--accent-hover)] active:brightness-[0.96] transition-[background-color,color,filter]",
                   "disabled:opacity-50 disabled:pointer-events-none"
                 )}
               >

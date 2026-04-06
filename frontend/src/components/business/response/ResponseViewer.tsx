@@ -203,7 +203,7 @@ function getRequestErrorPresentation(parsed: ParsedRequestError): RequestErrorPr
 
 function LoadingTopShimmer() {
   return (
-    <div className="absolute left-0 top-0 h-[2px] w-full overflow-hidden bg-[var(--border-subtle)]/60">
+    <div className="absolute left-0 top-0 h-[3px] w-full overflow-hidden bg-[var(--border-subtle)]/60">
       <div className="response-loading-sheen h-full w-[34%]" />
     </div>
   )
@@ -327,16 +327,16 @@ export function ResponseViewer() {
             className={cn(
               "inline-flex items-center gap-2 rounded-[8px] px-4 py-2 text-[13px] transition-colors",
               canSendFromEmptyState
-                ? "text-[#666] hover:text-[#444]"
+                ? "text-[var(--fg-secondary)] hover:text-[var(--fg)]"
                 : "text-[var(--fg-muted)] opacity-70 cursor-not-allowed"
             )}
-            style={{ backgroundColor: "rgb(242,242,242)" }}
+            style={{ backgroundColor: resolved === "dark" ? "rgb(52,52,52)" : "rgb(249,249,249)" }}
           >
             <AppIcon name="clock" size={15} />
             <span>Send + Get a successful response</span>
-            <span className="ml-1 inline-flex items-center gap-1 text-[10px] text-[#8a8a8a]">
-              <kbd className="h-4 min-w-4 rounded-[4px] bg-white/70 px-1 font-mono">⌘</kbd>
-              <kbd className="h-4 min-w-4 rounded-[4px] bg-white/70 px-1 font-mono">Enter</kbd>
+            <span className="ml-1 inline-flex items-center gap-1 text-[10px] text-[var(--fg-muted)]">
+              <kbd className="h-4 min-w-4 rounded-[4px] border border-[var(--button-border)] bg-[var(--surface)] px-1 font-mono">⌘</kbd>
+              <kbd className="h-4 min-w-4 rounded-[4px] border border-[var(--button-border)] bg-[var(--surface)] px-1 font-mono">Enter</kbd>
             </span>
           </button>
         </div>
@@ -363,11 +363,15 @@ export function ResponseViewer() {
 
   return (
     <div className="flex h-full flex-col bg-[var(--surface)] relative">
-      {/* 发送中的叠加层 */}
       {isSending && (
-        <div className="absolute inset-0 z-10 pointer-events-auto bg-[var(--surface)]/68 backdrop-blur-[2px]">
+        <div className="absolute inset-x-0 top-0 z-20 pointer-events-none">
           <LoadingTopShimmer />
         </div>
+      )}
+
+      {/* 发送中的叠加层 */}
+      {isSending && (
+        <div className="absolute inset-x-0 bottom-0 top-[32px] z-10 pointer-events-auto bg-[var(--response-loading-overlay)]" />
       )}
 
       <Tabs value={activeTabValue} onValueChange={setActiveTabValue} className="flex-1 flex flex-col min-h-0">
