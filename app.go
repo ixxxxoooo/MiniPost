@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -28,6 +29,18 @@ type App struct {
 	envSvc     *service.EnvironmentService
 	historySvc *service.HistoryService
 	store      *repository.FileStore
+}
+
+const httpStreamEventName = "minipost:http-stream"
+
+type httpStreamEventPayload struct {
+	StreamID   string `json:"streamId"`
+	Kind       string `json:"kind"`
+	Data       string `json:"data"`
+	Raw        string `json:"raw,omitempty"`
+	Timestamp  string `json:"timestamp"`
+	Sequence   int    `json:"sequence"`
+	BytesTotal int64  `json:"bytesTotal,omitempty"`
 }
 
 func NewApp() *App {
@@ -77,6 +90,43 @@ func normalizeCurlInput(input model.SendRequestInput) (model.SendRequestInput, e
 // ---- HTTP 请求 ----
 
 func (a *App) SendRequestWithEnv(input model.SendRequestInput, projectID, envID string) (*model.HttpResponse, error) {
+	return a.sendRequestWithEnv(input, projectID, envID, nil)
+}
+
+func (a *App) SendRequestWithEnvStream(input model.SendRequestInput, projectID, envID string, streamID string) (*model.HttpResponse, error) {
+	lastSequence := 0
+	onChunk := func(chunk model.StreamChunk) {
+		lastSequence = chunk.Sequence
+		a.emitHTTPStreamEvent(streamID, chunk)
+	}
+
+	resp, err := a.sendRequestWithEnv(input, projectID, envID, onChunk)
+	if err != nil {
+		if lastSequence > 0 {
+			a.emitHTTPStreamEvent(streamID, model.StreamChunk{
+				Kind:      "error",
+				Data:      err.Error(),
+				Raw:       err.Error(),
+				Timestamp: time.Now().Format(time.RFC3339Nano),
+				Sequence:  lastSequence + 1,
+			})
+		}
+		return nil, err
+	}
+
+	if lastSequence > 0 {
+		a.emitHTTPStreamEvent(streamID, model.StreamChunk{
+			Kind:      "connection_closed",
+			Data:      "Connection closed",
+			Raw:       "Connection closed",
+			Timestamp: time.Now().Format(time.RFC3339Nano),
+			Sequence:  lastSequence + 1,
+		})
+	}
+	return resp, nil
+}
+
+func (a *App) sendRequestWithEnv(input model.SendRequestInput, projectID, envID string, onChunk func(model.StreamChunk)) (*model.HttpResponse, error) {
 	normalizedInput, err := normalizeCurlInput(input)
 	if err != nil {
 		logger.Warn("cURL 解析失败", "url", input.URL, "error", err.Error())
@@ -104,7 +154,12 @@ func (a *App) SendRequestWithEnv(input model.SendRequestInput, projectID, envID 
 		}
 	}
 
-	resp, err := a.httpSvc.SendRequest(input)
+	var resp *model.HttpResponse
+	if onChunk != nil {
+		resp, err = a.httpSvc.SendRequestStreaming(input, onChunk)
+	} else {
+		resp, err = a.httpSvc.SendRequest(input)
+	}
 	if err != nil {
 		logger.Warn("HTTP 请求失败", "method", input.Method, "url", input.URL, "error", err.Error())
 		return nil, err
@@ -133,6 +188,21 @@ func (a *App) SendRequestWithEnv(input model.SendRequestInput, projectID, envID 
 	}
 
 	return resp, nil
+}
+
+func (a *App) emitHTTPStreamEvent(streamID string, chunk model.StreamChunk) {
+	if a.ctx == nil || strings.TrimSpace(streamID) == "" {
+		return
+	}
+	wailsRuntime.EventsEmit(a.ctx, httpStreamEventName, httpStreamEventPayload{
+		StreamID:   streamID,
+		Kind:       chunk.Kind,
+		Data:       chunk.Data,
+		Raw:        chunk.Raw,
+		Timestamp:  chunk.Timestamp,
+		Sequence:   chunk.Sequence,
+		BytesTotal: chunk.BytesTotal,
+	})
 }
 
 func (a *App) SendRequest(input model.SendRequestInput) (*model.HttpResponse, error) {

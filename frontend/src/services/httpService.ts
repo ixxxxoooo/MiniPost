@@ -1,5 +1,5 @@
-import { SendRequest, SendRequestWithEnv } from "../../wailsjs/go/main/App"
-import type { HttpResponse } from "@/types/response"
+import { SendRequest, SendRequestWithEnv, SendRequestWithEnvStream } from "../../wailsjs/go/main/App"
+import type { HttpResponse, HttpStreamEventPayload, StreamEntryKind } from "@/types/response"
 import type { RequestData } from "@/types/request"
 import { stripJsonComments } from "@/components/ui/CodeEditor"
 import { useCookieStore } from "@/stores/cookieStore"
@@ -28,6 +28,31 @@ export interface SendRequestPayload {
   }
 }
 
+export interface SendRequestStreamOptions {
+  streamId: string
+  onStreamEvent: (event: HttpStreamEventPayload) => void
+}
+
+function dedupeHeaders(headers: Array<{ key: string; value: string }>): Array<{ key: string; value: string }> {
+  const result: Array<{ key: string; value: string }> = []
+  const indexByName = new Map<string, number>()
+
+  headers.forEach((header) => {
+    const key = header.key?.trim()
+    if (!key) return
+    const normalized = normalizeHeaderName(key)
+    const existingIndex = indexByName.get(normalized)
+    if (existingIndex === undefined) {
+      indexByName.set(normalized, result.length)
+      result.push({ key, value: header.value })
+      return
+    }
+    result[existingIndex] = { key, value: header.value }
+  })
+
+  return result
+}
+
 function buildPayload(request: RequestData): SendRequestPayload {
   return {
     method: request.method,
@@ -35,9 +60,11 @@ function buildPayload(request: RequestData): SendRequestPayload {
     params: request.params
       .filter((p) => p.enabled && p.key)
       .map((p) => ({ key: p.key, value: p.value })),
-    headers: request.headers
-      .filter((h) => h.enabled && h.key)
-      .map((h) => ({ key: h.key, value: h.value })),
+    headers: dedupeHeaders(
+      request.headers
+        .filter((h) => h.enabled && h.key)
+        .map((h) => ({ key: h.key, value: h.value }))
+    ),
     body: {
       type: request.body.type,
       raw: stripJsonComments(request.body.raw ?? ""),
@@ -90,10 +117,39 @@ function hasHeader(headers: Array<{ key: string; value: string }>, name: string)
   return headers.some((header) => normalizeHeaderName(header.key) === target)
 }
 
+function normalizeStreamEventPayload(input: unknown): HttpStreamEventPayload | null {
+  if (!input || typeof input !== "object") return null
+  const raw = input as Partial<HttpStreamEventPayload>
+  if (typeof raw.streamId !== "string" || !raw.streamId.trim()) return null
+  if (!isStreamEntryKind(raw.kind)) return null
+  if (typeof raw.data !== "string") return null
+  if (typeof raw.timestamp !== "string" || !raw.timestamp.trim()) return null
+  if (typeof raw.sequence !== "number" || !Number.isFinite(raw.sequence)) return null
+  return {
+    streamId: raw.streamId,
+    kind: raw.kind,
+    data: raw.data,
+    raw: typeof raw.raw === "string" ? raw.raw : undefined,
+    timestamp: raw.timestamp,
+    sequence: raw.sequence,
+    bytesTotal: typeof raw.bytesTotal === "number" && Number.isFinite(raw.bytesTotal) ? raw.bytesTotal : undefined,
+  }
+}
+
+function isStreamEntryKind(value: unknown): value is StreamEntryKind {
+  return value === "response_start"
+    || value === "data"
+    || value === "event"
+    || value === "chunk"
+    || value === "connection_closed"
+    || value === "error"
+}
+
 export async function sendHttpRequest(
   request: RequestData,
   projectId?: string,
-  envId?: string
+  envId?: string,
+  streamOptions?: SendRequestStreamOptions
 ): Promise<HttpResponse> {
   const payload = buildPayload(request)
   const uiSettings = useUIStore.getState()
@@ -131,13 +187,34 @@ export async function sendHttpRequest(
     { key: "X-MiniPost-Option-Disable-Auto-Content-Type", value: isSuppressed("content-type") ? "1" : "0" },
   )
 
-  // 始终使用 SendRequestWithEnv 以确保历史记录被保存
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = projectId
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? await SendRequestWithEnv(payload as any, projectId, envId || "")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    : await SendRequest(payload as any)
+  const shouldStream = Boolean(streamOptions?.streamId && streamOptions.onStreamEvent)
+  let stopStreamListener: (() => void) | null = null
+
+  if (shouldStream) {
+    const runtime = await import("../../wailsjs/runtime/runtime")
+    stopStreamListener = runtime.EventsOn("minipost:http-stream", (...args: unknown[]) => {
+      const payload = normalizeStreamEventPayload(args[0])
+      if (!payload || payload.streamId !== streamOptions!.streamId) return
+      streamOptions!.onStreamEvent(payload)
+    })
+  }
+
+  // 始终优先使用 SendRequestWithEnv，以确保历史记录被保存
+  let result: Awaited<ReturnType<typeof SendRequestWithEnv>>
+  try {
+    if (shouldStream) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      result = await SendRequestWithEnvStream(payload as any, projectId || "", envId || "", streamOptions!.streamId)
+    } else if (projectId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      result = await SendRequestWithEnv(payload as any, projectId, envId || "")
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      result = await SendRequest(payload as any)
+    }
+  } finally {
+    stopStreamListener?.()
+  }
 
   const normalizedResult: HttpResponse = {
     statusCode: result.statusCode,
@@ -149,6 +226,7 @@ export async function sendHttpRequest(
     contentType: result.contentType,
     protocol: (result as unknown as { protocol?: string }).protocol,
     warnings: (result as unknown as { warnings?: string[] }).warnings ?? [],
+    network: (result as unknown as { network?: HttpResponse["network"] }).network,
     timings: (result as unknown as { timings?: HttpResponse["timings"] }).timings,
     sizeDetails: (result as unknown as { sizeDetails?: HttpResponse["sizeDetails"] }).sizeDetails,
   }

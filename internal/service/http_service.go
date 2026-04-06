@@ -1,11 +1,13 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -44,6 +46,8 @@ type requestTrace struct {
 	requestStart time.Time
 	getConn      time.Time
 	gotConn      time.Time
+	localAddr    string
+	remoteAddr   string
 	dnsStart     time.Time
 	dnsDone      time.Time
 	connectStart time.Time
@@ -182,6 +186,15 @@ func NewHttpService() *HttpService {
 
 // SendRequest 执行 HTTP 请求并返回响应
 func (s *HttpService) SendRequest(input model.SendRequestInput) (*model.HttpResponse, error) {
+	return s.sendRequest(input, nil)
+}
+
+// SendRequestStreaming 执行 HTTP 请求并在读取响应体时实时回调 chunk
+func (s *HttpService) SendRequestStreaming(input model.SendRequestInput, onChunk func(model.StreamChunk)) (*model.HttpResponse, error) {
+	return s.sendRequest(input, onChunk)
+}
+
+func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(model.StreamChunk)) (*model.HttpResponse, error) {
 	normalizedInput, err := s.normalizeInput(input)
 	if err != nil {
 		return nil, err
@@ -236,9 +249,17 @@ func (s *HttpService) SendRequest(input model.SendRequestInput) (*model.HttpResp
 				trace.getConn = time.Now()
 			}
 		},
-		GotConn: func(_ httptrace.GotConnInfo) {
+		GotConn: func(info httptrace.GotConnInfo) {
 			if trace.gotConn.IsZero() {
 				trace.gotConn = time.Now()
+			}
+			if info.Conn != nil {
+				if trace.localAddr == "" {
+					trace.localAddr = normalizeSocketAddress(info.Conn.LocalAddr())
+				}
+				if trace.remoteAddr == "" {
+					trace.remoteAddr = normalizeSocketAddress(info.Conn.RemoteAddr())
+				}
 			}
 		},
 		DNSStart: func(_ httptrace.DNSStartInfo) {
@@ -297,8 +318,47 @@ func (s *HttpService) SendRequest(input model.SendRequestInput) (*model.HttpResp
 		}
 	}
 	defer resp.Body.Close()
+	responseHeaderBytes := estimateResponseHeaderBytes(resp)
+	network := buildNetworkDetails(resp, trace)
 
-	bodyBytes, err := s.readResponseBody(resp.Body, options.maxResponseBytes)
+	if onChunk != nil {
+		type responseStartPayload struct {
+			StatusCode  int                   `json:"statusCode"`
+			StatusText  string                `json:"statusText"`
+			Headers     map[string][]string   `json:"headers"`
+			ContentType string                `json:"contentType"`
+			Protocol    string                `json:"protocol,omitempty"`
+			Network     *model.NetworkDetails `json:"network,omitempty"`
+			HeaderBytes int64                 `json:"headerBytes"`
+		}
+		startPayload := responseStartPayload{
+			StatusCode:  resp.StatusCode,
+			StatusText:  http.StatusText(resp.StatusCode),
+			Headers:     resp.Header,
+			ContentType: resp.Header.Get("Content-Type"),
+			Protocol:    resp.Proto,
+			Network:     network,
+			HeaderBytes: responseHeaderBytes,
+		}
+		encoded, _ := json.Marshal(startPayload)
+		onChunk(model.StreamChunk{
+			Kind:       "response_start",
+			Data:       string(encoded),
+			Timestamp:  time.Now().Format(time.RFC3339Nano),
+			Sequence:   1,
+			BytesTotal: responseHeaderBytes,
+		})
+	}
+
+	wrappedOnChunk := onChunk
+	if onChunk != nil {
+		wrappedOnChunk = func(chunk model.StreamChunk) {
+			chunk.Sequence += 1
+			chunk.BytesTotal += responseHeaderBytes
+			onChunk(chunk)
+		}
+	}
+	bodyBytes, err := s.readResponseBody(resp.Body, options.maxResponseBytes, resp.Header.Get("Content-Type"), wrappedOnChunk)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +375,6 @@ func (s *HttpService) SendRequest(input model.SendRequestInput) (*model.HttpResp
 
 	// 使用响应协议信息估算请求头大小，便于与 Postman 的展示口径保持接近。
 	requestHeaderBytes := estimateRequestHeaderBytes(req, resp.Proto)
-	responseHeaderBytes := estimateResponseHeaderBytes(resp)
 	responseBodyBytes := int64(len(bodyBytes))
 	sizeDetails := model.SizeBreakdown{
 		ResponseHeaders: responseHeaderBytes,
@@ -340,9 +399,79 @@ func (s *HttpService) SendRequest(input model.SendRequestInput) (*model.HttpResp
 		ContentType: respContentType,
 		Protocol:    resp.Proto,
 		Warnings:    warnings,
+		Network:     network,
 		Timings:     timings,
 		SizeDetails: sizeDetails,
 	}, nil
+}
+
+func buildNetworkDetails(resp *http.Response, trace requestTrace) *model.NetworkDetails {
+	details := &model.NetworkDetails{
+		HTTPVersion:   fmt.Sprintf("%d.%d", resp.ProtoMajor, resp.ProtoMinor),
+		LocalAddress:  trace.localAddr,
+		RemoteAddress: trace.remoteAddr,
+	}
+
+	if resp.TLS != nil {
+		details.TLSProtocol = tlsVersionLabel(resp.TLS.Version)
+		details.CipherName = tls.CipherSuiteName(resp.TLS.CipherSuite)
+		if details.CipherName == "" && resp.TLS.CipherSuite != 0 {
+			details.CipherName = fmt.Sprintf("0x%04x", resp.TLS.CipherSuite)
+		}
+
+		if len(resp.TLS.PeerCertificates) > 0 {
+			leaf := resp.TLS.PeerCertificates[0]
+			if leaf.Subject.CommonName != "" {
+				details.CertificateCN = leaf.Subject.CommonName
+			} else if len(leaf.DNSNames) > 0 {
+				details.CertificateCN = leaf.DNSNames[0]
+			}
+			details.IssuerCN = leaf.Issuer.CommonName
+			details.ValidUntil = leaf.NotAfter.UTC().Format(time.RFC3339)
+		}
+	}
+
+	if details.HTTPVersion == "" &&
+		details.LocalAddress == "" &&
+		details.RemoteAddress == "" &&
+		details.TLSProtocol == "" &&
+		details.CipherName == "" &&
+		details.CertificateCN == "" &&
+		details.IssuerCN == "" &&
+		details.ValidUntil == "" {
+		return nil
+	}
+	return details
+}
+
+func tlsVersionLabel(version uint16) string {
+	switch version {
+	case tls.VersionTLS10:
+		return "TLSv1.0"
+	case tls.VersionTLS11:
+		return "TLSv1.1"
+	case tls.VersionTLS12:
+		return "TLSv1.2"
+	case tls.VersionTLS13:
+		return "TLSv1.3"
+	default:
+		return ""
+	}
+}
+
+func normalizeSocketAddress(addr net.Addr) string {
+	if addr == nil {
+		return ""
+	}
+	raw := strings.TrimSpace(addr.String())
+	if raw == "" {
+		return ""
+	}
+	host, _, err := net.SplitHostPort(raw)
+	if err == nil {
+		return strings.Trim(host, "[]")
+	}
+	return strings.Trim(raw, "[]")
 }
 
 func (s *HttpService) buildURL(rawURL string, params []model.KeyValue) (string, error) {
@@ -547,7 +676,13 @@ func (s *HttpService) buildClient(options requestOptions) *http.Client {
 	return &client
 }
 
-func (s *HttpService) readResponseBody(body io.Reader, maxResponseBytes int64) ([]byte, error) {
+func (s *HttpService) readResponseBody(body io.Reader, maxResponseBytes int64, contentType string, onChunk func(model.StreamChunk)) ([]byte, error) {
+	if onChunk != nil {
+		if isSSEContentType(contentType) {
+			return s.readSSEStreamBody(body, maxResponseBytes, onChunk)
+		}
+	}
+
 	if maxResponseBytes <= 0 {
 		bodyBytes, err := io.ReadAll(body)
 		if err != nil {
@@ -562,10 +697,87 @@ func (s *HttpService) readResponseBody(body io.Reader, maxResponseBytes int64) (
 		return nil, appErrors.Wrap("READ_BODY_FAILED", "读取响应体失败", err)
 	}
 	if int64(len(bodyBytes)) > maxResponseBytes {
-		limitMB := maxResponseBytes / (1024 * 1024)
-		return nil, appErrors.New("MAX_RESPONSE_SIZE_EXCEEDED", fmt.Sprintf("响应体超过最大大小限制（%d MB）", limitMB))
+		return nil, newMaxBodySizeExceededError(maxResponseBytes)
 	}
 	return bodyBytes, nil
+}
+
+func (s *HttpService) readSSEStreamBody(body io.Reader, maxResponseBytes int64, onChunk func(model.StreamChunk)) ([]byte, error) {
+	reader := bufio.NewReader(body)
+	buffer := bytes.NewBuffer(nil)
+	eventLines := make([]string, 0, 8)
+	sequence := 0
+
+	emit := func(kind string, data string, raw string) {
+		sequence++
+		onChunk(model.StreamChunk{
+			Kind:       kind,
+			Data:       data,
+			Raw:        raw,
+			Timestamp:  time.Now().Format(time.RFC3339Nano),
+			Sequence:   sequence,
+			BytesTotal: int64(buffer.Len()),
+		})
+	}
+
+	flushEvent := func() {
+		if len(eventLines) == 0 {
+			return
+		}
+		raw := strings.Join(eventLines, "\n")
+		dataLines := make([]string, 0, len(eventLines))
+		for _, line := range eventLines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "data:") {
+				dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(trimmed, "data:")))
+			}
+		}
+		if len(dataLines) > 0 {
+			emit("data", strings.Join(dataLines, "\n"), raw)
+		} else {
+			emit("event", raw, raw)
+		}
+		eventLines = eventLines[:0]
+	}
+
+	for {
+		line, err := reader.ReadString('\n')
+		if len(line) > 0 {
+			if _, writeErr := buffer.WriteString(line); writeErr != nil {
+				return nil, appErrors.Wrap("READ_BODY_FAILED", "读取响应体失败", writeErr)
+			}
+			if maxResponseBytes > 0 && int64(buffer.Len()) > maxResponseBytes {
+				return nil, newMaxBodySizeExceededError(maxResponseBytes)
+			}
+
+			trimmedLine := strings.TrimRight(line, "\r\n")
+			if trimmedLine == "" {
+				flushEvent()
+			} else {
+				eventLines = append(eventLines, trimmedLine)
+			}
+		}
+
+		if err == nil {
+			continue
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		return nil, appErrors.Wrap("READ_BODY_FAILED", "读取响应体失败", err)
+	}
+
+	flushEvent()
+	return buffer.Bytes(), nil
+}
+
+func isSSEContentType(contentType string) bool {
+	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
+}
+
+func newMaxBodySizeExceededError(maxResponseBytes int64) error {
+	limitMB := maxResponseBytes / (1024 * 1024)
+	return appErrors.New("MAX_RESPONSE_SIZE_EXCEEDED", fmt.Sprintf("响应体超过最大大小限制（%d MB）", limitMB))
 }
 
 func parseBoolOption(raw string, defaultValue bool) bool {
