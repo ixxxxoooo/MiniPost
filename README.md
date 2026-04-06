@@ -1,19 +1,178 @@
-# README
+# MiniPost
 
-## About
+MiniPost 是一个基于 Wails + React + TypeScript 的桌面 API 调试工具。
 
-This is the official Wails React-TS template.
+## 1. 环境要求
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
+- Go 1.22+
+- Node.js 20+
+- Wails CLI 2.11+
 
-## Live Development
+安装 Wails CLI：
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+```bash
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
+```
 
-## Building
+## 2. 本地开发
 
-To build a redistributable, production mode package, use `wails build`.
+```bash
+wails dev
+```
+
+## 3. 产物目录约定
+
+- `build/bin/`：Wails 原始构建输出
+- `dist/macos/`：macOS 发布产物（`.app` + `.dmg`）
+- `dist/windows/`：Windows 发布产物（`.exe` / 安装包）
+
+## 4. 构建（统一一条命令）
+
+先赋予脚本执行权限：
+
+```bash
+chmod +x scripts/*.sh
+```
+
+### 4.1 构建 macOS（输出 DMG）
+
+```bash
+./scripts/build-macos.sh
+```
+
+默认输出：
+
+- `dist/macos/MiniPost.app`
+- `dist/macos/MiniPost-<version>.dmg`
+- DMG 内含 `Authorize MiniPost.command`（用户可双击完成授权）
+
+可选参数（环境变量）：
+
+- `APP_NAME`：应用名（默认 `MiniPost`）
+- `VERSION`：DMG 版本号（默认自动取 git describe）
+- `MACOS_PLATFORM`：`darwin/arm64` 或 `darwin/amd64`
+- `WAILS_BUILD_FLAGS`：附加 Wails 构建参数
+- `OUT_DIR`：输出目录（默认 `dist/macos`）
+
+### 4.2 构建 Windows
+
+```bash
+./scripts/build-windows.sh
+```
+
+默认输出：
+
+- `dist/windows/*.exe`
+- `dist/windows/*.msi`（如果有）
+
+可选参数（环境变量）：
+
+- `WINDOWS_PLATFORM`：默认 `windows/amd64`
+- `WEBVIEW2_STRATEGY`：默认 `download`
+- `WAILS_BUILD_FLAGS`：附加 Wails 构建参数
+- `OUT_DIR`：输出目录（默认 `dist/windows`）
+
+说明：
+
+- 在 macOS/Linux 上构建 Windows 需要交叉编译器。脚本会优先使用 `zig`，其次 `x86_64-w64-mingw32-gcc`。
+- 业界最佳实践是使用 CI 的原生 runner 分别构建 macOS 和 Windows，以降低交叉编译不一致风险。
+
+### 4.3 一次构建双平台
+
+```bash
+./scripts/build.sh
+```
+
+可选：
+
+```bash
+SKIP_WINDOWS=1 ./scripts/build.sh
+SKIP_MACOS=1 ./scripts/build.sh
+```
+
+## 5. macOS 发布最佳实践（签名 + 公证）
+
+建议发布版本必须进行以下流程：
+
+1. 使用 `Developer ID Application` 证书签名 `.app` 和 `.dmg`
+2. 使用 `notarytool` 对 `.dmg` 提交公证
+3. 对 `.dmg`（和可单独分发的 `.app`）执行 `stapler`
+
+脚本已内置支持，设置以下环境变量即可：
+
+- `MACOS_SIGN_IDENTITY` 例如：`Developer ID Application: Your Company (TEAMID)`
+- `MACOS_NOTARY_PROFILE` 例如：`AC_NOTARY_PROFILE`
+
+示例：
+
+```bash
+export MACOS_SIGN_IDENTITY="Developer ID Application: Your Company (TEAMID)"
+export MACOS_NOTARY_PROFILE="AC_NOTARY_PROFILE"
+./scripts/build-macos.sh
+```
+
+配置 notary profile（一次性）：
+
+```bash
+xcrun notarytool store-credentials "AC_NOTARY_PROFILE" \
+  --apple-id "your-apple-id@example.com" \
+  --team-id "TEAMID" \
+  --password "app-specific-password"
+```
+
+## 6. “直接授权”命令（内部分发可用）
+
+对于未公证或内网传输导致的隔离标记，可直接执行：
+
+```bash
+xattr -dr com.apple.quarantine "dist/macos/MiniPost.app"
+```
+
+或使用脚本：
+
+```bash
+./scripts/macos-authorize.sh dist/macos/MiniPost.app
+```
+
+对于 DMG 内分发用户：
+
+- 打开 DMG 后，双击 `Authorize MiniPost.command` 即可执行授权。
+
+可选增强信任（管理员权限）：
+
+```bash
+sudo spctl --add --label "MiniPost Local Trust" "dist/macos/MiniPost.app"
+```
+
+## 7. Windows 签名最佳实践（可选）
+
+脚本支持可选 `signtool` 签名，请在 Windows 主机设置：
+
+- `WIN_CERT_FILE`：`pfx` 证书路径
+- `WIN_CERT_PASSWORD`：证书密码
+- `WIN_SIGNTOOL`：默认 `signtool`
+- `WIN_TIMESTAMP_URL`：默认 `http://timestamp.digicert.com`
+
+示例：
+
+```bash
+WIN_CERT_FILE="C:/certs/release.pfx" \
+WIN_CERT_PASSWORD="***" \
+./scripts/build-windows.sh
+```
+
+## 8. 常用命令速查
+
+```bash
+# 开发
+wails dev
+
+# macOS 发布（dmg）
+./scripts/build-macos.sh
+
+# Windows 发布
+./scripts/build-windows.sh
+
+# 双平台
+./scripts/build.sh
+```

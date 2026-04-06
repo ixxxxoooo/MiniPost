@@ -344,7 +344,7 @@ function App() {
   useKeyboardShortcuts(shortcuts)
 
   return (
-    <TooltipProvider delayDuration={40} skipDelayDuration={12}>
+    <TooltipProvider delayDuration={200} skipDelayDuration={12}>
       <div className="window-frame fixed inset-0 bg-transparent">
         <div className="window-shell h-full w-full bg-[var(--surface)]">
           <AppLayout />

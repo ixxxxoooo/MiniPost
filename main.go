@@ -1,3 +1,6 @@
+//go:build !bindings
+// +build !bindings
+
 package main
 
 import (
