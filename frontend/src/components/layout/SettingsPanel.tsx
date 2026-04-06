@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { backupService } from "@/services/backupService"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { OpenFileDialogAny } from "../../../wailsjs/go/main/App"
+import appLogo from "@/assets/images/appicon.png"
 
 const SHORTCUTS = [
   { keys: "⌘ + Enter", desc: "发送请求" },
@@ -520,8 +521,8 @@ export function SettingsPanel() {
               {activeSection === "about" && (
                 <section className="rounded-[11px] border border-[var(--border-color)] p-4">
                   <div className="flex items-center gap-2.5">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-[9px] bg-[var(--accent)] text-white font-semibold text-[13px]">
-                      M
+                    <div className="h-9 w-9 overflow-hidden rounded-[9px]">
+                      <img src={appLogo} alt="MiniPost" className="h-full w-full object-cover" />
                     </div>
                     <div>
                       <div className="text-[14px] font-semibold text-[var(--fg)]">MiniPost</div>

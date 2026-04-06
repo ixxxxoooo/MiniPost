@@ -155,7 +155,7 @@ export function KeyValueEditor({
 
   return (
     <div className="px-[var(--size-padding-sm)] pt-2">
-      <table className="w-full border-collapse border border-[var(--border-color)]" style={{ fontSize: "11px" }}>
+      <table className="w-full select-none border-collapse border border-[var(--border-color)]" style={{ fontSize: "11px" }}>
         <thead>
           <tr>
             <th className="w-7 border border-[var(--border-color)] px-1 py-1" />
@@ -276,7 +276,7 @@ export function KeyValueEditor({
                     }}
                     placeholder={keyPlaceholder}
                     className={cn(
-                      "w-full h-[24px] px-2 bg-transparent text-[var(--fg)] font-mono",
+                      "w-full h-[24px] px-2 bg-transparent text-[var(--fg)] font-mono select-text",
                       "text-[11px] placeholder:text-[var(--fg-muted)] placeholder:italic",
                       "focus:outline-none",
                       !item.enabled && !isLastEmpty && "opacity-40"
@@ -289,7 +289,7 @@ export function KeyValueEditor({
                     onChange={(e) => handleUpdate(item.id, "value", e.target.value)}
                     placeholder={valuePlaceholder}
                     className={cn(
-                      "w-full h-[24px] px-2 bg-transparent text-[var(--fg)] font-mono",
+                      "w-full h-[24px] px-2 bg-transparent text-[var(--fg)] font-mono select-text",
                       "text-[11px] placeholder:text-[var(--fg-muted)] placeholder:italic",
                       "focus:outline-none",
                       !item.enabled && !isLastEmpty && "opacity-40"
@@ -304,7 +304,7 @@ export function KeyValueEditor({
                       onChange={(e) => handleUpdate(item.id, "description", e.target.value)}
                       placeholder="Description"
                       className={cn(
-                        "w-full h-[24px] px-2 bg-transparent text-[var(--fg-secondary)]",
+                        "w-full h-[24px] px-2 bg-transparent text-[var(--fg-secondary)] select-text",
                         "text-[11px] placeholder:text-[var(--fg-muted)] placeholder:italic",
                         "focus:outline-none",
                         !item.enabled && !isLastEmpty && "opacity-40"

@@ -218,9 +218,6 @@ export function ResponseViewer() {
   const response = activeTab?.response ?? null
   const responseError = activeTab?.responseError ?? null
   const safeHeaders = response?.headers ?? {}
-  const requestHeaderEntries = (activeTab?.request.headers ?? [])
-    .filter((h) => h.enabled && h.key.trim())
-    .map((h) => [h.key, h.value] as const)
   const parsedError = responseError ? parseRequestError(responseError) : null
   const errorPresentation = parsedError ? getRequestErrorPresentation(parsedError) : null
   const canSendFromEmptyState = Boolean(activeTab?.request.url?.trim())
@@ -586,21 +583,6 @@ export function ResponseViewer() {
                             <span>•</span>
                             <span>Code: {parsedError?.code || "REQUEST_FAILED"}</span>
                           </div>
-
-                          <details open>
-                            <summary className="cursor-pointer select-none text-[11px] text-[var(--fg-secondary)]">Request Headers</summary>
-                            <div className="mt-1.5 ml-3 space-y-1 text-[11px] text-[var(--fg-secondary)] font-mono">
-                              {requestHeaderEntries.length > 0 ? (
-                                requestHeaderEntries.map(([key, value]) => (
-                                  <div key={key}>
-                                    <span className="text-[var(--fg)]">{key}</span>: "{value}"
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="text-[var(--fg-muted)]">无请求头</div>
-                              )}
-                            </div>
-                          </details>
                         </div>
                       </div>
                     </div>
