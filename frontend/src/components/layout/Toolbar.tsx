@@ -98,6 +98,13 @@ export function Toolbar() {
                 key: f.key ?? "",
                 value: f.value ?? "",
               })),
+              formData: (result.body.formData ?? []).map((f) => ({
+                key: f.key ?? "",
+                value: f.value ?? "",
+                type: f.type ?? "text",
+                filePath: f.filePath ?? "",
+                fileName: f.fileName ?? "",
+              })),
             }
           : createdRequest.body,
         auth: result.auth ?? createdRequest.auth,
@@ -125,7 +132,7 @@ export function Toolbar() {
         })),
         body: requestToSave.body
           ? {
-              type: requestToSave.body.type as "none" | "raw" | "json" | "form-urlencoded",
+              type: requestToSave.body.type as "none" | "raw" | "json" | "form-urlencoded" | "form-data",
               raw: requestToSave.body.raw,
               json: requestToSave.body.json,
               formUrlEncoded: (requestToSave.body.formUrlEncoded ?? []).map((f) => ({
@@ -133,6 +140,15 @@ export function Toolbar() {
                 key: f.key,
                 value: f.value,
                 enabled: true,
+              })),
+              formData: (requestToSave.body.formData ?? []).map((f) => ({
+                id: crypto.randomUUID(),
+                key: f.key,
+                value: f.value ?? "",
+                enabled: true,
+                type: (f.type as "text" | "file") || "text",
+                filePath: f.filePath,
+                fileName: f.fileName,
               })),
             }
           : { type: "none" as const },
@@ -231,29 +247,29 @@ export function Toolbar() {
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
           <div
             className={cn(
-              "relative z-[301] w-[520px] rounded-[12px] border shadow-2xl",
+              "relative z-[301] w-[500px] rounded-[12px] border shadow-2xl",
               "bg-[var(--surface)] border-[var(--border-color)]",
               "animate-in fade-in zoom-in-95 duration-150"
             )}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-3 px-6 pt-6 pb-3">
-              <div className="h-8 w-8 rounded-[8px] bg-[var(--accent)]/10 flex items-center justify-center flex-shrink-0">
-                <AppIcon name="fileImport" size={16} className="text-[var(--accent)]" />
+            <div className="flex items-center gap-2.5 px-5 pt-4 pb-2">
+              <div className="h-7 w-7 rounded-[8px] bg-[var(--accent)]/10 flex items-center justify-center flex-shrink-0">
+                <AppIcon name="fileImport" size={15} className="text-[var(--accent)]" />
               </div>
               <div className="flex-1">
                 <h3 className="text-[14px] font-semibold text-[var(--fg)]">导入 cURL</h3>
                 <p className="text-[11px] text-[var(--fg-muted)] mt-0.5">粘贴 cURL 命令以快速创建请求</p>
               </div>
               <button
-                className="h-6 w-6 flex items-center justify-center rounded-[6px] hover:bg-[var(--sidebar-hover)] transition-colors"
+                className="h-5 w-5 flex items-center justify-center rounded-[6px] hover:bg-[var(--sidebar-hover)] transition-colors"
                 onClick={() => { setShowCurlDialog(false); setCurlError("") }}
               >
-                <AppIcon name="clear" size={12} className="text-[var(--fg-muted)]" />
+                <AppIcon name="clear" size={11} className="text-[var(--fg-muted)]" />
               </button>
             </div>
 
-            <div className="px-6 pb-3">
+            <div className="px-5 pb-2">
               <textarea
                 value={curlCommand}
                 onChange={(e) => setCurlCommand(e.target.value)}
@@ -285,15 +301,15 @@ export function Toolbar() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between px-6 pb-6 pt-1">
+            <div className="flex items-center justify-between px-5 pb-4 pt-0.5">
               <span className="text-[10px] text-[var(--fg-muted)]">
                 <kbd className="px-1 py-0.5 rounded bg-[var(--surface-secondary)] border border-[var(--border-color)] text-[9px] font-mono">⌘I</kbd>
                 <span className="ml-1.5">快速唤起</span>
               </span>
-              <div className="flex gap-2">
+              <div className="flex gap-1.5 flex-shrink-0">
                 <button
                   className={cn(
-                    "h-[32px] px-4 rounded-[8px] text-[12px] font-medium transition-colors",
+                    "h-[30px] min-w-[84px] px-3.5 rounded-[8px] text-[12px] font-medium whitespace-nowrap transition-colors flex-shrink-0",
                     "border border-[var(--border-color)] text-[var(--fg-secondary)] hover:bg-[var(--surface-secondary)]"
                   )}
                   onClick={() => { setShowCurlDialog(false); setCurlError("") }}
@@ -302,14 +318,14 @@ export function Toolbar() {
                 </button>
                 <button
                   className={cn(
-                    "h-[32px] px-5 rounded-[8px] text-[12px] font-medium transition-colors",
+                    "h-[30px] min-w-[84px] px-4.5 rounded-[8px] text-[12px] font-medium whitespace-nowrap transition-colors flex-shrink-0",
                     "bg-[var(--accent)] text-white hover:brightness-110",
                     "disabled:opacity-40 disabled:pointer-events-none"
                   )}
                   disabled={!curlCommand.trim() || !currentProjectId}
                   onClick={() => void handleCurlImport()}
                 >
-                  导入
+                  导入 (Enter)
                 </button>
               </div>
             </div>

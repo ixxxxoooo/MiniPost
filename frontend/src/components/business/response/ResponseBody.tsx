@@ -615,18 +615,6 @@ function FilterGlyph() {
   )
 }
 
-function FormatGlyph() {
-  return (
-    <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-        <path d="M2 2.5H10" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-        <path d="M2 6H8.2" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-        <path d="M2 9.5H6.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-      </svg>
-    </span>
-  )
-}
-
 function WrapGlyph() {
   return (
     <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
@@ -696,16 +684,6 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
     await navigator.clipboard.writeText(displayBody)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1200)
-  }
-
-  const handleFormat = () => {
-    setPreview(false)
-    setFilterOpen(false)
-    setFilterExpr("")
-    if (mode === "raw") {
-      const detected = detectDefaultMode(contentType, body, responseFormatDetection)
-      if (detected !== "raw") setMode(detected)
-    }
   }
 
   const handleSearch = useCallback(() => {
@@ -780,13 +758,6 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
         </div>
 
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            className="h-6 w-6 rounded-[8px] border border-transparent bg-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
-            onClick={handleFormat}
-          >
-            <FormatGlyph />
-          </button>
           <button
             type="button"
             className={cn(

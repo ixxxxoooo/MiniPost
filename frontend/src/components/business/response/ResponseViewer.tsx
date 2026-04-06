@@ -223,6 +223,7 @@ export function ResponseViewer() {
     .map((h) => [h.key, h.value] as const)
   const parsedError = responseError ? parseRequestError(responseError) : null
   const errorPresentation = parsedError ? getRequestErrorPresentation(parsedError) : null
+  const canSendFromEmptyState = Boolean(activeTab?.request.url?.trim())
 
   const timingRows = useMemo<TimingRow[]>(() => {
     if (!response) return []
@@ -306,12 +307,39 @@ export function ResponseViewer() {
     }
   }, [responseError])
 
+  const triggerSendFromEmptyState = () => {
+    if (!canSendFromEmptyState || isSending) return
+    window.dispatchEvent(new CustomEvent("minipost:send"))
+  }
+
   if (!response && !responseError && !isSending) {
     return (
-      <div className="flex h-full items-center justify-center bg-[var(--surface)]">
-        <span className="text-[length:var(--size-font-xs)] text-[var(--fg-muted)]">
-          发送请求后在此查看响应
-        </span>
+      <div className="flex h-full flex-col bg-[var(--surface)]">
+        <div className="flex h-[32px] items-center px-[var(--size-padding-sm)]">
+          <span className="text-[13px] font-semibold text-[var(--fg)]">Response</span>
+        </div>
+
+        <div className="flex flex-1 items-center justify-center px-4">
+          <button
+            type="button"
+            onClick={triggerSendFromEmptyState}
+            disabled={!canSendFromEmptyState}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-[8px] px-4 py-2 text-[13px] transition-colors",
+              canSendFromEmptyState
+                ? "text-[#666] hover:text-[#444]"
+                : "text-[var(--fg-muted)] opacity-70 cursor-not-allowed"
+            )}
+            style={{ backgroundColor: "rgb(242,242,242)" }}
+          >
+            <AppIcon name="clock" size={15} />
+            <span>Send + Get a successful response</span>
+            <span className="ml-1 inline-flex items-center gap-1 text-[10px] text-[#8a8a8a]">
+              <kbd className="h-4 min-w-4 rounded-[4px] bg-white/70 px-1 font-mono">⌘</kbd>
+              <kbd className="h-4 min-w-4 rounded-[4px] bg-white/70 px-1 font-mono">Enter</kbd>
+            </span>
+          </button>
+        </div>
       </div>
     )
   }
@@ -319,7 +347,12 @@ export function ResponseViewer() {
   if (!response && !responseError && isSending) {
     return (
       <div className="relative h-full bg-[var(--surface)]">
-        <LoadingTopShimmer />
+        <div className="flex h-[32px] items-center px-[var(--size-padding-sm)]">
+          <span className="text-[13px] font-semibold text-[var(--fg)]">Response</span>
+        </div>
+        <div className="flex h-[calc(100%-32px)] items-center justify-center px-4">
+          <span className="text-[13px] text-[var(--fg-secondary)]">发送请求...</span>
+        </div>
       </div>
     )
   }
@@ -332,7 +365,7 @@ export function ResponseViewer() {
     <div className="flex h-full flex-col bg-[var(--surface)] relative">
       {/* 发送中的叠加层 */}
       {isSending && (
-        <div className="absolute inset-0 z-10 pointer-events-auto bg-[var(--surface)]/68 backdrop-blur-[1px]">
+        <div className="absolute inset-0 z-10 pointer-events-auto bg-[var(--surface)]/68 backdrop-blur-[2px]">
           <LoadingTopShimmer />
         </div>
       )}

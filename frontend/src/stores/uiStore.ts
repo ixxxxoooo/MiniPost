@@ -44,7 +44,12 @@ interface UIState {
   sslCertificateVerification: boolean
   sslTlsKeyLog: boolean
   disableCookies: boolean
+  sendNoCacheHeader: boolean
+  sendPostmanTokenHeader: boolean
   responseFormatDetection: ResponseFormatDetection
+  alwaysDiscardUnsavedOnClose: boolean
+  autoBackupEnabled: boolean
+  autoBackupIntervalMinutes: number
   editingEnvironmentId: string | null
   openEnvironmentTabIds: string[]
 
@@ -65,7 +70,12 @@ interface UIState {
   setSSLCertificateVerification: (v: boolean) => void
   setSSLTlsKeyLog: (v: boolean) => void
   setDisableCookies: (v: boolean) => void
+  setSendNoCacheHeader: (v: boolean) => void
+  setSendPostmanTokenHeader: (v: boolean) => void
   setResponseFormatDetection: (v: ResponseFormatDetection) => void
+  setAlwaysDiscardUnsavedOnClose: (v: boolean) => void
+  setAutoBackupEnabled: (v: boolean) => void
+  setAutoBackupIntervalMinutes: (v: number) => void
   setEditingEnvironmentId: (id: string | null) => void
   closeEnvironmentTab: (id: string) => void
   closeActiveEnvironmentTab: () => void
@@ -94,6 +104,7 @@ const SCROLLBAR_AUTO_HIDE_STORAGE_KEY = "minipost:scrollbar-auto-hide"
 const REQUEST_SETTINGS_STORAGE_KEY = "minipost:request-settings"
 const THEME_STORAGE_KEY = "minipost:theme"
 const FONT_SIZE_STORAGE_KEY = "minipost:font-size"
+const BACKUP_SETTINGS_STORAGE_KEY = "minipost:backup-settings"
 let scrollbarActivityTeardown: (() => void) | null = null
 let scrollbarHideTimer: number | null = null
 
@@ -105,7 +116,15 @@ type PersistedRequestSettings = {
   sslCertificateVerification: boolean
   sslTlsKeyLog: boolean
   disableCookies: boolean
+  sendNoCacheHeader: boolean
+  sendPostmanTokenHeader: boolean
   responseFormatDetection: ResponseFormatDetection
+  alwaysDiscardUnsavedOnClose: boolean
+}
+
+type PersistedBackupSettings = {
+  autoBackupEnabled: boolean
+  autoBackupIntervalMinutes: number
 }
 
 function defaultRequestSettings(): PersistedRequestSettings {
@@ -117,7 +136,48 @@ function defaultRequestSettings(): PersistedRequestSettings {
     sslCertificateVerification: true,
     sslTlsKeyLog: false,
     disableCookies: false,
+    sendNoCacheHeader: false,
+    sendPostmanTokenHeader: false,
     responseFormatDetection: "auto",
+    alwaysDiscardUnsavedOnClose: false,
+  }
+}
+
+type PersistedRequestSettingsSource = Pick<
+  UIState,
+  | "followRedirects"
+  | "httpVersion"
+  | "requestTimeoutMs"
+  | "maxResponseSizeMB"
+  | "sslCertificateVerification"
+  | "sslTlsKeyLog"
+  | "disableCookies"
+  | "sendNoCacheHeader"
+  | "sendPostmanTokenHeader"
+  | "responseFormatDetection"
+  | "alwaysDiscardUnsavedOnClose"
+>
+
+function toPersistedRequestSettings(state: PersistedRequestSettingsSource): PersistedRequestSettings {
+  return {
+    followRedirects: state.followRedirects,
+    httpVersion: state.httpVersion,
+    requestTimeoutMs: state.requestTimeoutMs,
+    maxResponseSizeMB: state.maxResponseSizeMB,
+    sslCertificateVerification: state.sslCertificateVerification,
+    sslTlsKeyLog: state.sslTlsKeyLog,
+    disableCookies: state.disableCookies,
+    sendNoCacheHeader: state.sendNoCacheHeader,
+    sendPostmanTokenHeader: state.sendPostmanTokenHeader,
+    responseFormatDetection: state.responseFormatDetection,
+    alwaysDiscardUnsavedOnClose: state.alwaysDiscardUnsavedOnClose,
+  }
+}
+
+function defaultBackupSettings(): PersistedBackupSettings {
+  return {
+    autoBackupEnabled: false,
+    autoBackupIntervalMinutes: 30,
   }
 }
 
@@ -148,7 +208,10 @@ function readRequestSettings(): PersistedRequestSettings {
       sslCertificateVerification: parsed.sslCertificateVerification ?? defaults.sslCertificateVerification,
       sslTlsKeyLog: parsed.sslTlsKeyLog ?? defaults.sslTlsKeyLog,
       disableCookies: parsed.disableCookies ?? defaults.disableCookies,
+      sendNoCacheHeader: parsed.sendNoCacheHeader ?? defaults.sendNoCacheHeader,
+      sendPostmanTokenHeader: parsed.sendPostmanTokenHeader ?? defaults.sendPostmanTokenHeader,
       responseFormatDetection,
+      alwaysDiscardUnsavedOnClose: parsed.alwaysDiscardUnsavedOnClose ?? defaults.alwaysDiscardUnsavedOnClose,
     }
   } catch {
     return defaults
@@ -159,6 +222,35 @@ function persistRequestSettings(settings: PersistedRequestSettings) {
   if (typeof window === "undefined") return
   try {
     window.localStorage.setItem(REQUEST_SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+  } catch {
+    // ignore persistence errors
+  }
+}
+
+function readBackupSettings(): PersistedBackupSettings {
+  const defaults = defaultBackupSettings()
+  if (typeof window === "undefined") return defaults
+  try {
+    const raw = window.localStorage.getItem(BACKUP_SETTINGS_STORAGE_KEY)
+    if (!raw) return defaults
+    const parsed = JSON.parse(raw) as Partial<PersistedBackupSettings>
+    return {
+      autoBackupEnabled: parsed.autoBackupEnabled ?? defaults.autoBackupEnabled,
+      autoBackupIntervalMinutes: clampSettingNumber(
+        Math.round(parsed.autoBackupIntervalMinutes ?? defaults.autoBackupIntervalMinutes),
+        5,
+        1440
+      ),
+    }
+  } catch {
+    return defaults
+  }
+}
+
+function persistBackupSettings(settings: PersistedBackupSettings) {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(BACKUP_SETTINGS_STORAGE_KEY, JSON.stringify(settings))
   } catch {
     // ignore persistence errors
   }
@@ -285,6 +377,7 @@ const initialFontSize = readFontSize()
 
 export const useUIStore = create<UIState>((set) => ({
   ...readRequestSettings(),
+  ...readBackupSettings(),
   theme: initialTheme,
   resolved: initialResolvedTheme,
   sidebarWidth: 240,
@@ -326,117 +419,77 @@ export const useUIStore = create<UIState>((set) => ({
   },
   setFollowRedirects: (followRedirects) => set((state) => {
     const next = { ...state, followRedirects }
-    persistRequestSettings({
-      followRedirects: next.followRedirects,
-      httpVersion: next.httpVersion,
-      requestTimeoutMs: next.requestTimeoutMs,
-      maxResponseSizeMB: next.maxResponseSizeMB,
-      sslCertificateVerification: next.sslCertificateVerification,
-      sslTlsKeyLog: next.sslTlsKeyLog,
-      disableCookies: next.disableCookies,
-      responseFormatDetection: next.responseFormatDetection,
-    })
+    persistRequestSettings(toPersistedRequestSettings(next))
     return { followRedirects }
   }),
   setHttpVersion: (httpVersion) => set((state) => {
     const next = { ...state, httpVersion }
-    persistRequestSettings({
-      followRedirects: next.followRedirects,
-      httpVersion: next.httpVersion,
-      requestTimeoutMs: next.requestTimeoutMs,
-      maxResponseSizeMB: next.maxResponseSizeMB,
-      sslCertificateVerification: next.sslCertificateVerification,
-      sslTlsKeyLog: next.sslTlsKeyLog,
-      disableCookies: next.disableCookies,
-      responseFormatDetection: next.responseFormatDetection,
-    })
+    persistRequestSettings(toPersistedRequestSettings(next))
     return { httpVersion }
   }),
   setRequestTimeoutMs: (requestTimeoutMs) => set((state) => {
     const normalized = clampSettingNumber(Math.round(requestTimeoutMs), 0, 3_600_000)
     const next = { ...state, requestTimeoutMs: normalized }
-    persistRequestSettings({
-      followRedirects: next.followRedirects,
-      httpVersion: next.httpVersion,
-      requestTimeoutMs: next.requestTimeoutMs,
-      maxResponseSizeMB: next.maxResponseSizeMB,
-      sslCertificateVerification: next.sslCertificateVerification,
-      sslTlsKeyLog: next.sslTlsKeyLog,
-      disableCookies: next.disableCookies,
-      responseFormatDetection: next.responseFormatDetection,
-    })
+    persistRequestSettings(toPersistedRequestSettings(next))
     return { requestTimeoutMs: normalized }
   }),
   setMaxResponseSizeMB: (maxResponseSizeMB) => set((state) => {
     const normalized = clampSettingNumber(Math.round(maxResponseSizeMB), 0, 2048)
     const next = { ...state, maxResponseSizeMB: normalized }
-    persistRequestSettings({
-      followRedirects: next.followRedirects,
-      httpVersion: next.httpVersion,
-      requestTimeoutMs: next.requestTimeoutMs,
-      maxResponseSizeMB: next.maxResponseSizeMB,
-      sslCertificateVerification: next.sslCertificateVerification,
-      sslTlsKeyLog: next.sslTlsKeyLog,
-      disableCookies: next.disableCookies,
-      responseFormatDetection: next.responseFormatDetection,
-    })
+    persistRequestSettings(toPersistedRequestSettings(next))
     return { maxResponseSizeMB: normalized }
   }),
   setSSLCertificateVerification: (sslCertificateVerification) => set((state) => {
     const next = { ...state, sslCertificateVerification }
-    persistRequestSettings({
-      followRedirects: next.followRedirects,
-      httpVersion: next.httpVersion,
-      requestTimeoutMs: next.requestTimeoutMs,
-      maxResponseSizeMB: next.maxResponseSizeMB,
-      sslCertificateVerification: next.sslCertificateVerification,
-      sslTlsKeyLog: next.sslTlsKeyLog,
-      disableCookies: next.disableCookies,
-      responseFormatDetection: next.responseFormatDetection,
-    })
+    persistRequestSettings(toPersistedRequestSettings(next))
     return { sslCertificateVerification }
   }),
   setSSLTlsKeyLog: (sslTlsKeyLog) => set((state) => {
     const next = { ...state, sslTlsKeyLog }
-    persistRequestSettings({
-      followRedirects: next.followRedirects,
-      httpVersion: next.httpVersion,
-      requestTimeoutMs: next.requestTimeoutMs,
-      maxResponseSizeMB: next.maxResponseSizeMB,
-      sslCertificateVerification: next.sslCertificateVerification,
-      sslTlsKeyLog: next.sslTlsKeyLog,
-      disableCookies: next.disableCookies,
-      responseFormatDetection: next.responseFormatDetection,
-    })
+    persistRequestSettings(toPersistedRequestSettings(next))
     return { sslTlsKeyLog }
   }),
   setDisableCookies: (disableCookies) => set((state) => {
     const next = { ...state, disableCookies }
-    persistRequestSettings({
-      followRedirects: next.followRedirects,
-      httpVersion: next.httpVersion,
-      requestTimeoutMs: next.requestTimeoutMs,
-      maxResponseSizeMB: next.maxResponseSizeMB,
-      sslCertificateVerification: next.sslCertificateVerification,
-      sslTlsKeyLog: next.sslTlsKeyLog,
-      disableCookies: next.disableCookies,
-      responseFormatDetection: next.responseFormatDetection,
-    })
+    persistRequestSettings(toPersistedRequestSettings(next))
     return { disableCookies }
+  }),
+  setSendNoCacheHeader: (sendNoCacheHeader) => set((state) => {
+    const next = { ...state, sendNoCacheHeader }
+    persistRequestSettings(toPersistedRequestSettings(next))
+    return { sendNoCacheHeader }
+  }),
+  setSendPostmanTokenHeader: (sendPostmanTokenHeader) => set((state) => {
+    const next = { ...state, sendPostmanTokenHeader }
+    persistRequestSettings(toPersistedRequestSettings(next))
+    return { sendPostmanTokenHeader }
   }),
   setResponseFormatDetection: (responseFormatDetection) => set((state) => {
     const next = { ...state, responseFormatDetection }
-    persistRequestSettings({
-      followRedirects: next.followRedirects,
-      httpVersion: next.httpVersion,
-      requestTimeoutMs: next.requestTimeoutMs,
-      maxResponseSizeMB: next.maxResponseSizeMB,
-      sslCertificateVerification: next.sslCertificateVerification,
-      sslTlsKeyLog: next.sslTlsKeyLog,
-      disableCookies: next.disableCookies,
-      responseFormatDetection: next.responseFormatDetection,
-    })
+    persistRequestSettings(toPersistedRequestSettings(next))
     return { responseFormatDetection }
+  }),
+  setAlwaysDiscardUnsavedOnClose: (alwaysDiscardUnsavedOnClose) => set((state) => {
+    const next = { ...state, alwaysDiscardUnsavedOnClose }
+    persistRequestSettings(toPersistedRequestSettings(next))
+    return { alwaysDiscardUnsavedOnClose }
+  }),
+  setAutoBackupEnabled: (autoBackupEnabled) => set((state) => {
+    const next = { ...state, autoBackupEnabled }
+    persistBackupSettings({
+      autoBackupEnabled: next.autoBackupEnabled,
+      autoBackupIntervalMinutes: next.autoBackupIntervalMinutes,
+    })
+    return { autoBackupEnabled }
+  }),
+  setAutoBackupIntervalMinutes: (autoBackupIntervalMinutes) => set((state) => {
+    const normalized = clampSettingNumber(Math.round(autoBackupIntervalMinutes), 5, 1440)
+    const next = { ...state, autoBackupIntervalMinutes: normalized }
+    persistBackupSettings({
+      autoBackupEnabled: next.autoBackupEnabled,
+      autoBackupIntervalMinutes: next.autoBackupIntervalMinutes,
+    })
+    return { autoBackupIntervalMinutes: normalized }
   }),
   setEditingEnvironmentId: (editingEnvironmentId) => set((state) => {
     if (!editingEnvironmentId) {

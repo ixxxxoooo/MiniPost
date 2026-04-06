@@ -3,6 +3,7 @@ package httputil
 import (
 	"errors"
 	"minipost/internal/model"
+	"path/filepath"
 	"strings"
 	"unicode"
 )
@@ -68,6 +69,43 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 					input.Body = model.RequestBody{Type: "json", JSON: data}
 				} else {
 					input.Body = model.RequestBody{Type: "raw", Raw: data}
+				}
+				if input.Method == "GET" {
+					input.Method = "POST"
+				}
+			}
+		case "-F", "--form":
+			if i+1 < len(parts) {
+				i++
+				formArg := strings.TrimSpace(parts[i])
+				key, value, ok := strings.Cut(formArg, "=")
+				if ok {
+					key = strings.TrimSpace(key)
+					value = strings.TrimSpace(value)
+					if key != "" {
+						if input.Body.Type != "form-data" {
+							input.Body = model.RequestBody{
+								Type:     "form-data",
+								FormData: []model.FormData{},
+							}
+						}
+						if strings.HasPrefix(value, "@") {
+							filePath := strings.Trim(strings.TrimPrefix(value, "@"), "'\"")
+							input.Body.FormData = append(input.Body.FormData, model.FormData{
+								Key:      key,
+								Type:     "file",
+								Value:    filePath,
+								FilePath: filePath,
+								FileName: filepath.Base(filePath),
+							})
+						} else {
+							input.Body.FormData = append(input.Body.FormData, model.FormData{
+								Key:   key,
+								Type:  "text",
+								Value: strings.Trim(value, "'\""),
+							})
+						}
+					}
 				}
 				if input.Method == "GET" {
 					input.Method = "POST"

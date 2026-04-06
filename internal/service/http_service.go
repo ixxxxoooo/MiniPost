@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -8,10 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -26,11 +30,14 @@ type HttpService struct {
 }
 
 type requestOptions struct {
-	followRedirects  bool
-	timeout          time.Duration
-	maxResponseBytes int64
-	sslVerify        bool
-	httpVersion      string
+	followRedirects         bool
+	timeout                 time.Duration
+	maxResponseBytes        int64
+	sslVerify               bool
+	httpVersion             string
+	disableDefaultUserAgent bool
+	disableDefaultAccept    bool
+	disableAutoContentType  bool
 }
 
 type requestTrace struct {
@@ -78,6 +85,23 @@ func estimateRequestBodyBytes(body model.RequestBody) int64 {
 			values.Add(kv.Key, kv.Value)
 		}
 		return int64(len(values.Encode()))
+	case "form-data":
+		total := 0
+		for _, field := range body.FormData {
+			total += len(field.Key) + len(field.Value)
+			if strings.EqualFold(field.Type, "file") {
+				filePath := strings.TrimSpace(field.FilePath)
+				if filePath == "" {
+					filePath = strings.TrimSpace(field.Value)
+				}
+				if filePath != "" {
+					if stat, err := os.Stat(filePath); err == nil {
+						total += int(stat.Size())
+					}
+				}
+			}
+		}
+		return int64(total)
 	default:
 		return 0
 	}
@@ -183,7 +207,7 @@ func (s *HttpService) SendRequest(input model.SendRequestInput) (*model.HttpResp
 	}
 
 	// 设置 Content-Type（仅在有 body 时）
-	if contentType != "" {
+	if contentType != "" && !options.disableAutoContentType {
 		req.Header.Set("Content-Type", contentType)
 	}
 
@@ -196,8 +220,12 @@ func (s *HttpService) SendRequest(input model.SendRequestInput) (*model.HttpResp
 	s.applyAuth(req, input.Auth)
 
 	// 设置默认 User-Agent
-	if req.Header.Get("User-Agent") == "" {
+	if !options.disableDefaultUserAgent && req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", "MiniPost/1.0")
+	}
+	// 与 Postman 一致：未指定时补默认 Accept
+	if !options.disableDefaultAccept && req.Header.Get("Accept") == "" {
+		req.Header.Set("Accept", "*/*")
 	}
 
 	client := s.buildClient(options)
@@ -360,6 +388,50 @@ func (s *HttpService) buildBody(body model.RequestBody) (io.Reader, string, erro
 		}
 		return strings.NewReader(form.Encode()), "application/x-www-form-urlencoded", nil
 
+	case "form-data":
+		var buf bytes.Buffer
+		writer := multipart.NewWriter(&buf)
+
+		for _, field := range body.FormData {
+			key := strings.TrimSpace(field.Key)
+			if key == "" {
+				continue
+			}
+			if strings.EqualFold(field.Type, "file") {
+				filePath := strings.TrimSpace(field.FilePath)
+				if filePath == "" {
+					filePath = strings.TrimSpace(field.Value)
+				}
+				if filePath == "" {
+					continue
+				}
+				file, err := os.Open(filePath)
+				if err != nil {
+					return nil, "", appErrors.Wrap("INVALID_FORM_DATA_FILE", fmt.Sprintf("读取 form-data 文件失败: %s", filePath), err)
+				}
+				part, err := writer.CreateFormFile(key, filepath.Base(filePath))
+				if err != nil {
+					_ = file.Close()
+					return nil, "", appErrors.Wrap("INVALID_FORM_DATA_FILE", "构建 form-data 文件字段失败", err)
+				}
+				if _, err := io.Copy(part, file); err != nil {
+					_ = file.Close()
+					return nil, "", appErrors.Wrap("INVALID_FORM_DATA_FILE", "写入 form-data 文件内容失败", err)
+				}
+				_ = file.Close()
+				continue
+			}
+
+			if err := writer.WriteField(key, field.Value); err != nil {
+				return nil, "", appErrors.Wrap("INVALID_FORM_DATA", "构建 form-data 文本字段失败", err)
+			}
+		}
+
+		if err := writer.Close(); err != nil {
+			return nil, "", appErrors.Wrap("INVALID_FORM_DATA", "构建 form-data 失败", err)
+		}
+		return &buf, writer.FormDataContentType(), nil
+
 	default:
 		return nil, "", nil
 	}
@@ -380,11 +452,14 @@ func (s *HttpService) normalizeInput(input model.SendRequestInput) (model.SendRe
 
 func (s *HttpService) extractRequestOptions(headers []model.KeyValue) (requestOptions, []model.KeyValue) {
 	options := requestOptions{
-		followRedirects:  true,
-		timeout:          s.client.Timeout,
-		maxResponseBytes: 0,
-		sslVerify:        true,
-		httpVersion:      "auto",
+		followRedirects:         true,
+		timeout:                 s.client.Timeout,
+		maxResponseBytes:        0,
+		sslVerify:               true,
+		httpVersion:             "auto",
+		disableDefaultUserAgent: false,
+		disableDefaultAccept:    false,
+		disableAutoContentType:  false,
 	}
 
 	cleaned := make([]model.KeyValue, 0, len(headers))
@@ -422,6 +497,15 @@ func (s *HttpService) extractRequestOptions(headers []model.KeyValue) (requestOp
 			case "auto", "http1", "http2":
 				options.httpVersion = strings.ToLower(value)
 			}
+			continue
+		case "x-minipost-option-disable-default-user-agent":
+			options.disableDefaultUserAgent = parseBoolOption(value, options.disableDefaultUserAgent)
+			continue
+		case "x-minipost-option-disable-default-accept":
+			options.disableDefaultAccept = parseBoolOption(value, options.disableDefaultAccept)
+			continue
+		case "x-minipost-option-disable-auto-content-type":
+			options.disableAutoContentType = parseBoolOption(value, options.disableAutoContentType)
 			continue
 		default:
 			cleaned = append(cleaned, header)

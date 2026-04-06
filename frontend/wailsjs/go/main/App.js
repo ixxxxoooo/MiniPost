@@ -6,6 +6,10 @@ export function ClearHistory(arg1) {
   return window['go']['main']['App']['ClearHistory'](arg1);
 }
 
+export function CreateBackup() {
+  return window['go']['main']['App']['CreateBackup']();
+}
+
 export function CreateEnvironment(arg1, arg2) {
   return window['go']['main']['App']['CreateEnvironment'](arg1, arg2);
 }
@@ -120,6 +124,10 @@ export function RenameProject(arg1, arg2) {
 
 export function RenameRequest(arg1, arg2, arg3) {
   return window['go']['main']['App']['RenameRequest'](arg1, arg2, arg3);
+}
+
+export function RestoreBackup(arg1) {
+  return window['go']['main']['App']['RestoreBackup'](arg1);
 }
 
 export function SaveEnvironment(arg1) {

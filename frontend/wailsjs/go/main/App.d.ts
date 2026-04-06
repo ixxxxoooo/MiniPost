@@ -4,6 +4,8 @@ import {model} from '../models';
 
 export function ClearHistory(arg1:string):Promise<void>;
 
+export function CreateBackup():Promise<string>;
+
 export function CreateEnvironment(arg1:string,arg2:string):Promise<model.Environment>;
 
 export function CreateFolder(arg1:string,arg2:string,arg3:string):Promise<model.Folder>;
@@ -61,6 +63,8 @@ export function RenameFolder(arg1:string,arg2:string,arg3:string):Promise<void>;
 export function RenameProject(arg1:string,arg2:string):Promise<model.Project>;
 
 export function RenameRequest(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function RestoreBackup(arg1:string):Promise<void>;
 
 export function SaveEnvironment(arg1:model.Environment):Promise<void>;
 

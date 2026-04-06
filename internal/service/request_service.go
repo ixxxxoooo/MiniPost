@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -44,16 +45,90 @@ type postmanURL struct {
 	Raw string `json:"raw"`
 }
 
+func (u *postmanURL) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		*u = postmanURL{}
+		return nil
+	}
+
+	// Postman 有两种 url 结构：字符串或对象
+	if trimmed[0] == '"' {
+		var raw string
+		if err := json.Unmarshal(trimmed, &raw); err != nil {
+			return err
+		}
+		u.Raw = raw
+		return nil
+	}
+
+	var parsed struct {
+		Raw      string      `json:"raw"`
+		Protocol string      `json:"protocol"`
+		Host     []string    `json:"host"`
+		Path     []string    `json:"path"`
+		Query    []postmanKV `json:"query"`
+	}
+	if err := json.Unmarshal(trimmed, &parsed); err != nil {
+		return err
+	}
+
+	if parsed.Raw != "" {
+		u.Raw = parsed.Raw
+		return nil
+	}
+
+	host := strings.Join(parsed.Host, ".")
+	path := strings.Join(parsed.Path, "/")
+	var b strings.Builder
+	if parsed.Protocol != "" {
+		b.WriteString(parsed.Protocol)
+		b.WriteString("://")
+	}
+	b.WriteString(host)
+	if path != "" {
+		if !strings.HasPrefix(path, "/") {
+			b.WriteString("/")
+		}
+		b.WriteString(path)
+	}
+	if len(parsed.Query) > 0 {
+		values := url.Values{}
+		for _, q := range parsed.Query {
+			if strings.TrimSpace(q.Key) == "" {
+				continue
+			}
+			values.Add(q.Key, q.Value)
+		}
+		encoded := values.Encode()
+		if encoded != "" {
+			b.WriteString("?")
+			b.WriteString(encoded)
+		}
+	}
+
+	u.Raw = b.String()
+	return nil
+}
+
 type postmanKV struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
 
 type postmanBody struct {
-	Mode       string      `json:"mode"`
-	Raw        string      `json:"raw,omitempty"`
-	URLEncoded []postmanKV `json:"urlencoded,omitempty"`
-	Options    postmanOpt  `json:"options,omitempty"`
+	Mode       string            `json:"mode"`
+	Raw        string            `json:"raw,omitempty"`
+	URLEncoded []postmanKV       `json:"urlencoded,omitempty"`
+	FormData   []postmanFormData `json:"formdata,omitempty"`
+	Options    postmanOpt        `json:"options,omitempty"`
+}
+
+type postmanFormData struct {
+	Key   string          `json:"key"`
+	Value string          `json:"value,omitempty"`
+	Type  string          `json:"type,omitempty"` // text | file
+	Src   json.RawMessage `json:"src,omitempty"`  // string or string[]
 }
 
 type postmanOpt struct {
@@ -392,6 +467,40 @@ func convertRequestToPostman(request model.RequestItem) *postmanReq {
 				URLEncoded: formData,
 			}
 		}
+	case "form-data":
+		formData := make([]postmanFormData, 0, len(request.Body.FormData))
+		for _, field := range request.Body.FormData {
+			if strings.TrimSpace(field.Key) == "" {
+				continue
+			}
+			itemType := strings.TrimSpace(field.Type)
+			if itemType == "" {
+				itemType = "text"
+			}
+			item := postmanFormData{
+				Key:   field.Key,
+				Type:  itemType,
+				Value: field.Value,
+			}
+			if itemType == "file" {
+				src := strings.TrimSpace(field.FilePath)
+				if src == "" {
+					src = strings.TrimSpace(field.Value)
+				}
+				if src != "" {
+					if encoded, err := json.Marshal(src); err == nil {
+						item.Src = encoded
+					}
+				}
+			}
+			formData = append(formData, item)
+		}
+		if len(formData) > 0 {
+			postmanRequest.Body = &postmanBody{
+				Mode:     "formdata",
+				FormData: formData,
+			}
+		}
 	}
 
 	return postmanRequest
@@ -433,6 +542,26 @@ func (s *RequestService) ImportPostmanCollection(projectID string, raw []byte) e
 	return s.importPostmanItems(projectID, "", collection.Item)
 }
 
+func parsePostmanFormDataFilePath(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var single string
+	if err := json.Unmarshal(raw, &single); err == nil {
+		return strings.TrimSpace(single)
+	}
+	var multiple []string
+	if err := json.Unmarshal(raw, &multiple); err == nil {
+		for _, path := range multiple {
+			trimmed := strings.TrimSpace(path)
+			if trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+	return ""
+}
+
 func (s *RequestService) importPostmanItems(projectID, parentFolderID string, items []postmanItem) error {
 	for _, item := range items {
 		if len(item.Item) > 0 {
@@ -472,6 +601,31 @@ func (s *RequestService) importPostmanItems(projectID, parentFolderID string, it
 						formData = append(formData, model.KeyValue{Key: kv.Key, Value: kv.Value})
 					}
 					req.Body = model.RequestBody{Type: "form-urlencoded", FormUrlEncoded: formData}
+				case "formdata":
+					formData := make([]model.FormData, 0, len(item.Request.Body.FormData))
+					for _, field := range item.Request.Body.FormData {
+						itemType := strings.TrimSpace(field.Type)
+						if itemType == "" {
+							itemType = "text"
+						}
+						filePath := ""
+						fileName := ""
+						if itemType == "file" {
+							filePath = parsePostmanFormDataFilePath(field.Src)
+							if filePath != "" {
+								parts := strings.Split(strings.ReplaceAll(filePath, "\\", "/"), "/")
+								fileName = parts[len(parts)-1]
+							}
+						}
+						formData = append(formData, model.FormData{
+							Key:      field.Key,
+							Value:    field.Value,
+							Type:     itemType,
+							FilePath: filePath,
+							FileName: fileName,
+						})
+					}
+					req.Body = model.RequestBody{Type: "form-data", FormData: formData}
 				}
 			}
 			if err := s.SaveRequest(req); err != nil {
