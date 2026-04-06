@@ -467,6 +467,25 @@ export function Sidebar() {
     }
   }, [deleteConfirm, deleteConfirmLoading, deleteFolder, deleteRequest, handleOpenRequest, requestMap, selectedNode?.id])
 
+  useEffect(() => {
+    if (!deleteConfirm) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        if (!deleteConfirmLoading) setDeleteConfirm(null)
+        return
+      }
+      if (event.key === "Enter") {
+        event.preventDefault()
+        if (!deleteConfirmLoading) {
+          void handleConfirmDelete()
+        }
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [deleteConfirm, deleteConfirmLoading, handleConfirmDelete])
+
   const handleNewRequest = async (folderId: string = "") => {
     if (!currentProjectId) return
     const req = await createRequest(folderId, "New Request")

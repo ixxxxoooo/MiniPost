@@ -178,6 +178,7 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  user-select: none;
 }
 
 html,
@@ -282,8 +283,14 @@ button:not(:disabled),
   opacity: 1 !important;
 }
 
-/* 文本输入区域可选中 */
-input, textarea, [contenteditable] {
+/* 仅输入/编辑区域允许文本选择 */
+input,
+textarea,
+[contenteditable],
+.cm-editor,
+.cm-content,
+.monaco-editor,
+.monaco-editor * {
   user-select: text;
 }
 
