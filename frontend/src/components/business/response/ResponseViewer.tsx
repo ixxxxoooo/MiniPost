@@ -4,6 +4,7 @@ import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
 import { AppIcon } from "@/components/ui/icon"
 import { ResponseBody } from "./ResponseBody"
+import { ResponseStream } from "./ResponseStream"
 import { ResponseHeaders } from "./ResponseHeaders"
 import { ResponseCookies } from "./ResponseCookies"
 import { cn } from "@/lib/utils"
@@ -25,6 +26,25 @@ function formatPhaseDuration(ms: number): string {
   if (ms < 10) return `${ms.toFixed(2)} ms`
   if (ms < 100) return `${ms.toFixed(1)} ms`
   return `${Math.round(ms)} ms`
+}
+
+function formatNetworkValidUntil(value?: string): string {
+  if (!value) return "-"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  const month = date.toLocaleString("en-US", { month: "short", timeZone: "UTC" })
+  const day = date.getUTCDate()
+  const hh = String(date.getUTCHours()).padStart(2, "0")
+  const mm = String(date.getUTCMinutes()).padStart(2, "0")
+  const ss = String(date.getUTCSeconds()).padStart(2, "0")
+  const year = date.getUTCFullYear()
+  return `${month} ${day} ${hh}:${mm}:${ss} ${year} GMT`
+}
+
+function displayNetworkValue(value?: string): string {
+  if (!value || !value.trim()) return "-"
+  return value
 }
 
 function statusBadgeClass(code: number, isDark: boolean): string {
@@ -213,10 +233,14 @@ export function ResponseViewer() {
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const { isSending, resolved } = useUIStore()
   const [activeTabValue, setActiveTabValue] = useState("body")
+  const [liveNow, setLiveNow] = useState(() => Date.now())
 
   const isDark = resolved === "dark"
   const response = activeTab?.response ?? null
   const responseError = activeTab?.responseError ?? null
+  const streamEntries = activeTab?.streamEntries ?? []
+  const streamActive = activeTab?.streamActive ?? false
+  const hasStreamEntries = streamEntries.length > 0
   const safeHeaders = response?.headers ?? {}
   const parsedError = responseError ? parseRequestError(responseError) : null
   const errorPresentation = parsedError ? getRequestErrorPresentation(parsedError) : null
@@ -299,6 +323,45 @@ export function ResponseViewer() {
   }, [response])
 
   useEffect(() => {
+    if (!isSending || !response || !(hasStreamEntries || streamActive)) return
+    const timer = window.setInterval(() => setLiveNow(Date.now()), 120)
+    return () => window.clearInterval(timer)
+  }, [hasStreamEntries, isSending, response, streamActive])
+
+  const streamStartTimestamp = useMemo(() => {
+    const startEntry = streamEntries.find((entry) => entry.kind === "response_start")
+    if (startEntry) return startEntry.timestamp
+    return streamEntries[0]?.timestamp
+  }, [streamEntries])
+
+  const displayDuration = useMemo(() => {
+    if (!response) return 0
+    const isLiveStreaming = isSending && (hasStreamEntries || streamActive)
+    if (!isLiveStreaming) return response.duration
+    const startMs = streamStartTimestamp ? new Date(streamStartTimestamp).getTime() : NaN
+    if (!Number.isFinite(startMs) || startMs <= 0) return response.duration
+    return Math.max(response.duration, liveNow - startMs)
+  }, [hasStreamEntries, isSending, liveNow, response, streamActive, streamStartTimestamp])
+
+  const displaySize = useMemo(() => {
+    if (!response) return 0
+    const latestBytes = streamEntries.reduce<number | undefined>((acc, entry) => {
+      if (typeof entry.bytesTotal !== "number" || !Number.isFinite(entry.bytesTotal)) return acc
+      return Math.max(acc ?? 0, entry.bytesTotal)
+    }, undefined)
+    if (latestBytes === undefined) return response.size
+    return Math.max(response.size, latestBytes)
+  }, [response, streamEntries])
+
+  const hasTLSNetwork = Boolean(
+    response?.network?.tlsProtocol
+    || response?.network?.cipherName
+    || response?.network?.certificateCN
+    || response?.network?.issuerCN
+    || response?.network?.validUntil
+  )
+
+  useEffect(() => {
     if (responseError) {
       setActiveTabValue("body")
     }
@@ -309,7 +372,7 @@ export function ResponseViewer() {
     window.dispatchEvent(new CustomEvent("minipost:send"))
   }
 
-  if (!response && !responseError && !isSending) {
+  if (!response && !responseError && !isSending && !hasStreamEntries) {
     return (
       <div className="flex h-full flex-col bg-[var(--surface)]">
         <div className="flex h-[32px] items-center px-[var(--size-padding-sm)]">
@@ -341,7 +404,7 @@ export function ResponseViewer() {
     )
   }
 
-  if (!response && !responseError && isSending) {
+  if (!response && !responseError && isSending && !hasStreamEntries) {
     return (
       <div className="relative h-full bg-[var(--surface)]">
         <div className="flex h-[32px] items-center px-[var(--size-padding-sm)]">
@@ -354,9 +417,9 @@ export function ResponseViewer() {
     )
   }
 
-  const headerCount = isSending ? 0 : Object.keys(safeHeaders).length
+  const headerCount = Object.keys(safeHeaders).length
   const cookies = parseResponseCookies(safeHeaders)
-  const cookieCount = isSending ? 0 : cookies.length
+  const cookieCount = cookies.length
 
   return (
     <div className="flex h-full flex-col bg-[var(--surface)] relative">
@@ -367,7 +430,7 @@ export function ResponseViewer() {
       )}
 
       {/* 发送中的叠加层 */}
-      {isSending && (
+      {isSending && !hasStreamEntries && (
         <div className="absolute inset-x-0 bottom-0 top-[32px] z-10 pointer-events-auto bg-[var(--response-loading-overlay)]" />
       )}
 
@@ -389,7 +452,7 @@ export function ResponseViewer() {
             </TabsTrigger>
           </TabsList>
 
-          {!isSending && response && !responseError && (
+          {response && !responseError && (
             <div className="ml-auto flex items-center gap-2 text-[11px] text-[var(--fg-muted)]">
               {response.warnings && response.warnings.length > 0 && (
                 <>
@@ -429,7 +492,7 @@ export function ResponseViewer() {
               <span className="text-[var(--fg-muted)]">•</span>
               <div className="relative group/time">
                 <span className="text-[var(--fg-muted)] [font-variant-numeric:tabular-nums] cursor-default">
-                  {formatDuration(response.duration)}
+                  {formatDuration(displayDuration)}
                 </span>
                 <div
                   className={cn(
@@ -444,7 +507,7 @@ export function ResponseViewer() {
                       <span>Response Time</span>
                     </div>
                     <div className="text-[12px] font-semibold text-[var(--fg)] [font-variant-numeric:tabular-nums]">
-                      {formatDuration(response.duration)}
+                      {formatDuration(displayDuration)}
                     </div>
                   </div>
                   <div className="space-y-0.5">
@@ -484,7 +547,7 @@ export function ResponseViewer() {
               <span className="text-[var(--fg-muted)]">•</span>
               <div className="relative group/size">
                 <span className="text-[var(--fg-muted)] [font-variant-numeric:tabular-nums] cursor-default">
-                  {formatSize(response.size)}
+                  {formatSize(displaySize)}
                 </span>
                 <div
                   className={cn(
@@ -500,7 +563,7 @@ export function ResponseViewer() {
                         <span>Response Size</span>
                       </span>
                       <span className="text-[13px] font-semibold text-[var(--fg)] [font-variant-numeric:tabular-nums]">
-                        {formatSize(sizeDetails?.responseTotal ?? response.size)}
+                        {formatSize(sizeDetails?.responseTotal ?? displaySize)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-[12px] text-[var(--fg-secondary)]">
@@ -509,7 +572,7 @@ export function ResponseViewer() {
                     </div>
                     <div className="flex items-center justify-between text-[12px] text-[var(--fg-secondary)]">
                       <span>Body</span>
-                      <span className="[font-variant-numeric:tabular-nums]">{formatSize(sizeDetails?.responseBody ?? response.size)}</span>
+                      <span className="[font-variant-numeric:tabular-nums]">{formatSize(sizeDetails?.responseBody ?? displaySize)}</span>
                     </div>
                   </div>
                   <div className="my-2 h-px bg-[var(--border-subtle)]" />
@@ -535,7 +598,76 @@ export function ResponseViewer() {
                 </div>
               </div>
               <span className="text-[var(--fg-muted)]">•</span>
-              <span className="max-w-[180px] truncate font-mono text-[var(--fg-muted)]">{response.contentType}</span>
+              <div className="relative group/network">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-[6px] text-[var(--fg-muted)]">
+                  <span className="relative inline-flex">
+                    <AppIcon name="globe" size={13} />
+                    {hasTLSNetwork && (
+                      <AppIcon
+                        name="lock"
+                        size={8}
+                        className="absolute -bottom-[1px] -right-[3px] rounded-[2px] bg-[var(--surface)]"
+                      />
+                    )}
+                  </span>
+                </span>
+                <div
+                  className={cn(
+                    "absolute right-0 top-[calc(100%+8px)] z-20 w-[min(460px,calc(100vw-24px))] rounded-[10px] border shadow-[var(--shadow-lg)]",
+                    "bg-[var(--surface)] border-[var(--border-color)] px-3 py-2.5 opacity-0 translate-y-1 pointer-events-none",
+                    "transition-all duration-150 group-hover/network:opacity-100 group-hover/network:translate-y-0 group-hover/network:pointer-events-auto"
+                  )}
+                >
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center rounded-[6px] bg-[var(--surface-secondary)] p-1">
+                      <AppIcon name="globe" size={12} className="text-[var(--fg-secondary)]" />
+                    </span>
+                    <span className="text-[12px] font-semibold text-[var(--fg)]">Network</span>
+                    <span className="relative group/network-info ml-auto inline-flex h-5 w-5 items-center justify-center rounded-[6px] text-[var(--fg-muted)] hover:bg-[var(--surface-secondary)]">
+                      <AppIcon name="info" size={11} />
+                      <span
+                        className={cn(
+                          "pointer-events-none absolute right-0 top-[calc(100%+6px)] z-10 w-[300px] rounded-[8px] border border-[var(--border-color)]",
+                          "bg-[var(--surface-elevated)] px-2.5 py-2 text-[11px] leading-5 text-[var(--fg-secondary)] shadow-[var(--shadow-md)]",
+                          "opacity-0 translate-y-1 transition-all duration-120",
+                          "group-hover/network-info:opacity-100 group-hover/network-info:translate-y-0"
+                        )}
+                      >
+                        这里展示本次请求的网络连接与 TLS 协商结果，便于定位代理、证书和链路问题。
+                      </span>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-[126px_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12px] leading-5">
+                    <span className="text-[var(--fg-secondary)]">HTTP Version</span>
+                    <span className="font-mono text-[var(--fg)]">{displayNetworkValue(response.network?.httpVersion)}</span>
+                    <span className="text-[var(--fg-secondary)]">Local Address</span>
+                    <span className="font-mono text-[var(--fg)]">{displayNetworkValue(response.network?.localAddress)}</span>
+                    <span className="text-[var(--fg-secondary)]">Remote Address</span>
+                    <span className="font-mono text-[var(--fg)]">{displayNetworkValue(response.network?.remoteAddress)}</span>
+                  </div>
+
+                  <div className="my-1.5 h-px bg-[var(--border-subtle)]" />
+
+                  <div className="grid grid-cols-[126px_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12px] leading-5">
+                    <span className="text-[var(--fg-secondary)]">TLS Protocol</span>
+                    <span className="font-mono text-[var(--fg)]">{displayNetworkValue(response.network?.tlsProtocol)}</span>
+                    <span className="text-[var(--fg-secondary)]">Cipher Name</span>
+                    <span className="font-mono text-[var(--fg)] break-all">{displayNetworkValue(response.network?.cipherName)}</span>
+                  </div>
+
+                  <div className="my-1.5 h-px bg-[var(--border-subtle)]" />
+
+                  <div className="grid grid-cols-[126px_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12px] leading-5">
+                    <span className="text-[var(--fg-secondary)]">Certificate CN</span>
+                    <span className="font-mono text-[var(--fg)] break-all">{displayNetworkValue(response.network?.certificateCN)}</span>
+                    <span className="text-[var(--fg-secondary)]">Issuer CN</span>
+                    <span className="font-mono text-[var(--fg)] break-all">{displayNetworkValue(response.network?.issuerCN)}</span>
+                    <span className="text-[var(--fg-secondary)]">Valid Until</span>
+                    <span className="font-mono text-[var(--fg)]">{formatNetworkValidUntil(response.network?.validUntil)}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -588,6 +720,8 @@ export function ResponseViewer() {
                     </div>
                   </div>
                 </div>
+              ) : hasStreamEntries || streamActive ? (
+                <ResponseStream entries={streamEntries} isDark={isDark} />
               ) : response ? (
                 <ResponseBody body={response.body} contentType={response.contentType} isDark={isDark} />
               ) : (

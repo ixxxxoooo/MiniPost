@@ -417,6 +417,32 @@ export namespace model {
 	        this.total = source["total"];
 	    }
 	}
+	export class NetworkDetails {
+	    httpVersion?: string;
+	    localAddress?: string;
+	    remoteAddress?: string;
+	    tlsProtocol?: string;
+	    cipherName?: string;
+	    certificateCN?: string;
+	    issuerCN?: string;
+	    validUntil?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetworkDetails(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.httpVersion = source["httpVersion"];
+	        this.localAddress = source["localAddress"];
+	        this.remoteAddress = source["remoteAddress"];
+	        this.tlsProtocol = source["tlsProtocol"];
+	        this.cipherName = source["cipherName"];
+	        this.certificateCN = source["certificateCN"];
+	        this.issuerCN = source["issuerCN"];
+	        this.validUntil = source["validUntil"];
+	    }
+	}
 	export class HttpResponse {
 	    statusCode: number;
 	    statusText: string;
@@ -427,6 +453,7 @@ export namespace model {
 	    contentType: string;
 	    protocol?: string;
 	    warnings?: string[];
+	    network?: NetworkDetails;
 	    timings: TimingBreakdown;
 	    sizeDetails: SizeBreakdown;
 	
@@ -445,6 +472,7 @@ export namespace model {
 	        this.contentType = source["contentType"];
 	        this.protocol = source["protocol"];
 	        this.warnings = source["warnings"];
+	        this.network = this.convertValues(source["network"], NetworkDetails);
 	        this.timings = this.convertValues(source["timings"], TimingBreakdown);
 	        this.sizeDetails = this.convertValues(source["sizeDetails"], SizeBreakdown);
 	    }
@@ -467,6 +495,7 @@ export namespace model {
 		    return a;
 		}
 	}
+	
 	
 	export class Project {
 	    id: string;

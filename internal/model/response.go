@@ -21,6 +21,26 @@ type SizeBreakdown struct {
 	RequestTotal    int64 `json:"requestTotal"`
 }
 
+type StreamChunk struct {
+	Kind       string `json:"kind"`
+	Data       string `json:"data"`
+	Raw        string `json:"raw,omitempty"`
+	Timestamp  string `json:"timestamp"`
+	Sequence   int    `json:"sequence"`
+	BytesTotal int64  `json:"bytesTotal,omitempty"`
+}
+
+type NetworkDetails struct {
+	HTTPVersion   string `json:"httpVersion,omitempty"`
+	LocalAddress  string `json:"localAddress,omitempty"`
+	RemoteAddress string `json:"remoteAddress,omitempty"`
+	TLSProtocol   string `json:"tlsProtocol,omitempty"`
+	CipherName    string `json:"cipherName,omitempty"`
+	CertificateCN string `json:"certificateCN,omitempty"`
+	IssuerCN      string `json:"issuerCN,omitempty"`
+	ValidUntil    string `json:"validUntil,omitempty"`
+}
+
 // HttpResponse 返回给前端的 HTTP 响应结构
 type HttpResponse struct {
 	StatusCode  int                 `json:"statusCode"`
@@ -32,6 +52,7 @@ type HttpResponse struct {
 	ContentType string              `json:"contentType"`
 	Protocol    string              `json:"protocol,omitempty"`
 	Warnings    []string            `json:"warnings,omitempty"`
+	Network     *NetworkDetails     `json:"network,omitempty"`
 	Timings     TimingBreakdown     `json:"timings"`
 	SizeDetails SizeBreakdown       `json:"sizeDetails"`
 }
