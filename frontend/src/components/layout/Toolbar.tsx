@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { AppIcon } from "@/components/ui/icon"
 import { Input } from "@/components/ui/input"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useI18n } from "@/hooks/useI18n"
 import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore } from "@/stores/tabStore"
@@ -32,6 +33,7 @@ function useTitlebarDoubleClick() {
 }
 
 export function Toolbar() {
+  const { t } = useI18n()
   const { resolved, setTheme, setSettingsOpen } = useUIStore()
   const { currentProjectId, createRequest, saveRequestToBackend } = useProjectStore()
   const openRequestTab = useTabStore((s) => s.openRequestTab)
@@ -73,14 +75,14 @@ export function Toolbar() {
     setCurlError("")
     try {
       if (!currentProjectId) {
-        setCurlError("请先选择项目后再导入")
+        setCurlError(t("请先选择项目后再导入", "Please select a project before importing"))
         return
       }
 
       const result = await ImportCurl(curlCommand.trim())
       const createdRequest = await createRequest("", "Imported cURL")
       if (!createdRequest) {
-        setCurlError("新建请求失败，请稍后重试")
+        setCurlError(t("新建请求失败，请稍后重试", "Failed to create request. Please try again."))
         return
       }
 
@@ -183,7 +185,7 @@ export function Toolbar() {
       setCurlCommand("")
       setShowCurlDialog(false)
     } catch (err) {
-      setCurlError(err instanceof Error ? err.message : "cURL 解析失败")
+      setCurlError(err instanceof Error ? err.message : t("cURL 解析失败", "Failed to parse cURL"))
     }
   }
 
@@ -217,7 +219,7 @@ export function Toolbar() {
                 <AppIcon name="fileImport" size={14} strokeWidth={1.65} className="text-[var(--fg-secondary)]" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>导入 cURL (⌘I)</TooltipContent>
+            <TooltipContent>{t("导入 cURL", "Import cURL")} (⌘I)</TooltipContent>
           </Tooltip>
 
           <Tooltip>
@@ -233,7 +235,7 @@ export function Toolbar() {
                 }
               </button>
             </TooltipTrigger>
-            <TooltipContent>{resolved === "dark" ? "切换为浅色主题" : "切换为深色主题"}</TooltipContent>
+            <TooltipContent>{resolved === "dark" ? t("切换为浅色主题", "Switch to light theme") : t("切换为深色主题", "Switch to dark theme")}</TooltipContent>
           </Tooltip>
 
           <Tooltip>
@@ -246,7 +248,7 @@ export function Toolbar() {
                 <AppIcon name="settings" size={14} strokeWidth={1.65} className="text-[var(--fg-secondary)]" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>设置 (⌘,)</TooltipContent>
+            <TooltipContent>{t("设置", "Settings")} (⌘,)</TooltipContent>
           </Tooltip>
         </div>
       </div>
@@ -271,8 +273,8 @@ export function Toolbar() {
                 <AppIcon name="fileImport" size={15} className="text-[var(--accent)]" />
               </div>
               <div className="flex-1">
-                <h3 className="text-[14px] font-semibold text-[var(--fg)]">导入 cURL</h3>
-                <p className="text-[11px] text-[var(--fg-muted)] mt-0.5">粘贴 cURL 命令以快速创建请求</p>
+                <h3 className="text-[14px] font-semibold text-[var(--fg)]">{t("导入 cURL", "Import cURL")}</h3>
+                <p className="text-[11px] text-[var(--fg-muted)] mt-0.5">{t("粘贴 cURL 命令以快速创建请求", "Paste a cURL command to quickly create a request")}</p>
               </div>
               <button
                 className="h-5 w-5 flex items-center justify-center rounded-[6px] hover:bg-[var(--sidebar-hover)] transition-colors"
@@ -310,14 +312,14 @@ export function Toolbar() {
                 </div>
               )}
               <div className="mt-2 text-[10px] text-[var(--fg-muted)]">
-                Enter 导入，Shift + Enter 换行
+                {t("Enter 导入，Shift + Enter 换行", "Press Enter to import, Shift + Enter for newline")}
               </div>
             </div>
 
             <div className="flex items-center justify-between px-5 pb-4 pt-0.5">
               <span className="text-[10px] text-[var(--fg-muted)]">
                 <kbd className="px-1 py-0.5 rounded bg-[var(--surface-secondary)] border border-[var(--border-color)] text-[9px] font-mono">⌘I</kbd>
-                <span className="ml-1.5">快速唤起</span>
+                <span className="ml-1.5">{t("快速唤起", "Quick launch")}</span>
               </span>
               <div className="flex gap-1.5 flex-shrink-0">
                 <button
@@ -327,7 +329,7 @@ export function Toolbar() {
                   )}
                   onClick={() => { setShowCurlDialog(false); setCurlError("") }}
                 >
-                  取消
+                  {t("取消", "Cancel")}
                 </button>
                 <button
                   className={cn(
@@ -338,7 +340,7 @@ export function Toolbar() {
                   disabled={!curlCommand.trim() || !currentProjectId}
                   onClick={() => void handleCurlImport()}
                 >
-                  导入 (Enter)
+                  {t("导入", "Import")} (Enter)
                 </button>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { applyDocumentLocale, detectSystemLocale, normalizeLocale, type Locale } from "@/lib/locale"
 
 export type Theme = "light" | "dark" | "system"
 export type LayoutDirection = "vertical" | "horizontal"
@@ -26,6 +27,7 @@ export interface ConsoleEntry {
 }
 
 interface UIState {
+  locale: Locale
   theme: Theme
   resolved: "light" | "dark"
   sidebarWidth: number
@@ -56,6 +58,7 @@ interface UIState {
   workspaceView: WorkspaceView
 
   setTheme: (theme: Theme) => void
+  setLocale: (locale: Locale) => void
   setSidebarWidth: (width: number) => void
   toggleSidebar: () => void
   setLayoutDirection: (d: LayoutDirection) => void
@@ -106,6 +109,7 @@ function applyTheme(resolved: "light" | "dark") {
 const SCROLLBAR_AUTO_HIDE_STORAGE_KEY = "minipost:scrollbar-auto-hide"
 const REQUEST_SETTINGS_STORAGE_KEY = "minipost:request-settings"
 const THEME_STORAGE_KEY = "minipost:theme"
+const LOCALE_STORAGE_KEY = "minipost:locale"
 const FONT_SIZE_STORAGE_KEY = "minipost:font-size"
 const BACKUP_SETTINGS_STORAGE_KEY = "minipost:backup-settings"
 let scrollbarActivityTeardown: (() => void) | null = null
@@ -352,6 +356,26 @@ function persistTheme(theme: Theme) {
   }
 }
 
+function readLocale(): Locale {
+  if (typeof window === "undefined") return detectSystemLocale()
+  try {
+    const raw = window.localStorage.getItem(LOCALE_STORAGE_KEY)
+    if (raw) return normalizeLocale(raw)
+  } catch {
+    // ignore persistence errors
+  }
+  return detectSystemLocale()
+}
+
+function persistLocale(locale: Locale) {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale)
+  } catch {
+    // ignore persistence errors
+  }
+}
+
 function readFontSize(): number {
   if (typeof window === "undefined") return 12
   try {
@@ -376,11 +400,13 @@ function persistFontSize(fontSize: number) {
 
 const initialTheme = readTheme()
 const initialResolvedTheme = initialTheme === "system" ? getSystemTheme() : initialTheme
+const initialLocale = readLocale()
 const initialFontSize = readFontSize()
 
 export const useUIStore = create<UIState>((set) => ({
   ...readRequestSettings(),
   ...readBackupSettings(),
+  locale: initialLocale,
   theme: initialTheme,
   resolved: initialResolvedTheme,
   sidebarWidth: 240,
@@ -402,6 +428,11 @@ export const useUIStore = create<UIState>((set) => ({
     applyTheme(resolved)
     persistTheme(theme)
     set({ theme, resolved })
+  },
+  setLocale: (locale) => {
+    applyDocumentLocale(locale)
+    persistLocale(locale)
+    set({ locale })
   },
   setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -569,6 +600,7 @@ export const useUIStore = create<UIState>((set) => ({
 
 if (typeof window !== "undefined") {
   const store = useUIStore.getState()
+  applyDocumentLocale(store.locale)
   applyTheme(store.resolved)
   applyUIFontSize(store.fontSize)
   applyScrollbarMode(store.scrollbarAutoHide)

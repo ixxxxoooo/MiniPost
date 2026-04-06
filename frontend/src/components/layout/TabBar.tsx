@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { createPortal } from "react-dom"
 import { AppIcon } from "@/components/ui/icon"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useI18n } from "@/hooks/useI18n"
 import { cn } from "@/lib/utils"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { useTabStore, getProjectActiveTabIdFromState, getProjectTabsFromState, type RequestTab } from "@/stores/tabStore"
@@ -21,6 +22,7 @@ const DROPDOWN_PANEL_CLASS = "rounded-[10px] border border-[var(--border-color)]
 const DROPDOWN_ITEM_CLASS = "w-full whitespace-nowrap px-3 py-1.5 rounded-[7px] text-[11px] text-left transition-colors flex items-center gap-2"
 
 export function TabBar() {
+  const { t } = useI18n()
   const tabs = useTabStore(getProjectTabsFromState)
   const activeTabId = useTabStore(getProjectActiveTabIdFromState)
   const setActiveTab = useTabStore((s) => s.setActiveTab)
@@ -184,20 +186,20 @@ export function TabBar() {
   const handleCloseOtherTabs = useCallback((tabId: string) => {
     const targetToClose = tabs.filter((tab) => tab.id !== tabId && tab.closable)
     if (!alwaysDiscardUnsavedOnClose && targetToClose.some((tab) => tab.dirty)) {
-      const confirmed = window.confirm("即将关闭其他标签页，其中包含未保存修改。确定继续并丢弃这些修改吗？")
+      const confirmed = window.confirm(t("即将关闭其他标签页，其中包含未保存修改。确定继续并丢弃这些修改吗？", "You're about to close other tabs with unsaved changes. Continue and discard them?"))
       if (!confirmed) return
     }
     closeOtherTabs(tabId)
-  }, [alwaysDiscardUnsavedOnClose, closeOtherTabs, tabs])
+  }, [alwaysDiscardUnsavedOnClose, closeOtherTabs, t, tabs])
 
   const handleCloseAllTabs = useCallback(() => {
     const targetToClose = tabs.filter((tab) => tab.closable)
     if (!alwaysDiscardUnsavedOnClose && targetToClose.some((tab) => tab.dirty)) {
-      const confirmed = window.confirm("即将关闭全部标签页，其中包含未保存修改。确定继续并丢弃这些修改吗？")
+      const confirmed = window.confirm(t("即将关闭全部标签页，其中包含未保存修改。确定继续并丢弃这些修改吗？", "You're about to close all tabs with unsaved changes. Continue and discard them?"))
       if (!confirmed) return
     }
     closeAllTabs(currentProjectId || undefined)
-  }, [alwaysDiscardUnsavedOnClose, closeAllTabs, currentProjectId, tabs])
+  }, [alwaysDiscardUnsavedOnClose, closeAllTabs, currentProjectId, t, tabs])
 
   const handleConfirmCloseWithoutSave = useCallback(() => {
     if (!closeConfirmTabId) return
@@ -264,29 +266,29 @@ export function TabBar() {
   }, [setEditingEnvironmentId])
 
   const activeEnvName = useMemo(() => {
-    if (!activeEnvironmentId) return "No Environment"
+    if (!activeEnvironmentId) return t("无环境", "No Environment")
     const env = environments.find((e) => e.id === activeEnvironmentId)
-    return env?.name || "No Environment"
-  }, [activeEnvironmentId, environments])
+    return env?.name || t("无环境", "No Environment")
+  }, [activeEnvironmentId, environments, t])
 
   const openEnvironmentTabs = useMemo(
     () => openEnvironmentTabIds.map((id) => ({
       id,
-      name: environments.find((env) => env.id === id)?.name || "Environment",
+      name: environments.find((env) => env.id === id)?.name || t("环境", "Environment"),
     })),
-    [environments, openEnvironmentTabIds]
+    [environments, openEnvironmentTabIds, t]
   )
 
   const hasAnyTab = tabs.length > 0 || openEnvironmentTabs.length > 0
   const envDropdownWidth = useMemo(() => {
     const labels = [
-      "No Environment",
-      creatingEnvironment ? "创建中..." : "新建环境",
+      t("无环境", "No Environment"),
+      creatingEnvironment ? t("创建中...", "Creating...") : t("新建环境", "New environment"),
       ...environments.map((env) => env.name),
     ]
     const longest = labels.reduce((max, label) => Math.max(max, label.length), 0)
     return Math.max(172, Math.min(360, 76 + longest * DROPDOWN_CHAR_WIDTH))
-  }, [creatingEnvironment, environments])
+  }, [creatingEnvironment, environments, t])
   const filteredEnvironments = useMemo(() => {
     const query = envSearchQuery.trim().toLowerCase()
     if (!query) return environments
@@ -295,9 +297,9 @@ export function TabBar() {
   const tabListWidth = useMemo(() => {
     const tabLabels = tabs.map((tab) => `${tab.request.method || "GET"} ${tab.title || "Untitled"}`)
     const envLabels = openEnvironmentTabs.map((tab) => `Environment ${tab.name}`)
-    const longest = [...tabLabels, ...envLabels, "No Environment"].reduce((max, label) => Math.max(max, label.length), 0)
+    const longest = [...tabLabels, ...envLabels, t("无环境", "No Environment")].reduce((max, label) => Math.max(max, label.length), 0)
     return Math.max(240, Math.min(460, 86 + longest * DROPDOWN_CHAR_WIDTH))
-  }, [openEnvironmentTabs, tabs])
+  }, [openEnvironmentTabs, t, tabs])
 
   if (!hasAnyTab) {
     return (
@@ -311,7 +313,7 @@ export function TabBar() {
           <button
             className="h-[22px] w-[22px] flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)] transition-colors"
             onClick={handleAddTab}
-            title="新建请求"
+            title={t("新建请求", "New request")}
           >
             <AppIcon name="add" size={13} strokeWidth={2} />
           </button>
@@ -333,7 +335,7 @@ export function TabBar() {
                   return next
                 })
               }}
-              title="切换环境"
+              title={t("切换环境", "Switch environment")}
             >
               <AppIcon name="globe" size={11} strokeWidth={1.8} />
               <span className="max-w-[100px] truncate">{activeEnvName}</span>
@@ -354,7 +356,7 @@ export function TabBar() {
                     <input
                       value={envSearchQuery}
                       onChange={(event) => setEnvSearchQuery(event.target.value)}
-                      placeholder="搜索环境..."
+                      placeholder={t("搜索环境...", "Search environments...")}
                       className={cn(
                         "h-7 w-full rounded-[7px] border border-[var(--border-color)] bg-[var(--surface)] pl-6 pr-2",
                         "text-[11px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
@@ -369,7 +371,7 @@ export function TabBar() {
                     onClick={() => void handleQuickCreateEnvironment()}
                     disabled={creatingEnvironment}
                   >
-                    {creatingEnvironment ? "创建中" : "新建"}
+                    {creatingEnvironment ? t("创建中", "Creating") : t("新建", "New")}
                   </button>
                 </div>
                 <button
@@ -379,7 +381,7 @@ export function TabBar() {
                   )}
                   onClick={() => { setActiveEnvironment(null); setShowEnvDropdown(false) }}
                 >
-                  <AppIcon name="globe" size={11} /> No Environment
+                  <AppIcon name="globe" size={11} /> {t("无环境", "No Environment")}
                 </button>
                 <div className="h-px bg-[var(--border-subtle)] my-0.5" />
                 {filteredEnvironments.map((env) => (
@@ -397,7 +399,7 @@ export function TabBar() {
                     <button
                       className="absolute right-2 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-[4px] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--sidebar-hover)] opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={(e) => { e.stopPropagation(); handleEditEnvironment(env.id) }}
-                      title="编辑环境"
+                      title={t("编辑环境", "Edit environment")}
                     >
                       <AppIcon name="pencil" size={10} />
                     </button>
@@ -405,7 +407,7 @@ export function TabBar() {
                 ))}
                 {filteredEnvironments.length === 0 && (
                   <div className="px-3 py-2 text-[10px] text-[var(--fg-muted)]">
-                    未找到匹配环境
+                    {t("未找到匹配环境", "No matching environments")}
                   </div>
                 )}
               </div>
@@ -449,7 +451,7 @@ export function TabBar() {
       >
         {tabs.map((tab) => {
           const isActive = !editingEnvironmentId && tab.id === activeTabId
-          const tabUrl = tab.request.url?.trim() || "未设置请求地址"
+          const tabUrl = tab.request.url?.trim() || t("未设置请求地址", "Request URL not set")
           return (
             <Tooltip key={tab.id} delayDuration={260}>
               <TooltipTrigger asChild>
@@ -524,7 +526,7 @@ export function TabBar() {
                   ? "bg-[var(--surface)] text-[var(--fg)] border-r-transparent border-b-2 border-b-[var(--accent)]"
                   : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]"
               )}
-              title={`Environment ${environmentTab.name}`}
+              title={`${t("环境", "Environment")} ${environmentTab.name}`}
               onPointerDown={(e) => {
                 if (e.button === 0) {
                   e.preventDefault()
@@ -557,7 +559,7 @@ export function TabBar() {
                   e.stopPropagation()
                   closeEnvironmentTab(environmentTab.id)
                 }}
-                title="关闭环境标签"
+                title={t("关闭环境标签", "Close environment tab")}
               >
                 <AppIcon name="clear" size={10} />
               </button>
@@ -568,7 +570,7 @@ export function TabBar() {
           <button
             className="h-[22px] w-[22px] flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)] transition-colors flex-shrink-0 ml-0.5 self-center"
             onClick={handleAddTab}
-            title="新建请求"
+            title={t("新建请求", "New request")}
           >
             <AppIcon name="add" size={13} strokeWidth={2} />
           </button>
@@ -581,7 +583,7 @@ export function TabBar() {
           <button
             className="h-[22px] w-[22px] flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)] transition-colors"
             onClick={handleAddTab}
-            title="新建请求"
+            title={t("新建请求", "New request")}
           >
             <AppIcon name="add" size={13} strokeWidth={2} />
           </button>
@@ -592,7 +594,7 @@ export function TabBar() {
           <button
             className="h-[22px] w-[22px] flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)] transition-colors"
             onClick={() => setShowTabList(!showTabList)}
-            title="显示所有标签"
+            title={t("显示所有标签", "Show all tabs")}
           >
             <AppIcon name="arrowDown" size={11} strokeWidth={2} />
           </button>
@@ -670,7 +672,7 @@ export function TabBar() {
                 return next
               })
             }}
-            title="切换环境"
+            title={t("切换环境", "Switch environment")}
           >
             <AppIcon name="globe" size={11} strokeWidth={1.8} />
             <span className="max-w-[100px] truncate">{activeEnvName}</span>
@@ -691,7 +693,7 @@ export function TabBar() {
                   <input
                     value={envSearchQuery}
                     onChange={(event) => setEnvSearchQuery(event.target.value)}
-                    placeholder="搜索环境..."
+                    placeholder={t("搜索环境...", "Search environments...")}
                     className={cn(
                       "h-7 w-full rounded-[7px] border border-[var(--border-color)] bg-[var(--surface)] pl-6 pr-2",
                       "text-[11px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
@@ -706,7 +708,7 @@ export function TabBar() {
                   onClick={() => void handleQuickCreateEnvironment()}
                   disabled={creatingEnvironment}
                 >
-                  {creatingEnvironment ? "创建中" : "新建"}
+                  {creatingEnvironment ? t("创建中", "Creating") : t("新建", "New")}
                 </button>
               </div>
               <button
@@ -716,7 +718,7 @@ export function TabBar() {
                 )}
                 onClick={() => { setActiveEnvironment(null); setShowEnvDropdown(false) }}
               >
-                <AppIcon name="globe" size={11} /> No Environment
+                <AppIcon name="globe" size={11} /> {t("无环境", "No Environment")}
               </button>
               <div className="h-px bg-[var(--border-subtle)] my-0.5" />
               {filteredEnvironments.map((env) => (
@@ -734,7 +736,7 @@ export function TabBar() {
                   <button
                     className="absolute right-2 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-[4px] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--sidebar-hover)] opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => { e.stopPropagation(); handleEditEnvironment(env.id) }}
-                    title="编辑环境"
+                    title={t("编辑环境", "Edit environment")}
                   >
                     <AppIcon name="pencil" size={10} />
                   </button>
@@ -742,7 +744,7 @@ export function TabBar() {
               ))}
               {filteredEnvironments.length === 0 && (
                 <div className="px-3 py-2 text-[10px] text-[var(--fg-muted)]">
-                  未找到匹配环境
+                  {t("未找到匹配环境", "No matching environments")}
                 </div>
               )}
             </div>
@@ -764,7 +766,7 @@ export function TabBar() {
               className="w-full whitespace-nowrap px-2.5 py-1.5 rounded-[7px] text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] flex items-center gap-2"
               onClick={() => { requestTabClose(contextMenu.tabId); setContextMenu(null) }}
             >
-              <AppIcon name="clear" size={12} /> 关闭
+              <AppIcon name="clear" size={12} /> {t("关闭", "Close")}
             </button>
           )}
           <button
@@ -772,14 +774,14 @@ export function TabBar() {
             disabled={closableTabs.length <= 1}
             onClick={() => { handleCloseOtherTabs(contextMenu.tabId); setContextMenu(null) }}
           >
-            <AppIcon name="clear" size={12} /> 关闭其他
+            <AppIcon name="clear" size={12} /> {t("关闭其他", "Close others")}
           </button>
           <button
             className="w-full whitespace-nowrap px-2.5 py-1.5 rounded-[7px] text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] disabled:opacity-40 flex items-center gap-2"
             disabled={closableTabs.length === 0}
             onClick={() => { handleCloseAllTabs(); setContextMenu(null) }}
           >
-            <AppIcon name="clear" size={12} /> 关闭全部
+            <AppIcon name="clear" size={12} /> {t("关闭全部", "Close all")}
           </button>
         </div>,
         document.body
@@ -792,7 +794,7 @@ export function TabBar() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)]">
-              <div className="text-[16px] font-semibold text-[var(--fg)]">保存更改</div>
+              <div className="text-[16px] font-semibold text-[var(--fg)]">{t("保存更改", "Save changes")}</div>
               <button
                 type="button"
                 className="h-6 w-6 inline-flex items-center justify-center rounded-[6px] text-[var(--fg-muted)] hover:bg-[var(--button-bg)] hover:text-[var(--fg)]"
@@ -804,9 +806,9 @@ export function TabBar() {
             </div>
             <div className="px-4 py-3.5">
               <p className="text-[13px] text-[var(--fg)] leading-[1.6]">
-                请求 <span className="font-medium">“{closeConfirmTab.title}”</span> 有未保存的修改。
+                {t("请求", "Request")} <span className="font-medium">“{closeConfirmTab.title}”</span> {t("有未保存的修改。", "has unsaved changes.")}
               </p>
-              <p className="mt-1 text-[12px] text-[var(--fg-secondary)]">关闭后这些修改将会丢失，是否先保存？</p>
+              <p className="mt-1 text-[12px] text-[var(--fg-secondary)]">{t("关闭后这些修改将会丢失，是否先保存？", "Closing will discard these changes. Save first?")}</p>
               <label className="mt-3 inline-flex items-center gap-2 text-[12px] text-[var(--fg)] cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -814,7 +816,7 @@ export function TabBar() {
                   onChange={(event) => setAlwaysDiscardUnsavedOnClose(event.target.checked)}
                   className="h-4 w-4 rounded-[4px] border border-[var(--border-color)] accent-[var(--accent)]"
                 />
-                <span>关闭 Tab 时默认丢弃未保存修改</span>
+                <span>{t("关闭 Tab 时默认丢弃未保存修改", "Discard unsaved changes by default when closing tabs")}</span>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="inline-flex h-4 w-4 items-center justify-center rounded-[4px] text-[var(--fg-muted)] hover:bg-[var(--button-bg)]">
@@ -822,7 +824,7 @@ export function TabBar() {
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="top" align="start" className="max-w-[320px] text-[12px] leading-5">
-                    勾选后，关闭标签页将不再提示是否保存。你可以随时在设置中修改此行为。
+                    {t("勾选后，关闭标签页将不再提示是否保存。你可以随时在设置中修改此行为。", "When checked, closing tabs won't prompt for save. You can change this in Settings anytime.")}
                   </TooltipContent>
                 </Tooltip>
               </label>
@@ -834,7 +836,7 @@ export function TabBar() {
                 onClick={handleConfirmCloseWithoutSave}
                 disabled={closeConfirmSaving}
               >
-                不保存
+                {t("不保存", "Don't save")}
               </button>
               <button
                 type="button"
@@ -842,7 +844,7 @@ export function TabBar() {
                 onClick={() => setCloseConfirmTabId(null)}
                 disabled={closeConfirmSaving}
               >
-                取消
+                {t("取消", "Cancel")}
               </button>
               <button
                 type="button"
@@ -850,7 +852,7 @@ export function TabBar() {
                 onClick={() => void handleConfirmCloseWithSave()}
                 disabled={closeConfirmSaving}
               >
-                {closeConfirmSaving ? "保存中..." : "保存并关闭"}
+                {closeConfirmSaving ? t("保存中...", "Saving...") : t("保存并关闭", "Save and close")}
               </button>
             </div>
           </div>

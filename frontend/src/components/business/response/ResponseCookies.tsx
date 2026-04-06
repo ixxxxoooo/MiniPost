@@ -1,3 +1,5 @@
+import { useI18n } from "@/hooks/useI18n"
+
 interface ParsedCookie {
   name: string
   value: string
@@ -9,10 +11,11 @@ interface ResponseCookiesProps {
 }
 
 export function ResponseCookies({ cookies }: ResponseCookiesProps) {
+  const { t } = useI18n()
   if (cookies.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-2xs text-[var(--fg-muted)]">
-        无 Cookies
+        {t("无 Cookies", "No cookies")}
       </div>
     )
   }
@@ -46,4 +49,3 @@ export function ResponseCookies({ cookies }: ResponseCookiesProps) {
     </div>
   )
 }
-

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect } from "react"
 import { createPortal } from "react-dom"
 import { AppIcon } from "@/components/ui/icon"
+import { useI18n } from "@/hooks/useI18n"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
@@ -57,14 +58,14 @@ interface DeleteConfirmState {
 
 const AUTO_EXPAND_DELAY = 600
 
-function detectImportType(content: string): {
+function detectImportType(content: string, t: (zh: string, en: string) => string): {
   type: DetectedImportType
   title: string
   description: string
 } {
   const trimmed = content.trim()
   if (!trimmed) {
-    return { type: "unknown", title: "未选择文件", description: "请先选择导入文件" }
+    return { type: "unknown", title: t("未选择文件", "No file selected"), description: t("请先选择导入文件", "Please select an import file first") }
   }
 
   try {
@@ -74,21 +75,21 @@ function detectImportType(content: string): {
         return {
           type: "postman",
           title: "Postman Collection",
-          description: "检测到 Postman v2.x 集合结构",
+          description: t("检测到 Postman v2.x 集合结构", "Detected Postman v2.x collection structure"),
         }
       }
       if ("paths" in parsed && ("openapi" in parsed || "swagger" in parsed)) {
         return {
           type: "swagger",
           title: "OpenAPI / Swagger",
-          description: "检测到 OpenAPI/Swagger 结构",
+          description: t("检测到 OpenAPI/Swagger 结构", "Detected OpenAPI/Swagger structure"),
         }
       }
       if ("paths" in parsed) {
         return {
           type: "swagger",
           title: "OpenAPI / Swagger",
-          description: "检测到 paths 字段，可按 OpenAPI 导入",
+          description: t("检测到 paths 字段，可按 OpenAPI 导入", "Detected paths field, can import as OpenAPI"),
         }
       }
     }
@@ -98,15 +99,15 @@ function detectImportType(content: string): {
       return {
         type: "swagger",
         title: "OpenAPI / Swagger (YAML)",
-        description: "检测到 YAML OpenAPI/Swagger 结构",
+        description: t("检测到 YAML OpenAPI/Swagger 结构", "Detected YAML OpenAPI/Swagger structure"),
       }
     }
   }
 
   return {
     type: "unknown",
-    title: "未识别格式",
-    description: "支持 Postman Collection / OpenAPI / Swagger（JSON 或 YAML）",
+    title: t("未识别格式", "Unrecognized format"),
+    description: t("支持 Postman Collection / OpenAPI / Swagger（JSON 或 YAML）", "Supports Postman Collection / OpenAPI / Swagger (JSON or YAML)"),
   }
 }
 
@@ -220,6 +221,7 @@ const MENU_ITEM = "w-full whitespace-nowrap px-2.5 py-1.5 rounded-[7px] text-[le
 const MENU_ITEM_HOTKEY = "text-[10px] text-[var(--fg-muted)] font-mono ml-4"
 
 export function Sidebar() {
+  const { t } = useI18n()
   const { sidebarWidth, setSidebarWidth, sidebarCollapsed, editingEnvironmentId, setEditingEnvironmentId } = useUIStore()
   const {
     currentProjectId,
@@ -256,7 +258,7 @@ export function Sidebar() {
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [importMode, setImportMode] = useState<ImportMode>("file")
   const [importContent, setImportContent] = useState("")
-  const [detectedImport, setDetectedImport] = useState(() => detectImportType(""))
+  const [detectedImport, setDetectedImport] = useState(() => detectImportType("", t))
   const [importLoading, setImportLoading] = useState(false)
   const [importProgress, setImportProgress] = useState(0)
   const [importError, setImportError] = useState("")
@@ -565,7 +567,7 @@ export function Sidebar() {
 
   const resetImportDialogState = () => {
     setImportContent("")
-    setDetectedImport(detectImportType(""))
+    setDetectedImport(detectImportType("", t))
     setImportError("")
     setImportSuccess("")
     setImportProgress(0)
@@ -585,9 +587,9 @@ export function Sidebar() {
       const content = await OpenFileDialogJSON()
       if (!content) return
       setImportContent(content)
-      setDetectedImport(detectImportType(content))
+      setDetectedImport(detectImportType(content, t))
     } catch (err) {
-      setImportError(err instanceof Error ? err.message : "选择文件失败")
+      setImportError(err instanceof Error ? err.message : t("选择文件失败", "Failed to choose file"))
     }
   }
 
@@ -607,7 +609,7 @@ export function Sidebar() {
 
   const handleFileImportConfirm = async () => {
     if (!importContent.trim()) {
-      setImportError("请先选择导入文件")
+      setImportError(t("请先选择导入文件", "Please select an import file first"))
       return
     }
 
@@ -619,14 +621,14 @@ export function Sidebar() {
     try {
       await importFromFile("auto", importContent)
       finishImportProgress()
-      setImportSuccess("导入完成")
+      setImportSuccess(t("导入完成", "Import completed"))
       setActiveTab("requests")
       setSearchQuery("")
     } catch (err) {
       if (importProgressTimerRef.current) clearInterval(importProgressTimerRef.current)
       importProgressTimerRef.current = null
       setImportProgress(0)
-      setImportError(err instanceof Error ? err.message : "导入失败")
+      setImportError(err instanceof Error ? err.message : t("导入失败", "Import failed"))
     } finally {
       setImportLoading(false)
     }
@@ -636,7 +638,7 @@ export function Sidebar() {
     if (!currentProjectId) return
     const command = curlImportInput.trim()
     if (!command) {
-      setImportError("请输入 cURL 命令")
+      setImportError(t("请输入 cURL 命令", "Please enter a cURL command"))
       return
     }
 
@@ -648,7 +650,7 @@ export function Sidebar() {
     try {
       const parsed = await ImportCurl(command)
       const createdRequest = await createRequest("", "Imported cURL")
-      if (!createdRequest) throw new Error("新建请求失败")
+      if (!createdRequest) throw new Error(t("新建请求失败", "Failed to create request"))
 
       const requestToSave = {
         ...createdRequest,
@@ -680,14 +682,14 @@ export function Sidebar() {
       await saveRequestToBackend(requestToSave as model.RequestItem)
       openRequestTab(currentProjectId, convertRequestToData(requestToSave as model.RequestItem))
       finishImportProgress()
-      setImportSuccess("cURL 导入完成")
+      setImportSuccess(t("cURL 导入完成", "cURL import completed"))
       setActiveTab("requests")
       setSearchQuery("")
     } catch (err) {
       if (importProgressTimerRef.current) clearInterval(importProgressTimerRef.current)
       importProgressTimerRef.current = null
       setImportProgress(0)
-      setImportError(err instanceof Error ? err.message : "cURL 导入失败")
+      setImportError(err instanceof Error ? err.message : t("cURL 导入失败", "cURL import failed"))
     } finally {
       setImportLoading(false)
     }
@@ -758,9 +760,9 @@ export function Sidebar() {
   }, [activeTab, renamingId, requestDeleteConfirm, selectedNode])
 
   const sidebarTabs: { key: SidebarTab; label: string; icon: "commandLine" | "clock" | "globe" }[] = [
-    { key: "requests", label: "请求", icon: "commandLine" },
-    { key: "history", label: "历史", icon: "clock" },
-    { key: "environments", label: "环境", icon: "globe" },
+    { key: "requests", label: t("请求", "Requests"), icon: "commandLine" },
+    { key: "history", label: t("历史", "History"), icon: "clock" },
+    { key: "environments", label: t("环境", "Environments"), icon: "globe" },
   ]
 
   const clearDragState = () => {
@@ -979,7 +981,7 @@ export function Sidebar() {
                         <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent>新建请求</TooltipContent>
+                    <TooltipContent>{t("新建请求", "New request")}</TooltipContent>
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -990,7 +992,7 @@ export function Sidebar() {
                         <AppIcon name="more" size={12} className="text-[var(--fg-muted)]" />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent>更多操作</TooltipContent>
+                    <TooltipContent>{t("更多操作", "More actions")}</TooltipContent>
                   </Tooltip>
                 </div>
               </>
@@ -1068,7 +1070,7 @@ export function Sidebar() {
                       <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>新建请求</TooltipContent>
+                  <TooltipContent>{t("新建请求", "New request")}</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1079,7 +1081,7 @@ export function Sidebar() {
                       <AppIcon name="more" size={12} className="text-[var(--fg-muted)]" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>更多操作</TooltipContent>
+                  <TooltipContent>{t("更多操作", "More actions")}</TooltipContent>
                 </Tooltip>
               </div>
             </>
@@ -1091,7 +1093,7 @@ export function Sidebar() {
   }
 
   const rootNodes = getChildren("")
-  const rootFolderName = "根目录"
+  const rootFolderName = t("根目录", "Root")
 
   if (sidebarCollapsed) return null
 
@@ -1144,7 +1146,7 @@ export function Sidebar() {
                 "border border-[var(--border-color)] bg-[var(--surface)] text-[var(--fg)]",
                 "placeholder:text-[var(--fg-muted)] focus:outline-none focus:border-[var(--accent)]"
               )}
-              placeholder="搜索请求..."
+              placeholder={t("搜索请求...", "Search requests...")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -1166,7 +1168,7 @@ export function Sidebar() {
                 <AppIcon name="fileImport" size={14} className="text-[var(--fg-secondary)]" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>导入</TooltipContent>
+            <TooltipContent>{t("导入", "Import")}</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1177,7 +1179,7 @@ export function Sidebar() {
                 <AppIcon name="folderAdd" size={14} className="text-[var(--fg-secondary)]" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>新建文件夹</TooltipContent>
+            <TooltipContent>{t("新建文件夹", "New folder")}</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1188,7 +1190,7 @@ export function Sidebar() {
                 <AppIcon name="add" size={14} className="text-[var(--fg-secondary)]" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>新建请求 (⌘N)</TooltipContent>
+            <TooltipContent>{t("新建请求", "New request")} (⌘N)</TooltipContent>
           </Tooltip>
         </div>
       )}
@@ -1201,8 +1203,8 @@ export function Sidebar() {
         {!currentProjectId ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center px-4">
-              <p className="text-[length:var(--size-font-xs)] text-[var(--fg-secondary)] font-medium">无项目</p>
-              <p className="text-2xs text-[var(--fg-muted)] mt-1">请在顶部左侧创建或选择项目</p>
+              <p className="text-[length:var(--size-font-xs)] text-[var(--fg-secondary)] font-medium">{t("无项目", "No project")}</p>
+              <p className="text-2xs text-[var(--fg-muted)] mt-1">{t("请在顶部左侧创建或选择项目", "Create or select a project from the top-left")}</p>
             </div>
           </div>
         ) : activeTab === "requests" ? (
@@ -1227,7 +1229,7 @@ export function Sidebar() {
                       <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>在根目录新建请求</TooltipContent>
+                  <TooltipContent>{t("在根目录新建请求", "New request in root")}</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1238,7 +1240,7 @@ export function Sidebar() {
                       <AppIcon name="folderAdd" size={12} className="text-[var(--fg-muted)]" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>在根目录新建文件夹</TooltipContent>
+                  <TooltipContent>{t("在根目录新建文件夹", "New folder in root")}</TooltipContent>
                 </Tooltip>
               </div>
             </div>
@@ -1246,7 +1248,7 @@ export function Sidebar() {
             {rootNodes.length === 0 && (
               <div className="text-center py-8">
                 <p className="text-2xs text-[var(--fg-muted)]">
-                  {isSearching ? "无匹配结果" : "暂无请求"}
+                  {isSearching ? t("无匹配结果", "No results") : t("暂无请求", "No requests")}
                 </p>
               </div>
             )}
@@ -1271,41 +1273,41 @@ export function Sidebar() {
           {dropdownMenu.type === "folder" && (
             <>
               <button className={MENU_ITEM} onClick={() => { handleNewRequest(dropdownMenu.id); setDropdownMenu(null) }}>
-                <AppIcon name="add" size={12} /> 添加请求
+                <AppIcon name="add" size={12} /> {t("添加请求", "Add request")}
               </button>
               <button className={MENU_ITEM} onClick={() => { handleNewFolder(dropdownMenu.id); setDropdownMenu(null) }}>
-                <AppIcon name="folderAdd" size={12} /> 添加文件夹
+                <AppIcon name="folderAdd" size={12} /> {t("添加文件夹", "Add folder")}
               </button>
               <div className="h-px bg-[var(--border-subtle)] my-0.5" />
             </>
           )}
           <button className={MENU_ITEM} onClick={() => startRename(dropdownMenu.id, dropdownMenu.type, dropdownMenu.name)}>
             <AppIcon name="pencil" size={12} />
-            <span className="flex-1">重命名</span>
+            <span className="flex-1">{t("重命名", "Rename")}</span>
             <span className={MENU_ITEM_HOTKEY}>⌘E</span>
           </button>
           <button className={MENU_ITEM} onClick={() => handleDuplicate(dropdownMenu.type, dropdownMenu.id)}>
             <AppIcon name="copy" size={12} />
-            <span className="flex-1">复制</span>
+            <span className="flex-1">{t("复制", "Copy")}</span>
             <span className={MENU_ITEM_HOTKEY}>⌘C</span>
           </button>
           <button className={MENU_ITEM} onClick={() => handleDuplicate(dropdownMenu.type, dropdownMenu.id)}>
             <AppIcon name="copy" size={12} />
-            <span className="flex-1">Duplicate</span>
+            <span className="flex-1">{t("Duplicate", "Duplicate")}</span>
             <span className={MENU_ITEM_HOTKEY}>⌘D</span>
           </button>
           {dropdownMenu.type === "request" && (
             <button className={MENU_ITEM} onClick={() => { const req = requestMap.get(dropdownMenu.id); if (req) handleCopyCurl(req) }}>
-              <AppIcon name="commandLine" size={12} /> 复制 cURL
+              <AppIcon name="commandLine" size={12} /> {t("复制 cURL", "Copy cURL")}
             </button>
           )}
           {dropdownMenu.type === "request" && (
             <button className={MENU_ITEM} onClick={() => { const req = requestMap.get(dropdownMenu.id); if (req) void handleExportCurl(req) }}>
-              <AppIcon name="download" size={12} /> 导出 cURL
+              <AppIcon name="download" size={12} /> {t("导出 cURL", "Export cURL")}
             </button>
           )}
           <button className={MENU_ITEM} onClick={() => handleExportNode(dropdownMenu.type, dropdownMenu.id)}>
-            <AppIcon name="download" size={12} /> 导出
+            <AppIcon name="download" size={12} /> {t("导出", "Export")}
           </button>
           <div className="h-px bg-[var(--border-subtle)] my-0.5" />
           <button
@@ -1315,7 +1317,7 @@ export function Sidebar() {
             }}
           >
             <AppIcon name="delete" size={12} />
-            <span className="flex-1">删除</span>
+            <span className="flex-1">{t("删除", "Delete")}</span>
             <span className={cn(MENU_ITEM_HOTKEY, "!text-[var(--danger)]/80")}>⌫</span>
           </button>
         </div>,
@@ -1329,11 +1331,12 @@ export function Sidebar() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="px-4 py-3 border-b border-[var(--border-subtle)]">
-              <div className="text-[16px] font-semibold text-[var(--fg)]">确认删除</div>
+              <div className="text-[16px] font-semibold text-[var(--fg)]">{t("确认删除", "Confirm deletion")}</div>
             </div>
             <div className="px-4 py-4 text-[13px] text-[var(--fg-secondary)] leading-[1.6]">
-              确定删除{deleteConfirm.type === "folder" ? "文件夹" : "请求"}
-              <span className="mx-1 text-[var(--fg)] font-medium">“{deleteConfirm.name}”</span>吗？
+              {t("确定删除", "Are you sure you want to delete")}
+              {deleteConfirm.type === "folder" ? t("文件夹", "folder") : t("请求", "request")}
+              <span className="mx-1 text-[var(--fg)] font-medium">“{deleteConfirm.name}”</span>{t("吗？", "?")}
             </div>
             <div className="px-4 py-3 border-t border-[var(--border-subtle)] flex items-center justify-end gap-2">
               <button
@@ -1342,7 +1345,7 @@ export function Sidebar() {
                 onClick={() => setDeleteConfirm(null)}
                 disabled={deleteConfirmLoading}
               >
-                取消
+                {t("取消", "Cancel")}
               </button>
               <button
                 type="button"
@@ -1350,7 +1353,7 @@ export function Sidebar() {
                 onClick={() => void handleConfirmDelete()}
                 disabled={deleteConfirmLoading}
               >
-                {deleteConfirmLoading ? "删除中..." : "删除"}
+                {deleteConfirmLoading ? t("删除中...", "Deleting...") : t("删除", "Delete")}
               </button>
             </div>
           </div>
@@ -1379,8 +1382,8 @@ export function Sidebar() {
                   <AppIcon name="fileImport" size={14} className="text-[var(--accent)]" />
                 </div>
                 <div>
-                  <div className="text-[13px] font-semibold text-[var(--fg)]">导入</div>
-                  <div className="text-[11px] text-[var(--fg-muted)]">支持文件导入与 cURL 导入</div>
+                  <div className="text-[13px] font-semibold text-[var(--fg)]">{t("导入", "Import")}</div>
+                  <div className="text-[11px] text-[var(--fg-muted)]">{t("支持文件导入与 cURL 导入", "Supports file import and cURL import")}</div>
                 </div>
               </div>
               <button
@@ -1406,7 +1409,7 @@ export function Sidebar() {
                   )}
                   onClick={() => { setImportMode("file"); setImportError(""); setImportSuccess("") }}
                 >
-                  文件导入
+                  {t("文件导入", "File import")}
                 </button>
                 <button
                   type="button"
@@ -1419,7 +1422,7 @@ export function Sidebar() {
                   )}
                   onClick={() => { setImportMode("curl"); setImportError(""); setImportSuccess("") }}
                 >
-                  cURL 导入
+                  {t("cURL 导入", "cURL import")}
                 </button>
               </div>
             </div>
@@ -1438,17 +1441,17 @@ export function Sidebar() {
                     )}
                   >
                     <AppIcon name="upload" size={16} className="text-[var(--fg-secondary)]" />
-                    <span className="text-[12px] text-[var(--fg)]">选择导入文件</span>
+                    <span className="text-[12px] text-[var(--fg)]">{t("选择导入文件", "Select import file")}</span>
                     <span className="text-[10px] text-[var(--fg-muted)]">Postman / OpenAPI / Swagger（JSON/YAML）</span>
                   </button>
 
                   <div className="rounded-[10px] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2.5">
-                    <div className="text-[11px] text-[var(--fg-muted)]">识别结果</div>
+                    <div className="text-[11px] text-[var(--fg-muted)]">{t("识别结果", "Detection result")}</div>
                     <div className="mt-1 text-[12px] font-medium text-[var(--fg)]">{detectedImport.title}</div>
                     <div className="mt-0.5 text-[11px] text-[var(--fg-secondary)]">{detectedImport.description}</div>
                     {importContent && (
                       <div className="mt-1 text-[10px] text-[var(--fg-muted)]">
-                        已读取 {new Blob([importContent]).size} bytes
+                        {t("已读取", "Read")} {new Blob([importContent]).size} bytes
                       </div>
                     )}
                   </div>
@@ -1470,9 +1473,9 @@ export function Sidebar() {
                       "bg-[var(--surface-secondary)] p-3 font-mono text-[12px] text-[var(--fg)]",
                       "placeholder:text-[var(--fg-muted)] focus:outline-none focus:border-[var(--accent)]"
                     )}
-                    placeholder="粘贴 cURL 命令，按 Enter 可直接导入"
+                    placeholder={t("粘贴 cURL 命令，按 Enter 可直接导入", "Paste a cURL command, press Enter to import")}
                   />
-                  <div className="text-[10px] text-[var(--fg-muted)]">Enter 导入，Shift+Enter 换行</div>
+                  <div className="text-[10px] text-[var(--fg-muted)]">{t("Enter 导入，Shift+Enter 换行", "Enter to import, Shift+Enter for newline")}</div>
                 </div>
               )}
 
@@ -1484,7 +1487,7 @@ export function Sidebar() {
                       style={{ width: `${importProgress}%` }}
                     />
                   </div>
-                  <div className="mt-1 text-[10px] text-[var(--fg-muted)]">正在导入，请稍候...</div>
+                  <div className="mt-1 text-[10px] text-[var(--fg-muted)]">{t("正在导入，请稍候...", "Importing, please wait...")}</div>
                 </div>
               )}
 
@@ -1510,7 +1513,7 @@ export function Sidebar() {
                 )}
                 onClick={() => setShowImportDialog(false)}
               >
-                取消
+                {t("取消", "Cancel")}
               </button>
               <button
                 type="button"
@@ -1527,7 +1530,7 @@ export function Sidebar() {
                   void handleCurlImportConfirm()
                 }}
               >
-                {importMode === "file" ? "导入文件" : "导入 cURL"}
+                {importMode === "file" ? t("导入文件", "Import file") : t("导入 cURL", "Import cURL")}
               </button>
             </div>
           </div>

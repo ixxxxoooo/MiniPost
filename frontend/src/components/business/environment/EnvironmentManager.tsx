@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react"
 import { AppIcon } from "@/components/ui/icon"
+import { useI18n } from "@/hooks/useI18n"
 import { cn } from "@/lib/utils"
 import { useProjectStore } from "@/stores/projectStore"
 import { useEnvironmentStore } from "@/stores/environmentStore"
 import { useUIStore } from "@/stores/uiStore"
 
 export function EnvironmentManager() {
+  const { t } = useI18n()
   const { currentProjectId } = useProjectStore()
   const {
     environments, activeEnvironmentId,
@@ -46,11 +48,11 @@ export function EnvironmentManager() {
     <div className="flex flex-col h-full">
       <div className="flex-shrink-0">
         <div className="flex items-center justify-between px-2 py-1">
-          <span className="text-2xs text-[var(--fg-muted)] font-medium uppercase">环境变量</span>
+          <span className="text-2xs text-[var(--fg-muted)] font-medium uppercase">{t("环境变量", "Environment variables")}</span>
           <button
             className="h-5 w-5 flex items-center justify-center rounded-[var(--radius-sm)] hover:bg-[var(--sidebar-hover)] transition-colors"
             onClick={() => setShowNewInput(true)}
-            title="新建环境"
+            title={t("新建环境", "New environment")}
           >
             <AppIcon name="add" size={12} className="text-[var(--fg-muted)]" />
           </button>
@@ -60,7 +62,7 @@ export function EnvironmentManager() {
           <div className="px-2 pb-1">
             <input
               className="w-full h-[var(--size-btn-sm)] px-2 text-[length:var(--size-font-2xs)] rounded-[var(--radius-input)] border border-[var(--border-color)] bg-[var(--surface)] text-[var(--fg)] outline-none focus:border-[var(--accent)]"
-              placeholder="环境名称..."
+              placeholder={t("环境名称...", "Environment name...")}
               value={newEnvName}
               onChange={(e) => setNewEnvName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") void handleCreateEnv(); if (e.key === "Escape") setShowNewInput(false) }}
@@ -89,7 +91,7 @@ export function EnvironmentManager() {
                 e.stopPropagation()
                 setActiveEnvironment(activeEnvironmentId === env.id ? null : env.id)
               }}
-              title={activeEnvironmentId === env.id ? "取消激活" : "激活此环境"}
+              title={activeEnvironmentId === env.id ? t("取消激活", "Deactivate") : t("激活此环境", "Activate this environment")}
             >
               {activeEnvironmentId === env.id && (
                 <div className="w-1.5 h-1.5 rounded-full bg-white" />
@@ -112,7 +114,7 @@ export function EnvironmentManager() {
 
         {environments.length === 0 && (
           <div className="text-center py-6 text-2xs text-[var(--fg-muted)]">
-            暂无环境，点击 + 创建
+            {t("暂无环境，点击 + 创建", "No environments yet. Click + to create one.")}
           </div>
         )}
       </div>

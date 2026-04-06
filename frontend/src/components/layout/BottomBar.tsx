@@ -2,14 +2,15 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { AppIcon } from "@/components/ui/icon"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useI18n } from "@/hooks/useI18n"
 import { useUIStore, type ConsoleEntry } from "@/stores/uiStore"
 import { useCookieStore } from "@/stores/cookieStore"
 import { CookiePanel } from "@/components/business/cookie/CookiePanel"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 
-function formatTimestamp(ts: string): string {
+function formatTimestamp(ts: string, locale: string): string {
   const d = new Date(ts)
-  return d.toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })
+  return d.toLocaleTimeString(locale, { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })
 }
 
 function getStatusColor(code: number): string {
@@ -18,21 +19,21 @@ function getStatusColor(code: number): string {
   return "text-[var(--warning)]"
 }
 
-function parseAppError(raw: string): { code: string; message: string; detail: string } {
+function parseAppError(raw: string, t: (zh: string, en: string) => string = (zh) => zh): { code: string; message: string; detail: string } {
   const text = raw.trim()
   const match = text.match(/^\[([A-Z0-9_]+)\]\s*([^:]+)(?::\s*(.*))?$/)
   if (!match) {
-    return { code: "REQUEST_FAILED", message: "请求发送失败", detail: text }
+    return { code: "REQUEST_FAILED", message: t("请求发送失败", "Request failed"), detail: text }
   }
   return {
     code: match[1] || "REQUEST_FAILED",
-    message: (match[2] || "请求发送失败").trim(),
+    message: (match[2] || t("请求发送失败", "Request failed")).trim(),
     detail: (match[3] || "").trim(),
   }
 }
 
-function normalizeConsoleError(raw: string): string {
-  const parsed = parseAppError(raw)
+function normalizeConsoleError(raw: string, t: (zh: string, en: string) => string = (zh) => zh): string {
+  const parsed = parseAppError(raw, t)
   const lowerDetail = parsed.detail.toLowerCase()
   if (parsed.detail) return parsed.detail
   if (parsed.code === "DNS_LOOKUP_FAILED") return "getaddrinfo ENOTFOUND"
@@ -52,7 +53,7 @@ function getRequestPath(urlText: string): string {
   }
 }
 
-function buildRawLog(entry: ConsoleEntry): string {
+function buildRawLog(entry: ConsoleEntry, t: (zh: string, en: string) => string): string {
   const requestProtocol = entry.requestProtocol || "HTTP/1.1"
   const requestLine = `${entry.method} ${getRequestPath(entry.url)} ${requestProtocol}`
   const requestHeaders = Object.entries(entry.requestHeaders ?? {})
@@ -79,7 +80,7 @@ function buildRawLog(entry: ConsoleEntry): string {
   if (requestBody) blocks.push("", requestBody)
 
   if (entry.error) {
-    blocks.push("", `Error: ${normalizeConsoleError(entry.error)}`)
+    blocks.push("", `Error: ${normalizeConsoleError(entry.error, t)}`)
     return blocks.join("\n")
   }
 
@@ -113,6 +114,7 @@ function getConsoleTone(entry: ConsoleEntry): ConsoleTone {
 }
 
 function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
+  const { t, locale } = useI18n()
   const [expanded, setExpanded] = useState(false)
   const [showRawLog, setShowRawLog] = useState(false)
   const hasError = !!entry.error
@@ -146,9 +148,7 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
           {entry.method}
         </span>
         <span className="text-[var(--fg)] truncate flex-1">{entry.url}</span>
-        {hasError && (
-          <span className="text-[var(--danger)] flex-shrink-0 text-[10px]">Error</span>
-        )}
+        {hasError && <span className="text-[var(--danger)] flex-shrink-0 text-[10px]">Error</span>}
         {hasResponse && !hasError && (
           <>
             <span className={cn("font-bold flex-shrink-0", getStatusColor(entry.status!))}>
@@ -165,7 +165,7 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
         {!hasResponse && !hasError && (
           <div className="h-2.5 w-2.5 border-[1.5px] border-[var(--fg-muted)] border-t-transparent rounded-full animate-spin flex-shrink-0" />
         )}
-        <span className="text-[var(--fg-muted)] text-[10px] flex-shrink-0 ml-1">{formatTimestamp(entry.timestamp)}</span>
+        <span className="text-[var(--fg-muted)] text-[10px] flex-shrink-0 ml-1">{formatTimestamp(entry.timestamp, locale)}</span>
       </div>
 
       {expanded && (
@@ -189,12 +189,12 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
                 </summary>
                 {showRawLog ? (
                   <pre className="ml-2 whitespace-pre-wrap break-all text-[11px] leading-[1.35] text-[var(--fg-secondary)]">
-                    {buildRawLog(entry)}
+                    {buildRawLog(entry, t)}
                   </pre>
                 ) : (
                   <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)]">
                     <div className="text-[var(--fg)]">{entry.method} {entry.url}</div>
-                    <div className="text-[var(--danger)]">Error: {normalizeConsoleError(entry.error || "")}</div>
+                    <div className="text-[var(--danger)]">Error: {normalizeConsoleError(entry.error || "", t)}</div>
                   </div>
                 )}
               </details>
@@ -230,7 +230,7 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
                 </summary>
                 {showRawLog ? (
                   <pre className="ml-2 whitespace-pre-wrap break-all text-[11px] leading-[1.35] text-[var(--fg-secondary)]">
-                    {buildRawLog(entry)}
+                    {buildRawLog(entry, t)}
                   </pre>
                 ) : (
                   <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)]">
@@ -288,6 +288,7 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
 }
 
 export function BottomBar() {
+  const { t } = useI18n()
   const {
     layoutDirection,
     setLayoutDirection,
@@ -392,10 +393,10 @@ export function BottomBar() {
                       clearConsoleLogs()
                     }}
                   >
-                    Clear
+                    {t("清空", "Clear")}
                   </button>
                 </TooltipTrigger>
-                <TooltipContent>清空</TooltipContent>
+                <TooltipContent>{t("清空", "Clear")}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -409,13 +410,13 @@ export function BottomBar() {
                     <AppIcon name="clear" size={10} className="text-[var(--fg-muted)]" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent>关闭</TooltipContent>
+                <TooltipContent>{t("关闭", "Close")}</TooltipContent>
               </Tooltip>
             </div>
           </div>
           <div ref={scrollRef} className="flex-1 overflow-y-auto">
             {consoleLogs.length === 0 ? (
-              <div className="text-center py-8 text-[11px] text-[var(--fg-muted)]">暂无请求日志</div>
+              <div className="text-center py-8 text-[11px] text-[var(--fg-muted)]">{t("暂无请求日志", "No request logs yet")}</div>
             ) : (
               consoleLogs.map((entry) => <ConsoleRow key={entry.id} entry={entry} />)
             )}
@@ -472,7 +473,7 @@ export function BottomBar() {
                 </span>
               </button>
             </TooltipTrigger>
-            <TooltipContent>上下布局</TooltipContent>
+            <TooltipContent>{t("上下布局", "Vertical layout")}</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -489,7 +490,7 @@ export function BottomBar() {
                 </span>
               </button>
             </TooltipTrigger>
-            <TooltipContent>左右布局</TooltipContent>
+            <TooltipContent>{t("左右布局", "Horizontal layout")}</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -510,7 +511,7 @@ export function BottomBar() {
                 </span>
               </button>
             </TooltipTrigger>
-            <TooltipContent>{sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}</TooltipContent>
+            <TooltipContent>{sidebarCollapsed ? t("展开侧边栏", "Expand sidebar") : t("收起侧边栏", "Collapse sidebar")}</TooltipContent>
           </Tooltip>
         </div>
       </div>

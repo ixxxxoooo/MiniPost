@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import type { FormDataItem } from "@/types/request"
 import { createFormDataItem } from "@/types/request"
+import { useI18n } from "@/hooks/useI18n"
 
 interface FileHistoryItem {
   path: string
@@ -59,6 +60,7 @@ function upsertFileHistory(history: FileHistoryItem[], path: string, name: strin
 }
 
 export function FormDataEditor() {
+  const { t, isZh } = useI18n()
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
   const [fileHistory, setFileHistory] = useState<FileHistoryItem[]>(() => readFileUploadHistory())
@@ -119,7 +121,7 @@ export function FormDataEditor() {
       rememberFileHistory(filePath, fileName)
       return true
     } catch (err) {
-      console.error("文件选择失败:", err)
+      console.error(t("文件选择失败:", "Failed to choose file:"), err)
       return false
     }
   }
@@ -137,10 +139,10 @@ export function FormDataEditor() {
         <thead>
           <tr>
             <th className="w-7 border border-[var(--border-color)] px-1 py-1" />
-            <th className="text-left border border-[var(--border-color)] px-2 py-1 font-semibold text-[var(--fg-secondary)]">Key</th>
-            <th className="w-[72px] border border-[var(--border-color)] px-1 py-1 font-semibold text-[var(--fg-secondary)] text-center">Type</th>
-            <th className="text-left border border-[var(--border-color)] px-2 py-1 font-semibold text-[var(--fg-secondary)]">Value</th>
-            <th className="text-left border border-[var(--border-color)] px-2 py-1 font-semibold text-[var(--fg-secondary)]">Description</th>
+            <th className="text-left border border-[var(--border-color)] px-2 py-1 font-semibold text-[var(--fg-secondary)]">{t("键", "Key")}</th>
+            <th className="w-[72px] border border-[var(--border-color)] px-1 py-1 font-semibold text-[var(--fg-secondary)] text-center">{t("类型", "Type")}</th>
+            <th className="text-left border border-[var(--border-color)] px-2 py-1 font-semibold text-[var(--fg-secondary)]">{t("值", "Value")}</th>
+            <th className="text-left border border-[var(--border-color)] px-2 py-1 font-semibold text-[var(--fg-secondary)]">{t("说明", "Description")}</th>
             <th className="w-8 border border-[var(--border-color)] px-1 py-1" />
           </tr>
         </thead>
@@ -166,7 +168,7 @@ export function FormDataEditor() {
                       if (isLastEmpty) handleNewRowKeyChange(item.id, e.target.value)
                       else handleUpdate(item.id, "key", e.target.value)
                     }}
-                    placeholder="Key"
+                    placeholder={t("键", "Key")}
                     className={cn(
                       "w-full h-[24px] px-2 bg-transparent text-[var(--fg)] font-mono",
                       "text-[11px] placeholder:text-[var(--fg-muted)] placeholder:italic",
@@ -177,9 +179,9 @@ export function FormDataEditor() {
                 </td>
                 <td className="border border-[var(--border-color)] px-1 py-0 text-center">
                   {!isLastEmpty ? (
-                    <TypeDropdown value={item.type} onChange={(t) => handleTypeChange(item.id, t)} />
+                    <TypeDropdown value={item.type} onChange={(nextType) => handleTypeChange(item.id, nextType)} isZh={isZh} />
                   ) : (
-                    <span className="text-[10px] text-[var(--fg-muted)]">Text</span>
+                    <span className="text-[10px] text-[var(--fg-muted)]">{t("文本", "Text")}</span>
                   )}
                 </td>
                 <td className="border border-[var(--border-color)] px-0 py-0">
@@ -188,6 +190,7 @@ export function FormDataEditor() {
                       value={item.fileName || ""}
                       valuePath={item.filePath || ""}
                       history={fileHistory}
+                      isZh={isZh}
                       onUploadLocal={() => handleSelectFile(item.id)}
                       onSelectHistory={(file) => handleSelectHistoryFile(item.id, file)}
                     />
@@ -195,7 +198,7 @@ export function FormDataEditor() {
                     <input
                       value={item.value}
                       onChange={(e) => handleUpdate(item.id, "value", e.target.value)}
-                      placeholder="Value"
+                      placeholder={t("值", "Value")}
                       className={cn(
                         "w-full h-[24px] px-2 bg-transparent text-[var(--fg)] font-mono",
                         "text-[11px] placeholder:text-[var(--fg-muted)] placeholder:italic",
@@ -210,7 +213,7 @@ export function FormDataEditor() {
                   <input
                     value={item.description ?? ""}
                     onChange={(e) => handleUpdate(item.id, "description", e.target.value)}
-                    placeholder="Description"
+                    placeholder={t("说明", "Description")}
                     className={cn(
                       "w-full h-[24px] px-2 bg-transparent text-[var(--fg-secondary)]",
                       "text-[11px] placeholder:text-[var(--fg-muted)] placeholder:italic",
@@ -239,7 +242,16 @@ export function FormDataEditor() {
   )
 }
 
-function TypeDropdown({ value, onChange }: { value: "text" | "file"; onChange: (v: "text" | "file") => void }) {
+function TypeDropdown({
+  value,
+  onChange,
+  isZh,
+}: {
+  value: "text" | "file"
+  onChange: (v: "text" | "file") => void
+  isZh: boolean
+}) {
+  const t = (zh: string, en: string) => (isZh ? zh : en)
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [menuRect, setMenuRect] = useState<{ top: number; left: number; width: number }>({
@@ -251,7 +263,7 @@ function TypeDropdown({ value, onChange }: { value: "text" | "file"; onChange: (
   const updateMenuRect = () => {
     if (!triggerRef.current) return
     const rect = triggerRef.current.getBoundingClientRect()
-    const labels = ["Text", "File"]
+    const labels = [t("文本", "Text"), t("文件", "File")]
     const contentWidth = labels.reduce((max, label) => Math.max(max, label.length), 0) * DROPDOWN_CHAR_WIDTH + 40
     setMenuRect({
       top: rect.bottom + 4,
@@ -286,7 +298,7 @@ function TypeDropdown({ value, onChange }: { value: "text" | "file"; onChange: (
         )}
         onClick={() => setOpen(!open)}
       >
-        {value === "text" ? "Text" : "File"}
+        {value === "text" ? t("文本", "Text") : t("文件", "File")}
         <AppIcon name="arrowDown" size={8} strokeWidth={2} className="text-[var(--fg-muted)]" />
       </button>
       {open && createPortal(
@@ -311,7 +323,7 @@ function TypeDropdown({ value, onChange }: { value: "text" | "file"; onChange: (
                 )}
                 onClick={() => { onChange(t); setOpen(false) }}
               >
-                {t === "text" ? "Text" : "File"}
+                {t === "text" ? (isZh ? "文本" : "Text") : (isZh ? "文件" : "File")}
               </button>
             ))}
           </div>
@@ -326,15 +338,18 @@ function FileValueDropdown({
   value,
   valuePath,
   history,
+  isZh,
   onUploadLocal,
   onSelectHistory,
 }: {
   value: string
   valuePath: string
   history: FileHistoryItem[]
+  isZh: boolean
   onUploadLocal: () => Promise<boolean>
   onSelectHistory: (file: FileHistoryItem) => void
 }) {
+  const t = (zh: string, en: string) => (isZh ? zh : en)
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [menuRect, setMenuRect] = useState<{ top: number; left: number; width: number }>({
@@ -343,11 +358,15 @@ function FileValueDropdown({
     width: 260,
   })
   const contentWidth = useMemo(() => {
-    const baseLabels = ["上传本地文件", "历史上传文件", "暂无历史文件"]
+    const baseLabels = [
+      t("上传本地文件", "Upload local file"),
+      t("历史上传文件", "Recent uploads"),
+      t("暂无历史文件", "No upload history"),
+    ]
     const historyLongest = history.reduce((max, item) => Math.max(max, item.name.length), 0)
     const baseLongest = baseLabels.reduce((max, label) => Math.max(max, label.length), 0)
     return Math.max(historyLongest, baseLongest) * DROPDOWN_CHAR_WIDTH + 84
-  }, [history])
+  }, [history, isZh])
 
   const updateMenuRect = () => {
     if (!triggerRef.current) return
@@ -383,10 +402,10 @@ function FileValueDropdown({
           "text-[var(--fg)] hover:border-[var(--accent)]"
         )}
         onClick={() => setOpen((prev) => !prev)}
-        title={value || "Select files"}
+        title={value || t("选择文件", "Select files")}
       >
         <span className={cn("truncate text-left flex-1", value ? "text-[var(--fg)]" : "text-[var(--fg-muted)]")}>
-          {value || "Select files"}
+          {value || t("选择文件", "Select files")}
         </span>
         <AppIcon name="arrowDown" size={9} strokeWidth={2} className="text-[var(--fg-muted)]" />
       </button>
@@ -415,19 +434,19 @@ function FileValueDropdown({
                 }}
               >
                 <AppIcon name="add" size={12} className="text-[var(--fg-secondary)]" />
-                上传本地文件
+                {t("上传本地文件", "Upload local file")}
               </button>
             </div>
 
             <div className="h-px bg-[var(--border-subtle)] mx-2" />
 
             <div className="px-2 pt-2 pb-1 text-[10px] font-medium text-[var(--fg-muted)] uppercase tracking-wide">
-              历史上传文件
+              {t("历史上传文件", "Recent uploads")}
             </div>
 
             <div className="px-2 pb-2 max-h-[180px] overflow-y-auto">
               {history.length === 0 ? (
-                <div className="px-2.5 py-2 text-[11px] text-[var(--fg-muted)]">暂无历史文件</div>
+                <div className="px-2.5 py-2 text-[11px] text-[var(--fg-muted)]">{t("暂无历史文件", "No upload history")}</div>
               ) : (
                 history.map((file) => {
                   const isSelected = !!valuePath && file.path === valuePath

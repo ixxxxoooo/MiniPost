@@ -1,4 +1,5 @@
 import React from "react"
+import { normalizeLocale } from "@/lib/locale"
 import { error as logError } from "@/lib/logger"
 
 interface ErrorBoundaryState {
@@ -37,6 +38,9 @@ export class ErrorBoundary extends React.Component<
   }
 
   render() {
+    const locale = normalizeLocale(typeof navigator === "undefined" ? "zh-CN" : navigator.language)
+    const t = (zh: string, en: string) => (locale === "zh-CN" ? zh : en)
+
     if (this.state.hasError) {
       return (
         <div
@@ -54,7 +58,7 @@ export class ErrorBoundary extends React.Component<
         >
           <div style={{ fontSize: "40px", marginBottom: "16px", opacity: 0.3 }}>⚠️</div>
           <h2 style={{ fontSize: "16px", fontWeight: 600, marginBottom: "8px" }}>
-            应用发生了意外错误
+            {t("应用发生了意外错误", "The app encountered an unexpected error")}
           </h2>
           <p style={{ fontSize: "13px", color: "#666", marginBottom: "16px", textAlign: "center" }}>
             {this.state.errorMessage}
@@ -70,7 +74,7 @@ export class ErrorBoundary extends React.Component<
               cursor: "pointer",
             }}
           >
-            重新加载
+            {t("重新加载", "Reload")}
           </button>
           {import.meta.env.DEV && this.state.errorStack && (
             <pre

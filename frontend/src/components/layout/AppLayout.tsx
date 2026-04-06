@@ -8,6 +8,7 @@ import { RequestEditorBody, RequestEditorToolbar } from "@/components/business/e
 import { ResponseViewer } from "@/components/business/response/ResponseViewer"
 import { EnvironmentEditorPage } from "@/components/business/environment/EnvironmentEditorPage"
 import { ProjectHome } from "./ProjectHome"
+import { useI18n } from "@/hooks/useI18n"
 import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils"
 import appLogo from "@/assets/images/appicon.png"
 
 export function AppLayout() {
+  const { t } = useI18n()
   const { layoutDirection, editingEnvironmentId, workspaceView } = useUIStore()
   const currentProjectId = useProjectStore((s) => s.currentProjectId)
   const activeTab = useTabStore(getProjectActiveTabFromState)
@@ -175,7 +177,7 @@ export function AppLayout() {
                       <img src={appLogo} alt="MiniPost" className="h-12 w-12 object-contain" />
                       <div className="mt-2 text-[13px] text-[var(--fg-secondary)]">MiniPost</div>
                       <div className="mt-1 text-[11px] leading-5 text-[var(--fg-muted)]">
-                        一个简洁、快速的 API 调试工具
+                        {t("一个简洁、快速的 API 调试工具", "A simple and fast API debugging tool")}
                       </div>
                     </div>
 
@@ -187,7 +189,7 @@ export function AppLayout() {
                         "hover:bg-[var(--surface-secondary)] text-left"
                       )}
                     >
-                      <span className="text-[12px] text-[var(--fg-muted)]">Create new</span>
+                      <span className="text-[12px] text-[var(--fg-muted)]">{t("新建请求", "Create new")}</span>
                       <span className="inline-flex items-center gap-1 text-[10px] text-[var(--fg-muted)] opacity-90">
                         <kbd className="h-5 min-w-5 rounded-[5px] border border-[var(--border-color)] bg-[var(--surface-secondary)] px-1 font-mono text-[var(--fg-muted)]">⌘</kbd>
                         <kbd className="h-5 min-w-5 rounded-[5px] border border-[var(--border-color)] bg-[var(--surface-secondary)] px-1 font-mono text-[var(--fg-muted)]">N</kbd>
@@ -202,7 +204,7 @@ export function AppLayout() {
                         "hover:bg-[var(--surface-secondary)] text-left"
                       )}
                     >
-                      <span className="text-[12px] text-[var(--fg-muted)]">Import</span>
+                      <span className="text-[12px] text-[var(--fg-muted)]">{t("导入", "Import")}</span>
                       <span className="inline-flex items-center gap-1 text-[10px] text-[var(--fg-muted)] opacity-90">
                         <kbd className="h-5 min-w-5 rounded-[5px] border border-[var(--border-color)] bg-[var(--surface-secondary)] px-1 font-mono text-[var(--fg-muted)]">⌘</kbd>
                         <kbd className="h-5 min-w-5 rounded-[5px] border border-[var(--border-color)] bg-[var(--surface-secondary)] px-1 font-mono text-[var(--fg-muted)]">O</kbd>
@@ -214,8 +216,8 @@ export function AppLayout() {
                 <div className="flex flex-1 min-h-0 items-center justify-center bg-[var(--surface)]">
                   <div className="text-center max-w-[320px] px-6">
                     <div className="text-[40px] mb-3 opacity-20">📁</div>
-                    <p className="text-[length:var(--size-font-sm)] text-[var(--fg-secondary)] font-medium">请选择工作区</p>
-                    <p className="text-2xs text-[var(--fg-muted)] mt-1">先在顶部选择一个工作区，然后再打开或创建请求标签</p>
+                    <p className="text-[length:var(--size-font-sm)] text-[var(--fg-secondary)] font-medium">{t("请选择工作区", "Please select a workspace")}</p>
+                    <p className="text-2xs text-[var(--fg-muted)] mt-1">{t("先在顶部选择一个工作区，然后再打开或创建请求标签", "Select a workspace at the top, then open or create request tabs")}</p>
                   </div>
                 </div>
               )}
