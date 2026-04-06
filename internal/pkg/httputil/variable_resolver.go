@@ -40,6 +40,18 @@ func ResolveRequestInput(input model.SendRequestInput, variables []model.Variabl
 	resolved.Body.Raw = ResolveVariables(input.Body.Raw, variables)
 	resolved.Body.JSON = ResolveVariables(input.Body.JSON, variables)
 	resolved.Body.FormUrlEncoded = ResolveKeyValues(input.Body.FormUrlEncoded, variables)
+	if len(input.Body.FormData) > 0 {
+		resolved.Body.FormData = make([]model.FormData, len(input.Body.FormData))
+		for i, item := range input.Body.FormData {
+			resolved.Body.FormData[i] = model.FormData{
+				Key:      ResolveVariables(item.Key, variables),
+				Value:    ResolveVariables(item.Value, variables),
+				Type:     item.Type,
+				FilePath: ResolveVariables(item.FilePath, variables),
+				FileName: ResolveVariables(item.FileName, variables),
+			}
+		}
+	}
 
 	resolved.Auth.Basic.Username = ResolveVariables(input.Auth.Basic.Username, variables)
 	resolved.Auth.Basic.Password = ResolveVariables(input.Auth.Basic.Password, variables)

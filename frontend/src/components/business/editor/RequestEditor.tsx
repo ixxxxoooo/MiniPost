@@ -12,6 +12,10 @@ import { useEnvironmentStore } from "@/stores/environmentStore"
 import { sendHttpRequest } from "@/services/httpService"
 import { useCookieStore } from "@/stores/cookieStore"
 import type { RequestData } from "@/types/request"
+import { createKeyValuePair } from "@/types/request"
+import { getSuppressedAutoHeaders, isAutoHeaderDisabledMarkerKey, normalizeHeaderName } from "@/lib/autoHeaders"
+
+const TOKEN_HEADER_NAME = "MiniPost-Token"
 
 function buildConsoleRequestBody(request: RequestData): string {
   if (request.body.type === "json") return request.body.json ?? ""
@@ -26,33 +30,80 @@ function buildConsoleRequestBody(request: RequestData): string {
   return ""
 }
 
-function buildConsoleRequestHeaders(request: RequestData, disableCookies: boolean): Record<string, string> {
+function buildConsoleRequestHeaders(
+  request: RequestData,
+  options: { disableCookies: boolean; sendNoCacheHeader: boolean; sendPostmanTokenHeader: boolean }
+): Record<string, string> {
   const headers: Record<string, string> = {}
+  const suppressed = getSuppressedAutoHeaders(request.headers)
+  const hasHeader = (name: string) => Object.keys(headers).some((key) => normalizeHeaderName(key) === normalizeHeaderName(name))
+  const isSuppressed = (name: string) => suppressed.has(normalizeHeaderName(name))
+  const isTokenSuppressed = isSuppressed("minipost-token") || isSuppressed("postman-token")
   request.headers
-    .filter((h) => h.enabled && h.key.trim())
+    .filter((h) => h.enabled && h.key.trim() && !isAutoHeaderDisabledMarkerKey(h.key))
     .forEach((h) => {
       headers[h.key] = h.value
     })
 
-  if (!headers["User-Agent"] && !headers["user-agent"]) {
+  if (!isSuppressed("user-agent") && !hasHeader("User-Agent")) {
     headers["User-Agent"] = "MiniPost/1.0"
   }
+  if (!isSuppressed("accept") && !hasHeader("Accept")) {
+    headers["Accept"] = "*/*"
+  }
 
-  if (request.body.type === "json" && !headers["Content-Type"] && !headers["content-type"]) {
+  if (request.body.type === "json" && !isSuppressed("content-type") && !hasHeader("Content-Type")) {
     headers["Content-Type"] = "application/json"
   }
-  if (request.body.type === "form-urlencoded" && !headers["Content-Type"] && !headers["content-type"]) {
+  if (request.body.type === "form-urlencoded" && !isSuppressed("content-type") && !hasHeader("Content-Type")) {
     headers["Content-Type"] = "application/x-www-form-urlencoded"
   }
 
-  if (!disableCookies) {
+  if (!options.disableCookies) {
     const cookieHeader = useCookieStore.getState().getCookieHeader(request.url)
-    if (cookieHeader && !headers["Cookie"] && !headers["cookie"]) {
+    if (cookieHeader && !isSuppressed("cookie") && !hasHeader("Cookie")) {
       headers["Cookie"] = cookieHeader
     }
   }
+  if (options.sendNoCacheHeader && !isSuppressed("cache-control") && !hasHeader("Cache-Control")) {
+    headers["Cache-Control"] = "no-cache"
+  }
+  if (options.sendPostmanTokenHeader && !isTokenSuppressed && !hasHeader("minipost-token") && !hasHeader("postman-token")) {
+    headers[TOKEN_HEADER_NAME] = "<calculated when request is sent>"
+  }
 
   return headers
+}
+
+function buildRequestWithRuntimeHeaders(
+  request: RequestData,
+  options: { sendPostmanTokenHeader: boolean }
+): RequestData {
+  const suppressed = getSuppressedAutoHeaders(request.headers)
+  const hasTokenHeader = request.headers.some(
+    (header) =>
+      header.enabled
+      && !isAutoHeaderDisabledMarkerKey(header.key)
+      && (normalizeHeaderName(header.key) === "postman-token" || normalizeHeaderName(header.key) === "minipost-token")
+  )
+  const shouldInjectPostmanToken = options.sendPostmanTokenHeader
+    && !suppressed.has("postman-token")
+    && !suppressed.has("minipost-token")
+    && !hasTokenHeader
+
+  if (!shouldInjectPostmanToken) return request
+
+  return {
+    ...request,
+    headers: [
+      ...request.headers,
+      createKeyValuePair({
+        key: TOKEN_HEADER_NAME,
+        value: crypto.randomUUID(),
+        enabled: true,
+      }),
+    ],
+  }
 }
  
 function useRequestEditorActions() {
@@ -85,7 +136,14 @@ function useRequestEditorActions() {
     setTabResponseError(activeTab.id, null)
 
     const uiState = useUIStore.getState()
-    const reqHeaders = buildConsoleRequestHeaders(activeTab.request, uiState.disableCookies)
+    const requestForSend = buildRequestWithRuntimeHeaders(activeTab.request, {
+      sendPostmanTokenHeader: uiState.sendPostmanTokenHeader,
+    })
+    const reqHeaders = buildConsoleRequestHeaders(requestForSend, {
+      disableCookies: uiState.disableCookies,
+      sendNoCacheHeader: uiState.sendNoCacheHeader,
+      sendPostmanTokenHeader: uiState.sendPostmanTokenHeader,
+    })
     const reqBody = buildConsoleRequestBody(activeTab.request)
     const requestProtocol = uiState.httpVersion === "http2" ? "HTTP/2.0" : "HTTP/1.1"
 
@@ -99,7 +157,7 @@ function useRequestEditorActions() {
 
     try {
       const result = await sendHttpRequest(
-        activeTab.request,
+        requestForSend,
         currentProjectId ?? undefined,
         activeEnvironmentId ?? undefined,
       )
@@ -141,12 +199,23 @@ function useRequestEditorActions() {
       method: req.method,
       url: req.url,
       params: req.params.filter((p: { key: string }) => p.key).map((p: { key: string; value: string }) => ({ key: p.key, value: p.value })),
-      headers: req.headers.filter((h: { key: string }) => h.key).map((h: { key: string; value: string }) => ({ key: h.key, value: h.value })),
+      headers: req.headers
+        .filter((h: { key: string }) => h.key && !isAutoHeaderDisabledMarkerKey(h.key))
+        .map((h: { key: string; value: string }) => ({ key: h.key, value: h.value })),
       body: {
         type: req.body.type,
         raw: req.body.raw ?? "",
         json: req.body.json ?? "",
         formUrlEncoded: (req.body.formUrlEncoded ?? []).filter((f: { key: string }) => f.key).map((f: { key: string; value: string }) => ({ key: f.key, value: f.value })),
+        formData: (req.body.formData ?? [])
+          .filter((f: { key: string }) => f.key)
+          .map((f: { key: string; value: string; type: string; filePath?: string; fileName?: string }) => ({
+            key: f.key,
+            value: f.value,
+            type: f.type,
+            filePath: f.filePath ?? "",
+            fileName: f.fileName ?? "",
+          })),
       },
       auth: {
         type: req.auth.type,

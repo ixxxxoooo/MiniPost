@@ -100,11 +100,32 @@ export namespace model {
 	        this.sortOrder = source["sortOrder"];
 	    }
 	}
+	export class FormData {
+	    key: string;
+	    value: string;
+	    type: string;
+	    filePath?: string;
+	    fileName?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FormData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.value = source["value"];
+	        this.type = source["type"];
+	        this.filePath = source["filePath"];
+	        this.fileName = source["fileName"];
+	    }
+	}
 	export class RequestBody {
 	    type: string;
 	    raw: string;
 	    json: string;
 	    formUrlEncoded: KeyValue[];
+	    formData: FormData[];
 	
 	    static createFrom(source: any = {}) {
 	        return new RequestBody(source);
@@ -116,6 +137,7 @@ export namespace model {
 	        this.raw = source["raw"];
 	        this.json = source["json"];
 	        this.formUrlEncoded = this.convertValues(source["formUrlEncoded"], KeyValue);
+	        this.formData = this.convertValues(source["formData"], FormData);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -315,6 +337,7 @@ export namespace model {
 		    return a;
 		}
 	}
+	
 	
 	export class HistoryEntry {
 	    id: string;

@@ -4,10 +4,11 @@ import { AppIcon } from "@/components/ui/icon"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
-import { useTabStore, getProjectActiveTabIdFromState, getProjectTabsFromState } from "@/stores/tabStore"
+import { useTabStore, getProjectActiveTabIdFromState, getProjectTabsFromState, type RequestTab } from "@/stores/tabStore"
 import { useProjectStore } from "@/stores/projectStore"
 import { useEnvironmentStore } from "@/stores/environmentStore"
 import { useUIStore } from "@/stores/uiStore"
+import { isAutoHeaderDisabledMarkerKey } from "@/lib/autoHeaders"
 
 interface TabContextMenuState {
   x: number
@@ -28,10 +29,13 @@ export function TabBar() {
   const closeAllTabs = useTabStore((s) => s.closeAllTabs)
   const addNewUnsavedTab = useTabStore((s) => s.addNewUnsavedTab)
   const currentProjectId = useProjectStore((s) => s.currentProjectId)
+  const saveRequestToBackend = useProjectStore((s) => s.saveRequestToBackend)
   const editingEnvironmentId = useUIStore((s) => s.editingEnvironmentId)
   const openEnvironmentTabIds = useUIStore((s) => s.openEnvironmentTabIds)
   const setEditingEnvironmentId = useUIStore((s) => s.setEditingEnvironmentId)
   const closeEnvironmentTab = useUIStore((s) => s.closeEnvironmentTab)
+  const alwaysDiscardUnsavedOnClose = useUIStore((s) => s.alwaysDiscardUnsavedOnClose)
+  const setAlwaysDiscardUnsavedOnClose = useUIStore((s) => s.setAlwaysDiscardUnsavedOnClose)
 
   const { environments, activeEnvironmentId, setActiveEnvironment, loadEnvironments, createEnvironment } = useEnvironmentStore()
 
@@ -41,10 +45,17 @@ export function TabBar() {
   const [showEnvDropdown, setShowEnvDropdown] = useState(false)
   const [envSearchQuery, setEnvSearchQuery] = useState("")
   const [creatingEnvironment, setCreatingEnvironment] = useState(false)
+  const [closeConfirmTabId, setCloseConfirmTabId] = useState<string | null>(null)
+  const [closeConfirmSaving, setCloseConfirmSaving] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const tabListRef = useRef<HTMLDivElement>(null)
   const envDropdownRef = useRef<HTMLDivElement>(null)
+
+  const closeConfirmTab = useMemo(
+    () => (closeConfirmTabId ? tabs.find((tab) => tab.id === closeConfirmTabId) ?? null : null),
+    [closeConfirmTabId, tabs]
+  )
 
   useEffect(() => {
     if (currentProjectId) loadEnvironments(currentProjectId)
@@ -115,6 +126,106 @@ export function TabBar() {
     document.addEventListener("mousedown", handler)
     return () => document.removeEventListener("mousedown", handler)
   }, [showEnvDropdown])
+
+  const saveTabToBackend = useCallback(async (tab: RequestTab) => {
+    if (!currentProjectId) return
+    const req = tab.request
+    const requestItem = {
+      id: req.id,
+      name: req.name,
+      method: req.method,
+      url: req.url,
+      params: req.params.filter((p) => p.key).map((p) => ({ key: p.key, value: p.value })),
+      headers: req.headers
+        .filter((h) => h.key && !isAutoHeaderDisabledMarkerKey(h.key))
+        .map((h) => ({ key: h.key, value: h.value })),
+      body: {
+        type: req.body.type,
+        raw: req.body.raw ?? "",
+        json: req.body.json ?? "",
+        formUrlEncoded: (req.body.formUrlEncoded ?? [])
+          .filter((f) => f.key)
+          .map((f) => ({ key: f.key, value: f.value })),
+        formData: (req.body.formData ?? [])
+          .filter((f) => f.key)
+          .map((f) => ({
+            key: f.key,
+            value: f.value,
+            type: f.type,
+            filePath: f.filePath ?? "",
+            fileName: f.fileName ?? "",
+          })),
+      },
+      auth: {
+        type: req.auth.type,
+        basic: req.auth.basic ?? { username: "", password: "" },
+        bearer: req.auth.bearer ?? { token: "" },
+        apiKey: req.auth.apiKey ?? { key: "", value: "", addTo: "header" },
+      },
+      folderId: req.folderId ?? "",
+      projectId: currentProjectId,
+      createdAt: req.createdAt,
+      updatedAt: new Date().toISOString(),
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await saveRequestToBackend(requestItem as any)
+  }, [currentProjectId, saveRequestToBackend])
+
+  const requestTabClose = useCallback((tabId: string) => {
+    const tab = tabs.find((candidate) => candidate.id === tabId)
+    if (!tab || !tab.closable) return
+    if (!tab.dirty || alwaysDiscardUnsavedOnClose) {
+      removeTab(tabId)
+      return
+    }
+    setCloseConfirmTabId(tabId)
+  }, [alwaysDiscardUnsavedOnClose, removeTab, tabs])
+
+  const handleCloseOtherTabs = useCallback((tabId: string) => {
+    const targetToClose = tabs.filter((tab) => tab.id !== tabId && tab.closable)
+    if (!alwaysDiscardUnsavedOnClose && targetToClose.some((tab) => tab.dirty)) {
+      const confirmed = window.confirm("即将关闭其他标签页，其中包含未保存修改。确定继续并丢弃这些修改吗？")
+      if (!confirmed) return
+    }
+    closeOtherTabs(tabId)
+  }, [alwaysDiscardUnsavedOnClose, closeOtherTabs, tabs])
+
+  const handleCloseAllTabs = useCallback(() => {
+    const targetToClose = tabs.filter((tab) => tab.closable)
+    if (!alwaysDiscardUnsavedOnClose && targetToClose.some((tab) => tab.dirty)) {
+      const confirmed = window.confirm("即将关闭全部标签页，其中包含未保存修改。确定继续并丢弃这些修改吗？")
+      if (!confirmed) return
+    }
+    closeAllTabs(currentProjectId || undefined)
+  }, [alwaysDiscardUnsavedOnClose, closeAllTabs, currentProjectId, tabs])
+
+  const handleConfirmCloseWithoutSave = useCallback(() => {
+    if (!closeConfirmTabId) return
+    removeTab(closeConfirmTabId)
+    setCloseConfirmTabId(null)
+  }, [closeConfirmTabId, removeTab])
+
+  const handleConfirmCloseWithSave = useCallback(async () => {
+    if (!closeConfirmTab || closeConfirmSaving) return
+    setCloseConfirmSaving(true)
+    try {
+      await saveTabToBackend(closeConfirmTab)
+      useTabStore.getState().markTabDirty(closeConfirmTab.id, false)
+      removeTab(closeConfirmTab.id)
+      setCloseConfirmTabId(null)
+    } finally {
+      setCloseConfirmSaving(false)
+    }
+  }, [closeConfirmSaving, closeConfirmTab, removeTab, saveTabToBackend])
+
+  useEffect(() => {
+    const handler = () => {
+      if (editingEnvironmentId || !activeTabId) return
+      requestTabClose(activeTabId)
+    }
+    window.addEventListener("minipost:close-active-request-tab", handler as EventListener)
+    return () => window.removeEventListener("minipost:close-active-request-tab", handler as EventListener)
+  }, [activeTabId, editingEnvironmentId, requestTabClose])
 
   const handleAddTab = () => {
     if (!currentProjectId) return
@@ -193,7 +304,7 @@ export function TabBar() {
       <div
         className={cn(
           "flex items-center h-[var(--size-tab)] border-b flex-shrink-0",
-          "bg-[var(--surface-secondary)] border-[var(--border-color)]"
+          "bg-[var(--surface-secondary)] border-[var(--tab-divider)]"
         )}
       >
         <div className="flex items-center gap-1 px-2 flex-shrink-0">
@@ -312,7 +423,7 @@ export function TabBar() {
     <div
       className={cn(
         "flex items-end h-[var(--size-tab)] border-b flex-shrink-0",
-        "bg-[var(--surface-secondary)] border-[var(--border-color)]"
+        "bg-[var(--surface-secondary)] border-[var(--tab-divider)]"
       )}
     >
       {hasOverflow && (
@@ -347,10 +458,10 @@ export function TabBar() {
                   className={cn(
                     "flex items-center gap-[var(--size-gap-sm)] px-2.5 h-[calc(var(--size-tab)-2px)]",
                     "text-[length:var(--size-font-2xs)] cursor-pointer select-none",
-                "border-r border-[var(--border-color)] transition-colors group min-w-0 flex-shrink-0",
+                "border-r border-[var(--tab-divider)] transition-colors group min-w-0 flex-shrink-0",
                 isActive
                   ? "bg-[var(--surface)] text-[var(--fg)] border-r-transparent border-b-2 border-b-[var(--accent)]"
-                  : "text-[var(--fg)] opacity-80 hover:opacity-100 hover:bg-[var(--tab-hover-bg)]"
+                  : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]"
               )}
                   onPointerDown={(e) => {
                     if (e.button === 0) {
@@ -358,7 +469,7 @@ export function TabBar() {
                       setEditingEnvironmentId(null)
                       setActiveTab(tab.id)
                     }
-                    if (e.button === 1 && tab.closable) { e.preventDefault(); removeTab(tab.id) }
+                    if (e.button === 1 && tab.closable) { e.preventDefault(); requestTabClose(tab.id) }
                   }}
                   onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id }) }}
                 >
@@ -368,7 +479,9 @@ export function TabBar() {
                   )}>
                     {tab.request.method || "GET"}
                   </span>
-                  <span className="truncate max-w-[100px]">{tab.title}</span>
+                  <span className={cn("truncate max-w-[100px]", isActive ? "text-[var(--fg)]" : "text-[var(--fg-muted)]")}>
+                    {tab.title}
+                  </span>
                   {tab.dirty && (
                     <span className="w-1 h-1 rounded-full bg-[var(--accent)] flex-shrink-0" />
                   )}
@@ -379,7 +492,7 @@ export function TabBar() {
                         "opacity-0 group-hover:opacity-100",
                         "text-[var(--fg-muted)] hover:text-[var(--fg)]"
                       )}
-                      onClick={(e) => { e.stopPropagation(); removeTab(tab.id) }}
+                      onClick={(e) => { e.stopPropagation(); requestTabClose(tab.id) }}
                     >
                       <AppIcon name="clear" size={10} />
                     </button>
@@ -406,10 +519,10 @@ export function TabBar() {
               className={cn(
                 "flex items-center gap-[var(--size-gap-sm)] px-2.5 h-[calc(var(--size-tab)-2px)]",
                 "text-[length:var(--size-font-2xs)] cursor-pointer select-none",
-                "border-r border-[var(--border-color)] transition-colors group min-w-0 flex-shrink-0",
+                "border-r border-[var(--tab-divider)] transition-colors group min-w-0 flex-shrink-0",
                 isEnvironmentTabActive
                   ? "bg-[var(--surface)] text-[var(--fg)] border-r-transparent border-b-2 border-b-[var(--accent)]"
-                  : "text-[var(--fg)] opacity-80 hover:opacity-100 hover:bg-[var(--tab-hover-bg)]"
+                  : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]"
               )}
               title={`Environment ${environmentTab.name}`}
               onPointerDown={(e) => {
@@ -431,7 +544,9 @@ export function TabBar() {
                   isEnvironmentTabActive ? "text-[var(--accent)]" : "text-[var(--fg-muted)]"
                 )}
               />
-              <span className="truncate max-w-[120px]">{environmentTab.name}</span>
+              <span className={cn("truncate max-w-[120px]", isEnvironmentTabActive ? "text-[var(--fg)]" : "text-[var(--fg-muted)]")}>
+                {environmentTab.name}
+              </span>
               <button
                 className={cn(
                   "flex items-center justify-center flex-shrink-0 transition-opacity",
@@ -538,7 +653,7 @@ export function TabBar() {
         </div>
 
         {/* 分隔线 */}
-        <div className="w-px h-3 bg-[var(--border-color)] mx-0.5" />
+        <div className="w-px h-3 bg-[var(--tab-divider)] mx-0.5" />
 
         {/* 环境选择 */}
         <div className="relative" ref={envDropdownRef}>
@@ -647,7 +762,7 @@ export function TabBar() {
           {contextTab?.closable && (
             <button
               className="w-full whitespace-nowrap px-2.5 py-1.5 rounded-[7px] text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] flex items-center gap-2"
-              onClick={() => { removeTab(contextMenu.tabId); setContextMenu(null) }}
+              onClick={() => { requestTabClose(contextMenu.tabId); setContextMenu(null) }}
             >
               <AppIcon name="clear" size={12} /> 关闭
             </button>
@@ -655,17 +770,90 @@ export function TabBar() {
           <button
             className="w-full whitespace-nowrap px-2.5 py-1.5 rounded-[7px] text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] disabled:opacity-40 flex items-center gap-2"
             disabled={closableTabs.length <= 1}
-            onClick={() => { closeOtherTabs(contextMenu.tabId); setContextMenu(null) }}
+            onClick={() => { handleCloseOtherTabs(contextMenu.tabId); setContextMenu(null) }}
           >
             <AppIcon name="clear" size={12} /> 关闭其他
           </button>
           <button
             className="w-full whitespace-nowrap px-2.5 py-1.5 rounded-[7px] text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] disabled:opacity-40 flex items-center gap-2"
             disabled={closableTabs.length === 0}
-            onClick={() => { closeAllTabs(currentProjectId || undefined); setContextMenu(null) }}
+            onClick={() => { handleCloseAllTabs(); setContextMenu(null) }}
           >
             <AppIcon name="clear" size={12} /> 关闭全部
           </button>
+        </div>,
+        document.body
+      )}
+      {closeConfirmTab && createPortal(
+        <div className="fixed inset-0 z-[320] flex items-center justify-center" onClick={() => { if (!closeConfirmSaving) setCloseConfirmTabId(null) }}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1.5px]" />
+          <div
+            className="relative z-[321] w-[460px] rounded-[12px] border border-[var(--border-color)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)]">
+              <div className="text-[16px] font-semibold text-[var(--fg)]">保存更改</div>
+              <button
+                type="button"
+                className="h-6 w-6 inline-flex items-center justify-center rounded-[6px] text-[var(--fg-muted)] hover:bg-[var(--button-bg)] hover:text-[var(--fg)]"
+                onClick={() => setCloseConfirmTabId(null)}
+                disabled={closeConfirmSaving}
+              >
+                <AppIcon name="clear" size={12} />
+              </button>
+            </div>
+            <div className="px-4 py-3.5">
+              <p className="text-[13px] text-[var(--fg)] leading-[1.6]">
+                请求 <span className="font-medium">“{closeConfirmTab.title}”</span> 有未保存的修改。
+              </p>
+              <p className="mt-1 text-[12px] text-[var(--fg-secondary)]">关闭后这些修改将会丢失，是否先保存？</p>
+              <label className="mt-3 inline-flex items-center gap-2 text-[12px] text-[var(--fg)] cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={alwaysDiscardUnsavedOnClose}
+                  onChange={(event) => setAlwaysDiscardUnsavedOnClose(event.target.checked)}
+                  className="h-4 w-4 rounded-[4px] border border-[var(--border-color)] accent-[var(--accent)]"
+                />
+                <span>关闭 Tab 时默认丢弃未保存修改</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-[4px] text-[var(--fg-muted)] hover:bg-[var(--button-bg)]">
+                      <AppIcon name="info" size={12} className="text-[var(--fg-muted)]" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="start" className="max-w-[320px] text-[12px] leading-5">
+                    勾选后，关闭标签页将不再提示是否保存。你可以随时在设置中修改此行为。
+                  </TooltipContent>
+                </Tooltip>
+              </label>
+            </div>
+            <div className="px-4 py-3 border-t border-[var(--border-subtle)] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="h-[32px] px-3 rounded-[8px] border border-[var(--button-border)] text-[12px] text-[var(--fg)] hover:bg-[var(--button-bg)]"
+                onClick={handleConfirmCloseWithoutSave}
+                disabled={closeConfirmSaving}
+              >
+                不保存
+              </button>
+              <button
+                type="button"
+                className="h-[32px] px-3 rounded-[8px] border border-[var(--button-border)] text-[12px] text-[var(--fg)] hover:bg-[var(--button-bg)]"
+                onClick={() => setCloseConfirmTabId(null)}
+                disabled={closeConfirmSaving}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="h-[32px] px-3 rounded-[8px] bg-[var(--accent)] text-white text-[12px] font-medium hover:opacity-95 disabled:opacity-60"
+                onClick={() => void handleConfirmCloseWithSave()}
+                disabled={closeConfirmSaving}
+              >
+                {closeConfirmSaving ? "保存中..." : "保存并关闭"}
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}

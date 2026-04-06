@@ -325,12 +325,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   importFromFile: async (format, content) => {
     const { currentProjectId } = get()
-    if (!currentProjectId) return
+    if (!currentProjectId) {
+      throw new Error("请先选择项目后再导入")
+    }
     try {
       await collectionService.importFromFile(currentProjectId, format, content)
       await get().loadCollections(currentProjectId)
     } catch (err) {
       set({ error: String(err) })
+      throw err
     }
   },
 }))

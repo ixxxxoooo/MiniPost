@@ -65,6 +65,7 @@
   --sidebar-accent-fg: #ffffff;
   --sidebar-hover: rgba(0, 0, 0, 0.04);
   --sidebar-active: rgba(0, 122, 255, 0.12);
+  --sidebar-tab-inactive: #b4b4ba;
 
   /* 工具栏 */
   --toolbar-bg: rgba(249, 249, 249, 0.85);
@@ -75,6 +76,7 @@
   --tab-active-bg: #ffffff;
   --tab-active-border: #007aff;
   --tab-hover-bg: rgba(0, 0, 0, 0.04);
+  --tab-divider: #d9d9dd;
 
   /* 状态色 */
   --success: #34c759;
@@ -132,6 +134,7 @@
   --sidebar-accent-fg: #ffffff;
   --sidebar-hover: rgb(48, 48, 48);
   --sidebar-active: rgba(10, 132, 255, 0.18);
+  --sidebar-tab-inactive: #77777e;
 
   --toolbar-bg: rgba(33, 33, 33, 0.85);
   --toolbar-border: rgb(48, 48, 48);
@@ -140,6 +143,7 @@
   --tab-active-bg: rgb(48, 48, 48);
   --tab-active-border: #0a84ff;
   --tab-hover-bg: rgb(48, 48, 48);
+  --tab-divider: rgba(255, 255, 255, 0.16);
 
   --success: #30d158;
   --warning: #ff9f0a;

@@ -4,6 +4,9 @@ import type { RequestData } from "@/types/request"
 import { stripJsonComments } from "@/components/ui/CodeEditor"
 import { useCookieStore } from "@/stores/cookieStore"
 import { useUIStore } from "@/stores/uiStore"
+import { getSuppressedAutoHeaders, normalizeHeaderName } from "@/lib/autoHeaders"
+
+const TOKEN_HEADER_NAME = "MiniPost-Token"
 
 export interface SendRequestPayload {
   method: string
@@ -15,6 +18,7 @@ export interface SendRequestPayload {
     raw: string
     json: string
     formUrlEncoded: { key: string; value: string }[]
+    formData: { key: string; value: string; type: string; filePath?: string; fileName?: string }[]
   }
   auth: {
     type: string
@@ -35,12 +39,21 @@ function buildPayload(request: RequestData): SendRequestPayload {
       .filter((h) => h.enabled && h.key)
       .map((h) => ({ key: h.key, value: h.value })),
     body: {
-      type: request.body.type === "form-data" ? "form-urlencoded" : request.body.type,
+      type: request.body.type,
       raw: stripJsonComments(request.body.raw ?? ""),
       json: stripJsonComments(request.body.json ?? ""),
       formUrlEncoded: (request.body.formUrlEncoded ?? [])
         .filter((f) => f.enabled && f.key)
         .map((f) => ({ key: f.key, value: f.value })),
+      formData: (request.body.formData ?? [])
+        .filter((f) => f.enabled && f.key)
+        .map((f) => ({
+          key: f.key,
+          value: f.value ?? "",
+          type: f.type,
+          filePath: f.filePath,
+          fileName: f.fileName,
+        })),
     },
     auth: {
       type: request.auth.type,
@@ -72,6 +85,11 @@ function mergeCookieHeader(manual: string, fromJar: string): string {
   return Array.from(map.entries()).map(([k, v]) => `${k}=${v}`).join("; ")
 }
 
+function hasHeader(headers: Array<{ key: string; value: string }>, name: string): boolean {
+  const target = normalizeHeaderName(name)
+  return headers.some((header) => normalizeHeaderName(header.key) === target)
+}
+
 export async function sendHttpRequest(
   request: RequestData,
   projectId?: string,
@@ -80,9 +98,12 @@ export async function sendHttpRequest(
   const payload = buildPayload(request)
   const uiSettings = useUIStore.getState()
   const cookieStore = useCookieStore.getState()
+  const suppressedAutoHeaders = getSuppressedAutoHeaders(request.headers)
+  const isSuppressed = (name: string) => suppressedAutoHeaders.has(normalizeHeaderName(name))
+  const isTokenSuppressed = isSuppressed("minipost-token") || isSuppressed("postman-token")
   if (!uiSettings.disableCookies) {
     const cookieHeader = cookieStore.getCookieHeader(request.url)
-    if (cookieHeader) {
+    if (cookieHeader && !isSuppressed("cookie")) {
       const existing = payload.headers.find((h) => h.key.toLowerCase() === "cookie")
       if (!existing) {
         payload.headers.push({ key: "Cookie", value: cookieHeader })
@@ -91,12 +112,23 @@ export async function sendHttpRequest(
       }
     }
   }
+
+  if (uiSettings.sendNoCacheHeader && !isSuppressed("cache-control") && !hasHeader(payload.headers, "Cache-Control")) {
+    payload.headers.push({ key: "Cache-Control", value: "no-cache" })
+  }
+  if (uiSettings.sendPostmanTokenHeader && !isTokenSuppressed && !hasHeader(payload.headers, "MiniPost-Token") && !hasHeader(payload.headers, "Postman-Token")) {
+    payload.headers.push({ key: TOKEN_HEADER_NAME, value: crypto.randomUUID() })
+  }
+
   payload.headers.push(
     { key: "X-MiniPost-Option-Follow-Redirects", value: uiSettings.followRedirects ? "1" : "0" },
     { key: "X-MiniPost-Option-Timeout-Ms", value: String(Math.max(0, Math.round(uiSettings.requestTimeoutMs))) },
     { key: "X-MiniPost-Option-Max-Response-Size-MB", value: String(Math.max(0, Math.round(uiSettings.maxResponseSizeMB))) },
     { key: "X-MiniPost-Option-SSL-Verify", value: uiSettings.sslCertificateVerification ? "1" : "0" },
     { key: "X-MiniPost-Option-HTTP-Version", value: uiSettings.httpVersion },
+    { key: "X-MiniPost-Option-Disable-Default-User-Agent", value: isSuppressed("user-agent") ? "1" : "0" },
+    { key: "X-MiniPost-Option-Disable-Default-Accept", value: isSuppressed("accept") ? "1" : "0" },
+    { key: "X-MiniPost-Option-Disable-Auto-Content-Type", value: isSuppressed("content-type") ? "1" : "0" },
   )
 
   // 始终使用 SendRequestWithEnv 以确保历史记录被保存

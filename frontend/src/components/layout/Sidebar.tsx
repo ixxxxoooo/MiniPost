@@ -47,6 +47,13 @@ interface DropIndicator {
   position: DropPosition
 }
 
+interface DeleteConfirmState {
+  id: string
+  type: "folder" | "request"
+  name: string
+  nextRequestId?: string
+}
+
 const AUTO_EXPAND_DELAY = 600
 
 function detectImportType(content: string): {
@@ -173,11 +180,20 @@ function convertRequestToData(request: model.RequestItem) {
     })),
     body: request.body
       ? {
-          type: request.body.type as "none" | "raw" | "json" | "form-urlencoded",
+          type: request.body.type as "none" | "raw" | "json" | "form-urlencoded" | "form-data",
           raw: request.body.raw,
           json: request.body.json,
           formUrlEncoded: (request.body.formUrlEncoded ?? []).map((f: { key: string; value: string }) => ({
             id: crypto.randomUUID(), key: f.key, value: f.value, enabled: true,
+          })),
+          formData: (request.body.formData ?? []).map((f: { key: string; value: string; type?: string; filePath?: string; fileName?: string }) => ({
+            id: crypto.randomUUID(),
+            key: f.key,
+            value: f.value ?? "",
+            enabled: true,
+            type: (f.type as "text" | "file") || "text",
+            filePath: f.filePath,
+            fileName: f.fileName,
           })),
         }
       : { type: "none" as const },
@@ -245,6 +261,8 @@ export function Sidebar() {
   const [importError, setImportError] = useState("")
   const [importSuccess, setImportSuccess] = useState("")
   const [curlImportInput, setCurlImportInput] = useState("")
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null)
+  const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const resizingRef = useRef(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -408,6 +426,45 @@ export function Sidebar() {
     setEditingEnvironmentId(null)
     openRequestTab(currentProjectId, convertRequestToData(request))
   }
+
+  const requestDeleteConfirm = useCallback((target: { id: string; type: "folder" | "request"; name: string }, fromShortcut = false) => {
+    let nextRequestId = ""
+    if (fromShortcut && target.type === "request") {
+      const requestIds = sortedTreeNodes
+        .filter((node) => node.nodeType === "request" && (!filteredNodeIds || filteredNodeIds.has(node.nodeId)))
+        .map((node) => node.nodeId)
+      const currentIndex = requestIds.indexOf(target.id)
+      nextRequestId = currentIndex >= 0 ? (requestIds[currentIndex + 1] ?? requestIds[currentIndex - 1] ?? "") : ""
+    }
+    setDeleteConfirm({ ...target, nextRequestId: nextRequestId || undefined })
+    setDropdownMenu(null)
+  }, [filteredNodeIds, sortedTreeNodes])
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteConfirm || deleteConfirmLoading) return
+    setDeleteConfirmLoading(true)
+    try {
+      if (deleteConfirm.type === "folder") {
+        await deleteFolder(deleteConfirm.id)
+      } else {
+        await deleteRequest(deleteConfirm.id)
+        if (deleteConfirm.nextRequestId) {
+          const nextRequest = requestMap.get(deleteConfirm.nextRequestId)
+          if (nextRequest) {
+            setSelectedNode({ type: "request", id: nextRequest.id, name: nextRequest.name })
+            handleOpenRequest(nextRequest)
+          } else {
+            setSelectedNode(null)
+          }
+        } else if (selectedNode?.id === deleteConfirm.id) {
+          setSelectedNode(null)
+        }
+      }
+      setDeleteConfirm(null)
+    } finally {
+      setDeleteConfirmLoading(false)
+    }
+  }, [deleteConfirm, deleteConfirmLoading, deleteFolder, deleteRequest, handleOpenRequest, requestMap, selectedNode?.id])
 
   const handleNewRequest = async (folderId: string = "") => {
     if (!currentProjectId) return
@@ -588,6 +645,13 @@ export function Sidebar() {
                 key: f.key ?? "",
                 value: f.value ?? "",
               })),
+              formData: (parsed.body.formData ?? []).map((f) => ({
+                key: f.key ?? "",
+                value: f.value ?? "",
+                type: f.type ?? "text",
+                filePath: f.filePath ?? "",
+                fileName: f.fileName ?? "",
+              })),
             }
           : createdRequest.body,
         auth: parsed.auth ?? createdRequest.auth,
@@ -639,14 +703,8 @@ export function Sidebar() {
         return
       }
 
-      let node = selectedNode
-      if (!node && activeTabRequestId) {
-        const activeReq = requestMap.get(activeTabRequestId)
-        if (activeReq) {
-          node = { type: "request", id: activeReq.id, name: activeReq.name }
-        }
-      }
-      if (!node) return
+      const node = selectedNode
+      if (!node || node.type !== "request") return
 
       const withMeta = event.metaKey || event.ctrlKey
       const key = event.key.toLowerCase()
@@ -671,17 +729,13 @@ export function Sidebar() {
 
       if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault()
-        if (node.type === "folder") {
-          void deleteFolder(node.id)
-        } else {
-          void deleteRequest(node.id)
-        }
+        requestDeleteConfirm(node, true)
       }
     }
 
     window.addEventListener("keydown", handleKeydown)
     return () => window.removeEventListener("keydown", handleKeydown)
-  }, [activeTab, activeTabRequestId, deleteFolder, deleteRequest, renamingId, requestMap, selectedNode])
+  }, [activeTab, renamingId, requestDeleteConfirm, selectedNode])
 
   const sidebarTabs: { key: SidebarTab; label: string; icon: "commandLine" | "clock" | "globe" }[] = [
     { key: "requests", label: "请求", icon: "commandLine" },
@@ -1020,11 +1074,11 @@ export function Sidebar() {
             <button
               key={tab.key}
               className={cn(
-                "flex-1 h-[calc(var(--size-tab)-2px)] font-medium transition-colors",
+                "flex-1 h-[calc(var(--size-tab)-2px)] transition-colors",
                 "text-[length:var(--size-font-2xs)]",
                 activeTab === tab.key
-                  ? "text-[var(--fg)] border-b-2 border-[var(--accent)]"
-                  : "text-[var(--fg-muted)] hover:text-[var(--fg-secondary)] border-b-2 border-transparent"
+                  ? "font-medium text-[var(--fg)] border-b-2 border-[var(--accent)]"
+                  : "font-normal text-[var(--fg-muted)] hover:text-[var(--fg-secondary)] border-b-2 border-transparent"
               )}
               onClick={() => setActiveTab(tab.key)}
             >
@@ -1195,16 +1249,50 @@ export function Sidebar() {
           <div className="h-px bg-[var(--border-subtle)] my-0.5" />
           <button
             className={cn(MENU_ITEM, "!text-[var(--danger)]")}
-            onClick={async () => {
-              if (dropdownMenu.type === "folder") await deleteFolder(dropdownMenu.id)
-              else await deleteRequest(dropdownMenu.id)
-              setDropdownMenu(null)
+            onClick={() => {
+              requestDeleteConfirm({ id: dropdownMenu.id, type: dropdownMenu.type, name: dropdownMenu.name })
             }}
           >
             <AppIcon name="delete" size={12} />
             <span className="flex-1">删除</span>
             <span className={cn(MENU_ITEM_HOTKEY, "!text-[var(--danger)]/80")}>⌫</span>
           </button>
+        </div>,
+        document.body
+      )}
+      {deleteConfirm && createPortal(
+        <div className="fixed inset-0 z-[330] flex items-center justify-center" onClick={() => { if (!deleteConfirmLoading) setDeleteConfirm(null) }}>
+          <div className="absolute inset-0 bg-black/45 backdrop-blur-[1.5px]" />
+          <div
+            className="relative z-[331] w-[440px] rounded-[12px] border border-[var(--border-color)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b border-[var(--border-subtle)]">
+              <div className="text-[16px] font-semibold text-[var(--fg)]">确认删除</div>
+            </div>
+            <div className="px-4 py-4 text-[13px] text-[var(--fg-secondary)] leading-[1.6]">
+              确定删除{deleteConfirm.type === "folder" ? "文件夹" : "请求"}
+              <span className="mx-1 text-[var(--fg)] font-medium">“{deleteConfirm.name}”</span>吗？
+            </div>
+            <div className="px-4 py-3 border-t border-[var(--border-subtle)] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="h-[32px] px-3 rounded-[8px] border border-[var(--button-border)] text-[12px] text-[var(--fg)] hover:bg-[var(--button-bg)]"
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleteConfirmLoading}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="h-[32px] px-3 rounded-[8px] bg-[var(--danger)] text-white text-[12px] font-medium hover:opacity-95 disabled:opacity-60"
+                onClick={() => void handleConfirmDelete()}
+                disabled={deleteConfirmLoading}
+              >
+                {deleteConfirmLoading ? "删除中..." : "删除"}
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}

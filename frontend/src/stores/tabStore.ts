@@ -215,6 +215,104 @@ function updateProjectState(
   return { projectTabs }
 }
 
+type ComparableKeyValue = {
+  id: string
+  key: string
+  value: string
+  enabled: boolean
+  description: string
+}
+
+type ComparableFormData = ComparableKeyValue & {
+  type: "text" | "file"
+  filePath: string
+  fileName: string
+}
+
+function isEmptyKeyValueRow(item: { key?: string; value?: string; description?: string }): boolean {
+  return (item.key ?? "") === ""
+    && (item.value ?? "") === ""
+    && (item.description ?? "") === ""
+}
+
+function toComparableKeyValues(items: RequestData["params"] | RequestData["headers"] | NonNullable<RequestData["body"]["formUrlEncoded"]>): ComparableKeyValue[] {
+  return (items ?? [])
+    .filter((item) => !isEmptyKeyValueRow(item))
+    .map((item) => ({
+      id: item.id,
+      key: item.key,
+      value: item.value,
+      enabled: item.enabled,
+      description: item.description ?? "",
+    }))
+}
+
+function toComparableFormData(items: NonNullable<RequestData["body"]["formData"]>): ComparableFormData[] {
+  return (items ?? [])
+    .filter((item) =>
+      (item.key ?? "") !== ""
+      || (item.value ?? "") !== ""
+      || (item.filePath ?? "") !== ""
+      || (item.fileName ?? "") !== ""
+    )
+    .map((item) => ({
+      id: item.id,
+      key: item.key,
+      value: item.value,
+      enabled: item.enabled,
+      description: item.description ?? "",
+      type: item.type,
+      filePath: item.filePath ?? "",
+      fileName: item.fileName ?? "",
+    }))
+}
+
+function toComparableRequest(request: RequestData) {
+  return {
+    id: request.id,
+    name: request.name,
+    method: request.method,
+    url: request.url,
+    params: toComparableKeyValues(request.params ?? []),
+    headers: toComparableKeyValues(request.headers ?? []),
+    body: {
+      type: request.body.type,
+      raw: request.body.raw ?? "",
+      json: request.body.json ?? "",
+      formUrlEncoded: toComparableKeyValues(request.body.formUrlEncoded ?? []),
+      formData: toComparableFormData(request.body.formData ?? []),
+    },
+    auth: {
+      type: request.auth.type,
+      basic: request.auth.basic
+        ? {
+            username: request.auth.basic.username,
+            password: request.auth.basic.password,
+          }
+        : undefined,
+      bearer: request.auth.bearer
+        ? {
+            token: request.auth.bearer.token,
+          }
+        : undefined,
+      apiKey: request.auth.apiKey
+        ? {
+            key: request.auth.apiKey.key,
+            value: request.auth.apiKey.value,
+            addTo: request.auth.apiKey.addTo,
+          }
+        : undefined,
+    },
+    folderId: request.folderId ?? "",
+    projectId: request.projectId ?? "",
+    createdAt: request.createdAt,
+  }
+}
+
+function hasMeaningfulRequestChange(previous: RequestData, next: RequestData): boolean {
+  return JSON.stringify(toComparableRequest(previous)) !== JSON.stringify(toComparableRequest(next))
+}
+
 export function getProjectTabsFromState(state: TabState, projectId?: string | null): RequestTab[] {
   return getScopedProjectState(state, projectId).tabs
 }
@@ -370,17 +468,21 @@ export const useTabStore = create<TabState>((set, get) => ({
       ...projectState,
       tabs: projectState.tabs.map((tab) =>
         tab.id === tabId
-          ? {
-              ...tab,
-              request: {
+          ? (() => {
+              const nextRequest: RequestData = {
                 ...tab.request,
                 ...req,
                 projectId: (req.projectId ?? tab.request.projectId ?? currentProjectId),
                 updatedAt: new Date().toISOString(),
-              },
-              dirty: true,
-            }
-          : tab,
+              }
+              const meaningfulChanged = hasMeaningfulRequestChange(tab.request, nextRequest)
+              return {
+                ...tab,
+                request: nextRequest,
+                dirty: tab.dirty || meaningfulChanged,
+              }
+            })()
+          : tab
       ),
     })))
   },
