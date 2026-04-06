@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { AppIcon } from "@/components/ui/icon"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useUIStore, type ConsoleEntry } from "@/stores/uiStore"
 import { useCookieStore } from "@/stores/cookieStore"
 import { CookiePanel } from "@/components/business/cookie/CookiePanel"
@@ -374,7 +375,6 @@ export function BottomBar() {
           <div
             className="flex items-center justify-between h-[25px] px-3 border-b border-[var(--border-color)] bg-[var(--surface-secondary)] flex-shrink-0 cursor-pointer"
             onClick={toggleConsole}
-            title="点击收起 Console"
           >
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-medium text-[var(--fg)]">Console</span>
@@ -383,26 +383,34 @@ export function BottomBar() {
               )}
             </div>
             <div className="flex items-center gap-1">
-              <button
-                className="h-5 px-1.5 flex items-center gap-1 rounded-[4px] text-[10px] text-[var(--fg-muted)] hover:bg-[var(--sidebar-hover)] transition-colors"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  clearConsoleLogs()
-                }}
-                title="清空"
-              >
-                Clear
-              </button>
-              <button
-                className="h-5 w-5 flex items-center justify-center rounded-[4px] hover:bg-[var(--sidebar-hover)] transition-colors"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  toggleConsole()
-                }}
-                title="关闭"
-              >
-                <AppIcon name="clear" size={10} className="text-[var(--fg-muted)]" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="h-5 px-1.5 flex items-center gap-1 rounded-[4px] text-[10px] text-[var(--fg-muted)] hover:bg-[var(--sidebar-hover)] transition-colors"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      clearConsoleLogs()
+                    }}
+                  >
+                    Clear
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>清空</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="h-5 w-5 flex items-center justify-center rounded-[4px] hover:bg-[var(--sidebar-hover)] transition-colors"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      toggleConsole()
+                    }}
+                  >
+                    <AppIcon name="clear" size={10} className="text-[var(--fg-muted)]" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>关闭</TooltipContent>
+              </Tooltip>
             </div>
           </div>
           <div ref={scrollRef} className="flex-1 overflow-y-auto">
@@ -449,49 +457,61 @@ export function BottomBar() {
         </div>
 
         <div className="flex items-center gap-1">
-          <button
-            className={cn(
-              "flex h-5 w-5 items-center justify-center rounded-[6px] transition-colors hover:bg-[var(--button-bg)]",
-              layoutDirection === "vertical" ? "text-[var(--fg)] bg-[var(--button-bg)]" : "text-[var(--fg-secondary)]"
-            )}
-            onClick={() => setLayoutDirection("vertical")}
-            title="上下布局"
-            type="button"
-          >
-            <span className="relative h-[11px] w-[13px] rounded-[2px] border border-current">
-              <span className="absolute left-[1px] right-[1px] top-1/2 h-px -translate-y-1/2 bg-current" />
-            </span>
-          </button>
-          <button
-            className={cn(
-              "flex h-5 w-5 items-center justify-center rounded-[6px] transition-colors hover:bg-[var(--button-bg)]",
-              layoutDirection === "horizontal" ? "text-[var(--fg)] bg-[var(--button-bg)]" : "text-[var(--fg-secondary)]"
-            )}
-            onClick={() => setLayoutDirection("horizontal")}
-            title="左右布局"
-            type="button"
-          >
-            <span className="relative h-[11px] w-[13px] rounded-[2px] border border-current">
-              <span className="absolute bottom-[1px] left-1/2 top-[1px] w-px -translate-x-1/2 bg-current" />
-            </span>
-          </button>
-          <button
-            className={cn(
-              "flex h-5 w-5 items-center justify-center rounded-[6px] transition-colors hover:bg-[var(--button-bg)]",
-              "text-[var(--fg-secondary)] hover:text-[var(--fg)]"
-            )}
-            onClick={toggleSidebar}
-            title={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
-            type="button"
-          >
-            <span className="relative h-[11px] w-[13px] rounded-[2px] border border-current">
-              {sidebarCollapsed ? (
-                <span className="absolute bottom-[1px] top-[1px] right-[1px] w-[3px] rounded-[1px] bg-current/80" />
-              ) : (
-                <span className="absolute bottom-[1px] top-[1px] left-[1px] w-[3px] rounded-[1px] bg-current/80" />
-              )}
-            </span>
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className={cn(
+                  "flex h-5 w-5 items-center justify-center rounded-[6px] transition-colors hover:bg-[var(--button-bg)]",
+                  layoutDirection === "vertical" ? "text-[var(--fg)] bg-[var(--button-bg)]" : "text-[var(--fg-secondary)]"
+                )}
+                onClick={() => setLayoutDirection("vertical")}
+                type="button"
+              >
+                <span className="relative h-[11px] w-[13px] rounded-[2px] border border-current">
+                  <span className="absolute left-[1px] right-[1px] top-1/2 h-px -translate-y-1/2 bg-current" />
+                </span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>上下布局</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className={cn(
+                  "flex h-5 w-5 items-center justify-center rounded-[6px] transition-colors hover:bg-[var(--button-bg)]",
+                  layoutDirection === "horizontal" ? "text-[var(--fg)] bg-[var(--button-bg)]" : "text-[var(--fg-secondary)]"
+                )}
+                onClick={() => setLayoutDirection("horizontal")}
+                type="button"
+              >
+                <span className="relative h-[11px] w-[13px] rounded-[2px] border border-current">
+                  <span className="absolute bottom-[1px] left-1/2 top-[1px] w-px -translate-x-1/2 bg-current" />
+                </span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>左右布局</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className={cn(
+                  "flex h-5 w-5 items-center justify-center rounded-[6px] transition-colors hover:bg-[var(--button-bg)]",
+                  "text-[var(--fg-secondary)] hover:text-[var(--fg)]"
+                )}
+                onClick={toggleSidebar}
+                type="button"
+              >
+                <span className="relative h-[11px] w-[13px] rounded-[2px] border border-current">
+                  {sidebarCollapsed ? (
+                    <span className="absolute bottom-[1px] top-[1px] right-[1px] w-[3px] rounded-[1px] bg-current/80" />
+                  ) : (
+                    <span className="absolute bottom-[1px] top-[1px] left-[1px] w-[3px] rounded-[1px] bg-current/80" />
+                  )}
+                </span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}</TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import { AppIcon } from "@/components/ui/icon"
 import { Input } from "@/components/ui/input"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore } from "@/stores/tabStore"
@@ -206,35 +207,47 @@ export function Toolbar() {
         <div className="flex-1" />
 
         <div className="titlebar-no-drag flex items-center gap-[var(--size-gap-sm)]" onMouseDown={(e) => e.stopPropagation()}>
-          <button
-            className="flex h-[24px] w-[24px] items-center justify-center rounded-[7px] transition-colors hover:bg-[var(--surface-secondary)]"
-            onClick={() => setShowCurlDialog(true)}
-            title="导入 cURL (⌘I)"
-            type="button"
-          >
-            <AppIcon name="fileImport" size={14} strokeWidth={1.65} className="text-[var(--fg-secondary)]" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="flex h-[24px] w-[24px] items-center justify-center rounded-[7px] transition-colors hover:bg-[var(--surface-secondary)]"
+                onClick={() => setShowCurlDialog(true)}
+                type="button"
+              >
+                <AppIcon name="fileImport" size={14} strokeWidth={1.65} className="text-[var(--fg-secondary)]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>导入 cURL (⌘I)</TooltipContent>
+          </Tooltip>
 
-          <button
-            className="flex h-[24px] w-[24px] items-center justify-center rounded-[7px] transition-colors hover:bg-[var(--surface-secondary)]"
-            onClick={() => setTheme(resolved === "dark" ? "light" : "dark")}
-            title={resolved === "dark" ? "切换为浅色主题" : "切换为深色主题"}
-            type="button"
-          >
-            {resolved === "dark"
-              ? <AppIcon name="sun" size={14} strokeWidth={1.65} className="text-[var(--fg-secondary)]" />
-              : <AppIcon name="moon" size={14} strokeWidth={1.65} className="text-[var(--fg-secondary)]" />
-            }
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="flex h-[24px] w-[24px] items-center justify-center rounded-[7px] transition-colors hover:bg-[var(--surface-secondary)]"
+                onClick={() => setTheme(resolved === "dark" ? "light" : "dark")}
+                type="button"
+              >
+                {resolved === "dark"
+                  ? <AppIcon name="sun" size={14} strokeWidth={1.65} className="text-[var(--fg-secondary)]" />
+                  : <AppIcon name="moon" size={14} strokeWidth={1.65} className="text-[var(--fg-secondary)]" />
+                }
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{resolved === "dark" ? "切换为浅色主题" : "切换为深色主题"}</TooltipContent>
+          </Tooltip>
 
-          <button
-            className="flex h-[24px] w-[24px] items-center justify-center rounded-[7px] transition-colors hover:bg-[var(--surface-secondary)]"
-            onClick={() => setSettingsOpen(true)}
-            title="设置 (⌘,)"
-            type="button"
-          >
-            <AppIcon name="settings" size={14} strokeWidth={1.65} className="text-[var(--fg-secondary)]" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="flex h-[24px] w-[24px] items-center justify-center rounded-[7px] transition-colors hover:bg-[var(--surface-secondary)]"
+                onClick={() => setSettingsOpen(true)}
+                type="button"
+              >
+                <AppIcon name="settings" size={14} strokeWidth={1.65} className="text-[var(--fg-secondary)]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>设置 (⌘,)</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -285,8 +298,8 @@ export function Toolbar() {
                   "border border-[var(--border-color)] bg-[var(--surface-secondary)]",
                   "text-[var(--fg)] font-mono text-[12px] leading-relaxed",
                   "placeholder:text-[var(--fg-muted)]/60 resize-y",
-                  "focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30",
-                  "transition-all duration-150"
+                  "focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 focus:border-[var(--accent)]",
+                  "transition-colors duration-150"
                 )}
                 autoFocus
               />

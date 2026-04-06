@@ -8,6 +8,7 @@ import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { info, error as logError } from "@/lib/logger"
 import { backupService } from "@/services/backupService"
+import { applyProjectThemeColor } from "@/lib/projectTheme"
 
 const WINDOW_STATE_STORAGE_KEY = "minipost:window-state"
 const AUTO_BACKUP_LAST_RUN_STORAGE_KEY = "minipost:auto-backup-last-run-at"
@@ -82,13 +83,21 @@ function persistLastAutoBackupAt(timestamp: number) {
 
 function App() {
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
+  const resolvedTheme = useUIStore((s) => s.resolved)
+  const setWorkspaceView = useUIStore((s) => s.setWorkspaceView)
   const editingEnvironmentId = useUIStore((s) => s.editingEnvironmentId)
   const closeActiveEnvironmentTab = useUIStore((s) => s.closeActiveEnvironmentTab)
   const autoBackupEnabled = useUIStore((s) => s.autoBackupEnabled)
   const autoBackupIntervalMinutes = useUIStore((s) => s.autoBackupIntervalMinutes)
-  const { currentProjectId, createRequest } = useProjectStore()
+  const currentProjectId = useProjectStore((s) => s.currentProjectId)
+  const projects = useProjectStore((s) => s.projects)
+  const createRequest = useProjectStore((s) => s.createRequest)
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const openRequestTab = useTabStore((s) => s.openRequestTab)
+  const currentProjectThemeColor = useMemo(() => {
+    if (!currentProjectId) return null
+    return projects.find((project) => project.id === currentProjectId)?.themeColor ?? null
+  }, [currentProjectId, projects])
 
   useEffect(() => {
     info("App", "React App 组件已挂载, 开始加载项目列表")
@@ -96,6 +105,10 @@ function App() {
       .then(() => info("App", "项目列表加载完成"))
       .catch((err) => logError("App", "项目列表加载失败", { error: String(err) }))
   }, [])
+
+  useEffect(() => {
+    applyProjectThemeColor(currentProjectThemeColor, resolvedTheme)
+  }, [currentProjectThemeColor, resolvedTheme])
 
   useEffect(() => {
     if (!autoBackupEnabled) return
@@ -281,8 +294,9 @@ function App() {
         createdAt: req.createdAt,
         updatedAt: req.updatedAt,
       })
+      setWorkspaceView("project")
     }
-  }, [currentProjectId, createRequest, openRequestTab])
+  }, [currentProjectId, createRequest, openRequestTab, setWorkspaceView])
 
   const handleSave = useCallback(() => {
     if (!editingEnvironmentId && !activeTab) return
@@ -330,7 +344,7 @@ function App() {
   useKeyboardShortcuts(shortcuts)
 
   return (
-    <TooltipProvider delayDuration={120} skipDelayDuration={80}>
+    <TooltipProvider delayDuration={40} skipDelayDuration={12}>
       <div className="window-frame fixed inset-0 bg-transparent">
         <div className="window-shell h-full w-full bg-[var(--surface)]">
           <AppLayout />

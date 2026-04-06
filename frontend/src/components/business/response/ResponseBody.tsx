@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 import { CodeEditor, type EditorLanguage } from "@/components/ui/CodeEditor"
 import { AppIcon } from "@/components/ui/icon"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useUIStore } from "@/stores/uiStore"
 
 interface ResponseBodyProps {
@@ -304,19 +305,21 @@ function tryApplyTextFilter(text: string, expression: string): { text: string; e
   return { text: lines.join("\n"), error: null }
 }
 
-type JsonTreeRow = {
-  path: string
-  depth: number
-  key: string
-  value: unknown
-  kind: "primitive" | "object" | "array"
-}
-
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-function jsonRowKind(value: unknown): JsonTreeRow["kind"] {
+type JsonNodeKind = "primitive" | "object" | "array"
+type JsonPathToken = string | number
+
+type JsonNodeRow = {
+  key: string
+  token: JsonPathToken
+  value: unknown
+  kind: JsonNodeKind
+}
+
+function jsonRowKind(value: unknown): JsonNodeKind {
   if (Array.isArray(value)) return "array"
   if (isJsonObject(value)) return "object"
   return "primitive"
@@ -328,40 +331,51 @@ function jsonBadge(value: unknown): string {
   return ""
 }
 
-function buildJsonRows(
-  root: unknown,
-  expanded: Set<string>,
-  path = "$",
-  depth = 0
-): JsonTreeRow[] {
-  const rows: JsonTreeRow[] = []
-  const kind = jsonRowKind(root)
-
-  if (kind === "primitive") {
-    rows.push({ path, depth, key: "value", value: root, kind })
-    return rows
-  }
-
-  const entries = Array.isArray(root)
-    ? root.map((item, idx) => [String(idx), item] as const)
-    : Object.entries(root as Record<string, unknown>)
-
-  entries.forEach(([key, value]) => {
-    const rowPath = Array.isArray(root) ? `${path}[${key}]` : `${path}.${key}`
-    const rowKind = jsonRowKind(value)
-    rows.push({
-      path: rowPath,
-      depth,
-      key,
-      value,
-      kind: rowKind,
-    })
-    if (rowKind !== "primitive" && expanded.has(rowPath)) {
-      rows.push(...buildJsonRows(value, expanded, rowPath, depth + 1))
+function resolveJsonPath(root: unknown, tokens: JsonPathToken[]): unknown {
+  let current: unknown = root
+  for (const token of tokens) {
+    if (typeof token === "number") {
+      if (!Array.isArray(current) || token < 0 || token >= current.length) return undefined
+      current = current[token]
+      continue
     }
-  })
+    if (!isJsonObject(current) || !(token in current)) return undefined
+    current = current[token]
+  }
+  return current
+}
 
-  return rows
+function buildJsonNodeRows(node: unknown): JsonNodeRow[] {
+  if (Array.isArray(node)) {
+    return node.map((value, index) => ({
+      key: `[${index}]`,
+      token: index,
+      value,
+      kind: jsonRowKind(value),
+    }))
+  }
+  if (isJsonObject(node)) {
+    return Object.entries(node).map(([key, value]) => ({
+      key,
+      token: key,
+      value,
+      kind: jsonRowKind(value),
+    }))
+  }
+  return []
+}
+
+function buildPathSegments(tokens: JsonPathToken[]): Array<{ label: string; tokens: JsonPathToken[] }> {
+  const segments: Array<{ label: string; tokens: JsonPathToken[] }> = [{ label: "Root", tokens: [] }]
+  const currentTokens: JsonPathToken[] = []
+  tokens.forEach((token) => {
+    currentTokens.push(token)
+    segments.push({
+      label: typeof token === "number" ? `[${token}]` : token,
+      tokens: [...currentTokens],
+    })
+  })
+  return segments
 }
 
 function formatPreviewPrimitive(value: unknown): string {
@@ -372,51 +386,68 @@ function formatPreviewPrimitive(value: unknown): string {
 }
 
 function JsonStructuredPreview({ value }: { value: unknown }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const rows = useMemo(() => buildJsonRows(value, expanded), [expanded, value])
+  const [tokens, setTokens] = useState<JsonPathToken[]>([])
+  const currentNode = useMemo(() => resolveJsonPath(value, tokens), [tokens, value])
+  const rows = useMemo(() => buildJsonNodeRows(currentNode), [currentNode])
+  const segments = useMemo(() => buildPathSegments(tokens), [tokens])
 
-  const toggle = (path: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(path)) next.delete(path)
-      else next.add(path)
-      return next
-    })
-  }
+  useEffect(() => {
+    setTokens([])
+  }, [value])
 
   return (
-    <div className="h-full overflow-auto rounded-[8px] border border-[var(--border-color)] bg-[var(--surface)]">
+    <div className="h-full overflow-auto border border-[var(--border-color)] bg-[var(--surface)]">
+      <div className="flex h-7 items-center gap-1 border-b border-[var(--border-subtle)] px-2 text-[12px]">
+        {segments.map((segment, index) => {
+          const isLast = index === segments.length - 1
+          return (
+            <div key={`${segment.label}-${index}`} className="flex items-center gap-1">
+              {isLast ? (
+                <span className="font-semibold text-[var(--fg)]">{segment.label}</span>
+              ) : (
+                <button
+                  type="button"
+                  className="text-[var(--fg-secondary)] hover:text-[var(--accent)] transition-colors"
+                  onClick={() => setTokens(segment.tokens)}
+                >
+                  {segment.label}
+                </button>
+              )}
+              {!isLast && <AppIcon name="arrowRight" size={9} className="text-[var(--fg-muted)]" />}
+            </div>
+          )
+        })}
+      </div>
+
       <table className="w-full border-collapse text-[12px]">
         <tbody>
-          {rows.map((row) => {
+          {rows.length > 0 ? rows.map((row) => {
             const complex = row.kind !== "primitive"
-            const isOpen = expanded.has(row.path)
             return (
-              <tr key={row.path} className="border-b border-[var(--border-subtle)] last:border-b-0">
-                <td className="w-[36%] border-r border-[var(--border-subtle)] px-3 py-2 align-top">
-                  <div
-                    className="flex items-center gap-1.5"
-                    style={{ paddingLeft: `${row.depth * 18}px` }}
-                  >
-                    {complex ? (
-                      <button
-                        type="button"
-                        className="flex h-4 w-4 items-center justify-center rounded-[4px] text-[var(--fg-muted)] hover:bg-[var(--button-bg)]"
-                        onClick={() => toggle(row.path)}
-                      >
-                        <AppIcon name={isOpen ? "arrowDown" : "arrowRight"} size={9} />
-                      </button>
-                    ) : (
-                      <span className="w-4" />
-                    )}
-                    <span className="font-semibold text-[var(--fg)]">{row.key}</span>
-                  </div>
-                </td>
-                <td className="px-3 py-2 align-top">
+              <tr key={`${row.key}-${String(row.token)}`} className="border-b border-[var(--border-subtle)] last:border-b-0">
+                <td className="w-[32%] border-r border-[var(--border-subtle)] px-3 py-1.5 align-top">
                   {complex ? (
-                    <span className="inline-flex items-center rounded-[6px] bg-[var(--surface-secondary)] px-2 py-0.5 font-mono text-[12px] text-[var(--fg-secondary)]">
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 text-left text-[var(--fg)] hover:text-[var(--accent)] transition-colors"
+                      onClick={() => setTokens((prev) => [...prev, row.token])}
+                    >
+                      <AppIcon name="arrowRight" size={10} className="text-[var(--fg-muted)]" />
+                      <span className="font-semibold">{row.key}</span>
+                    </button>
+                  ) : (
+                    <span className="font-semibold text-[var(--fg)]">{row.key}</span>
+                  )}
+                </td>
+                <td className="px-3 py-1.5 align-top">
+                  {complex ? (
+                    <button
+                      type="button"
+                      className="font-mono text-[var(--fg-secondary)] hover:text-[var(--accent)] transition-colors"
+                      onClick={() => setTokens((prev) => [...prev, row.token])}
+                    >
                       {jsonBadge(row.value)}
-                    </span>
+                    </button>
                   ) : (
                     <span className={cn(
                       "break-all",
@@ -428,7 +459,19 @@ function JsonStructuredPreview({ value }: { value: unknown }) {
                 </td>
               </tr>
             )
-          })}
+          }) : (
+            <tr>
+              <td className="w-[32%] border-r border-[var(--border-subtle)] px-3 py-1.5 align-top font-semibold text-[var(--fg)]">value</td>
+              <td className="px-3 py-1.5 align-top">
+                <span className={cn(
+                  "break-all",
+                  typeof currentNode === "string" ? "text-[var(--fg-secondary)]" : "font-mono text-[var(--fg)]"
+                )}>
+                  {formatPreviewPrimitive(currentNode)}
+                </span>
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -740,64 +783,88 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
             previewActive={preview}
             onSwitchToCodeView={() => setPreview(false)}
           />
-          <button
-            type="button"
-            className={cn(
-              "h-6 px-1.5 rounded-[8px] border border-transparent bg-transparent text-[10px] flex items-center gap-1 transition-colors",
-              preview && previewAvailable
-                ? "bg-[var(--selected-bg)] text-[var(--accent)]"
-                : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)]",
-              !previewAvailable && "opacity-40 pointer-events-none"
-            )}
-            onClick={() => setPreview(true)}
-            title="Preview"
-          >
-            <AppIcon name="arrowRight" size={10} />
-            Preview
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "h-6 px-1.5 rounded-[8px] border border-transparent bg-transparent text-[10px] flex items-center gap-1 transition-colors",
+                  preview && previewAvailable
+                    ? "bg-[var(--selected-bg)] text-[var(--accent)]"
+                    : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)]",
+                  !previewAvailable && "opacity-40 pointer-events-none"
+                )}
+                onClick={() => setPreview(true)}
+              >
+                <AppIcon name="arrowRight" size={10} />
+                Preview
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>预览</TooltipContent>
+          </Tooltip>
         </div>
 
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            className={cn(
-              "h-6 w-6 rounded-[8px] border border-transparent bg-transparent transition-colors flex items-center justify-center",
-              lineWrap
-                ? "bg-[var(--selected-bg)] text-[var(--accent)]"
-                : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)]"
-            )}
-            onClick={() => setLineWrap((prev) => !prev)}
-          >
-            <WrapGlyph />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "h-6 w-6 rounded-[8px] border border-transparent bg-transparent transition-colors flex items-center justify-center",
+                  lineWrap
+                    ? "bg-[var(--selected-bg)] text-[var(--accent)]"
+                    : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)]"
+                )}
+                onClick={() => setLineWrap((prev) => !prev)}
+              >
+                <WrapGlyph />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>自动换行</TooltipContent>
+          </Tooltip>
           <span className="mx-0.5 h-3.5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
-          <button
-            type="button"
-            className={cn(
-              "h-6 w-6 rounded-[8px] border border-transparent bg-transparent transition-colors flex items-center justify-center",
-              filterOpen
-                ? "bg-[var(--selected-bg)] text-[var(--accent)]"
-                : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)]"
-            )}
-            onClick={() => setFilterOpen((prev) => !prev)}
-          >
-            <FilterGlyph />
-          </button>
-          <button
-            type="button"
-            className="h-6 w-6 rounded-[8px] border border-transparent bg-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
-            onClick={handleSearch}
-          >
-            <AppIcon name="search" size={12} />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "h-6 w-6 rounded-[8px] border border-transparent bg-transparent transition-colors flex items-center justify-center",
+                  filterOpen
+                    ? "bg-[var(--selected-bg)] text-[var(--accent)]"
+                    : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)]"
+                )}
+                onClick={() => setFilterOpen((prev) => !prev)}
+              >
+                <FilterGlyph />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>过滤</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="h-6 w-6 rounded-[8px] border border-transparent bg-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
+                onClick={handleSearch}
+              >
+                <AppIcon name="search" size={12} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>查找 (⌘F)</TooltipContent>
+          </Tooltip>
           <span className="mx-0.5 h-3.5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
-          <button
-            type="button"
-            className="no-press-feedback h-6 px-1.5 rounded-[8px] border border-transparent bg-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
-            onClick={handleCopy}
-          >
-            <AppIcon name="copy" size={12} className={cn(copied && "text-[var(--accent)]")} />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="no-press-feedback h-6 px-1.5 rounded-[8px] border border-transparent bg-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
+                onClick={handleCopy}
+              >
+                <AppIcon name="copy" size={12} className={cn(copied && "text-[var(--accent)]")} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{copied ? "已复制" : "复制响应体"}</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 

@@ -2,6 +2,7 @@ export interface Project {
   id: string
   name: string
   description?: string
+  themeColor?: string
   createdAt: string
   updatedAt: string
   schemaVersion: number

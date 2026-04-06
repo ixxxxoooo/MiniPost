@@ -472,6 +472,7 @@ export namespace model {
 	    id: string;
 	    name: string;
 	    description?: string;
+	    themeColor?: string;
 	    createdAt: string;
 	    updatedAt: string;
 	    schemaVersion: number;
@@ -485,6 +486,7 @@ export namespace model {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.description = source["description"];
+	        this.themeColor = source["themeColor"];
 	        this.createdAt = source["createdAt"];
 	        this.updatedAt = source["updatedAt"];
 	        this.schemaVersion = source["schemaVersion"];

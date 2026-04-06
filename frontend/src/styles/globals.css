@@ -56,6 +56,7 @@
   --button-bg: rgb(237, 237, 237);
   --button-border: rgb(230, 230, 230);
   --selected-bg: rgb(242, 242, 242);
+  --response-loading-overlay: rgba(255, 255, 255, 0.78);
 
   /* 侧边栏 */
   --sidebar-bg: rgba(249, 249, 249, 0.92);
@@ -126,6 +127,7 @@
   --button-bg: rgb(59, 59, 59);
   --button-border: rgb(48, 48, 48);
   --selected-bg: rgb(68, 68, 68);
+  --response-loading-overlay: rgba(20, 20, 20, 0.56);
 
   --sidebar-bg: rgba(33, 33, 33, 0.92);
   --sidebar-fg: #f5f5f7;
@@ -358,7 +360,7 @@ html.scrollbar-auto-hide.scrollbar-active ::-webkit-scrollbar-thumb:hover {
     rgba(0, 122, 255, 0.35) 58%,
     rgba(0, 122, 255, 0) 100%
   );
-  animation: response-loading-sheen 1.15s ease-in-out infinite;
+  animation: response-loading-sheen 1.8s ease-in-out infinite;
 }
 
 /* 微型文字 */

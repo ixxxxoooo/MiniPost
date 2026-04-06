@@ -7,6 +7,7 @@ import { SettingsPanel } from "./SettingsPanel"
 import { RequestEditorBody, RequestEditorToolbar } from "@/components/business/editor/RequestEditor"
 import { ResponseViewer } from "@/components/business/response/ResponseViewer"
 import { EnvironmentEditorPage } from "@/components/business/environment/EnvironmentEditorPage"
+import { ProjectHome } from "./ProjectHome"
 import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
@@ -14,7 +15,7 @@ import { cn } from "@/lib/utils"
 import appLogo from "@/assets/images/appicon.png"
 
 export function AppLayout() {
-  const { sidebarCollapsed, layoutDirection, editingEnvironmentId } = useUIStore()
+  const { layoutDirection, editingEnvironmentId, workspaceView } = useUIStore()
   const currentProjectId = useProjectStore((s) => s.currentProjectId)
   const activeTab = useTabStore(getProjectActiveTabFromState)
 
@@ -80,6 +81,7 @@ export function AppLayout() {
   }, [layoutDirection])
 
   const showEnvEditor = !!editingEnvironmentId
+  const showProjectHome = workspaceView === "home"
 
   const triggerCreateNewRequest = useCallback(() => {
     window.dispatchEvent(new CustomEvent("minipost:new-request"))
@@ -94,125 +96,134 @@ export function AppLayout() {
       <Toolbar />
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        <Sidebar />
+        {showProjectHome ? (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <ProjectHome />
+            <BottomBar />
+          </div>
+        ) : (
+          <>
+            <Sidebar />
 
-        <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
-          <TabBar />
+            <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
+              <TabBar />
 
-          {showEnvEditor ? (
-            <EnvironmentEditorPage />
-          ) : activeTab ? (
-            <div className="flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden">
-              <RequestEditorToolbar />
+              {showEnvEditor ? (
+                <EnvironmentEditorPage />
+              ) : activeTab ? (
+                <div className="flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden">
+                  <RequestEditorToolbar />
 
-              <div
-                ref={splitContainerRef}
-                className={cn(
-                  "flex-1 overflow-hidden flex min-h-0 min-w-0",
-                  layoutDirection === "vertical" ? "flex-col" : "flex-row"
-                )}
-              >
-                <div
-                  className="overflow-hidden min-h-0 min-w-0"
-                  style={{
-                    [layoutDirection === "vertical" ? "height" : "width"]: `calc(var(--split-ratio, ${splitRatio}) * 100%)`,
-                    flexShrink: 0,
-                  }}
-                >
-                  <RequestEditorBody />
-                </div>
-
-                <div
-                  className={cn(
-                    "group relative flex-shrink-0",
-                    layoutDirection === "vertical"
-                      ? "h-px"
-                      : "w-px"
-                  )}
-                >
                   <div
+                    ref={splitContainerRef}
                     className={cn(
-                      "absolute z-10",
-                      layoutDirection === "vertical"
-                        ? "inset-x-0 -top-2 h-[5px] cursor-row-resize"
-                        : "inset-y-0 -left-2 w-[5px] cursor-col-resize"
+                      "flex-1 overflow-hidden flex min-h-0 min-w-0",
+                      layoutDirection === "vertical" ? "flex-col" : "flex-row"
                     )}
-                    onMouseDown={handleSplitDragStart}
-                  />
-                  <div
-                    className={cn(
-                      "absolute inset-0 bg-[var(--border-color)] group-hover:bg-[var(--accent)] transition-colors duration-200"
-                    )}
-                  />
-                  <div
-                    className={cn(
-                      "pointer-events-none bg-transparent group-hover:bg-[var(--accent)]/50 transition-all duration-200 rounded-full absolute",
-                      layoutDirection === "vertical"
-                        ? "w-6 h-1 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-                        : "h-6 w-1 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-                    )}
-                  />
-                </div>
+                  >
+                    <div
+                      className="overflow-hidden min-h-0 min-w-0"
+                      style={{
+                        [layoutDirection === "vertical" ? "height" : "width"]: `calc(var(--split-ratio, ${splitRatio}) * 100%)`,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <RequestEditorBody />
+                    </div>
 
-                <div className="flex-1 overflow-hidden min-h-0 min-w-0">
-                  <ResponseViewer />
-                </div>
-              </div>
-            </div>
-          ) : currentProjectId ? (
-            <div className="flex flex-1 min-h-0 items-center justify-center bg-[var(--surface)]">
-              <div className="w-[300px]">
-                <div className="mb-4 flex flex-col items-center text-center">
-                  <img src={appLogo} alt="MiniPost" className="h-12 w-12 object-contain" />
-                  <div className="mt-2 text-[13px] text-[var(--fg-secondary)]">MiniPost</div>
-                  <div className="mt-1 text-[11px] leading-5 text-[var(--fg-muted)]">
-                    一个简洁、快速的 API 调试工具
+                    <div
+                      className={cn(
+                        "group relative flex-shrink-0",
+                        layoutDirection === "vertical"
+                          ? "h-px"
+                          : "w-px"
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "absolute z-10",
+                          layoutDirection === "vertical"
+                            ? "inset-x-0 -top-2 h-[5px] cursor-row-resize"
+                            : "inset-y-0 -left-2 w-[5px] cursor-col-resize"
+                        )}
+                        onMouseDown={handleSplitDragStart}
+                      />
+                      <div
+                        className={cn(
+                          "absolute inset-0 bg-[var(--border-color)] group-hover:bg-[var(--accent)] transition-colors duration-200"
+                        )}
+                      />
+                      <div
+                        className={cn(
+                          "pointer-events-none bg-transparent group-hover:bg-[var(--accent)]/50 transition-all duration-200 rounded-full absolute",
+                          layoutDirection === "vertical"
+                            ? "w-6 h-1 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+                            : "h-6 w-1 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+                        )}
+                      />
+                    </div>
+
+                    <div className="flex-1 overflow-hidden min-h-0 min-w-0">
+                      <ResponseViewer />
+                    </div>
                   </div>
                 </div>
+              ) : currentProjectId ? (
+                <div className="flex flex-1 min-h-0 items-center justify-center bg-[var(--surface)]">
+                  <div className="w-[300px]">
+                    <div className="mb-4 flex flex-col items-center text-center">
+                      <img src={appLogo} alt="MiniPost" className="h-12 w-12 object-contain" />
+                      <div className="mt-2 text-[13px] text-[var(--fg-secondary)]">MiniPost</div>
+                      <div className="mt-1 text-[11px] leading-5 text-[var(--fg-muted)]">
+                        一个简洁、快速的 API 调试工具
+                      </div>
+                    </div>
 
-                <button
-                  type="button"
-                  onClick={triggerCreateNewRequest}
-                  className={cn(
-                    "flex h-8 w-full items-center justify-between rounded-[7px] px-2 transition-colors",
-                    "hover:bg-[var(--surface-secondary)] text-left"
-                  )}
-                >
-                  <span className="text-[12px] text-[var(--fg-muted)]">Create new</span>
-                  <span className="inline-flex items-center gap-1 text-[10px] text-[var(--fg-muted)] opacity-90">
-                    <kbd className="h-5 min-w-5 rounded-[5px] border border-[var(--border-color)] bg-[var(--surface-secondary)] px-1 font-mono text-[var(--fg-muted)]">⌘</kbd>
-                    <kbd className="h-5 min-w-5 rounded-[5px] border border-[var(--border-color)] bg-[var(--surface-secondary)] px-1 font-mono text-[var(--fg-muted)]">N</kbd>
-                  </span>
-                </button>
+                    <button
+                      type="button"
+                      onClick={triggerCreateNewRequest}
+                      className={cn(
+                        "flex h-8 w-full items-center justify-between rounded-[7px] px-2 transition-colors",
+                        "hover:bg-[var(--surface-secondary)] text-left"
+                      )}
+                    >
+                      <span className="text-[12px] text-[var(--fg-muted)]">Create new</span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-[var(--fg-muted)] opacity-90">
+                        <kbd className="h-5 min-w-5 rounded-[5px] border border-[var(--border-color)] bg-[var(--surface-secondary)] px-1 font-mono text-[var(--fg-muted)]">⌘</kbd>
+                        <kbd className="h-5 min-w-5 rounded-[5px] border border-[var(--border-color)] bg-[var(--surface-secondary)] px-1 font-mono text-[var(--fg-muted)]">N</kbd>
+                      </span>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={triggerOpenImport}
-                  className={cn(
-                    "mt-0.5 flex h-8 w-full items-center justify-between rounded-[7px] px-2 transition-colors",
-                    "hover:bg-[var(--surface-secondary)] text-left"
-                  )}
-                >
-                  <span className="text-[12px] text-[var(--fg-muted)]">Import</span>
-                  <span className="inline-flex items-center gap-1 text-[10px] text-[var(--fg-muted)] opacity-90">
-                    <kbd className="h-5 min-w-5 rounded-[5px] border border-[var(--border-color)] bg-[var(--surface-secondary)] px-1 font-mono text-[var(--fg-muted)]">⌘</kbd>
-                    <kbd className="h-5 min-w-5 rounded-[5px] border border-[var(--border-color)] bg-[var(--surface-secondary)] px-1 font-mono text-[var(--fg-muted)]">O</kbd>
-                  </span>
-                </button>
-              </div>
+                    <button
+                      type="button"
+                      onClick={triggerOpenImport}
+                      className={cn(
+                        "mt-0.5 flex h-8 w-full items-center justify-between rounded-[7px] px-2 transition-colors",
+                        "hover:bg-[var(--surface-secondary)] text-left"
+                      )}
+                    >
+                      <span className="text-[12px] text-[var(--fg-muted)]">Import</span>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-[var(--fg-muted)] opacity-90">
+                        <kbd className="h-5 min-w-5 rounded-[5px] border border-[var(--border-color)] bg-[var(--surface-secondary)] px-1 font-mono text-[var(--fg-muted)]">⌘</kbd>
+                        <kbd className="h-5 min-w-5 rounded-[5px] border border-[var(--border-color)] bg-[var(--surface-secondary)] px-1 font-mono text-[var(--fg-muted)]">O</kbd>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-1 min-h-0 items-center justify-center bg-[var(--surface)]">
+                  <div className="text-center max-w-[320px] px-6">
+                    <div className="text-[40px] mb-3 opacity-20">📁</div>
+                    <p className="text-[length:var(--size-font-sm)] text-[var(--fg-secondary)] font-medium">请选择工作区</p>
+                    <p className="text-2xs text-[var(--fg-muted)] mt-1">先在顶部选择一个工作区，然后再打开或创建请求标签</p>
+                  </div>
+                </div>
+              )}
+
+              <BottomBar />
             </div>
-          ) : (
-            <div className="flex flex-1 min-h-0 items-center justify-center bg-[var(--surface)]">
-              <div className="text-center max-w-[320px] px-6">
-                <div className="text-[40px] mb-3 opacity-20">📁</div>
-                <p className="text-[length:var(--size-font-sm)] text-[var(--fg-secondary)] font-medium">请选择工作区</p>
-                <p className="text-2xs text-[var(--fg-muted)] mt-1">先在顶部选择一个工作区，然后再打开或创建请求标签</p>
-              </div>
-            </div>
-          )}
-
-          <BottomBar />
-        </div>
+          </>
+        )}
       </div>
 
       <SettingsPanel />

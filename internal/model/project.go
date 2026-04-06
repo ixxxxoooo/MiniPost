@@ -5,6 +5,7 @@ type Project struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
 	Description   string `json:"description,omitempty"`
+	ThemeColor    string `json:"themeColor,omitempty"`
 	CreatedAt     string `json:"createdAt"`
 	UpdatedAt     string `json:"updatedAt"`
 	SchemaVersion int    `json:"schemaVersion"`
@@ -29,8 +30,8 @@ type CollectionNode struct {
 
 // CollectionData 项目集合数据
 type CollectionData struct {
-	Folders []Folder         `json:"folders"`
-	Requests []RequestItem   `json:"requests"`
+	Folders   []Folder         `json:"folders"`
+	Requests  []RequestItem    `json:"requests"`
 	TreeNodes []CollectionNode `json:"treeNodes"`
 }
 

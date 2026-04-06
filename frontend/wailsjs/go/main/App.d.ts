@@ -79,3 +79,7 @@ export function SaveTextFile(arg1:string,arg2:string):Promise<void>;
 export function SendRequest(arg1:model.SendRequestInput):Promise<model.HttpResponse>;
 
 export function SendRequestWithEnv(arg1:model.SendRequestInput,arg2:string,arg3:string):Promise<model.HttpResponse>;
+
+export function UpdateProjectDescription(arg1:string,arg2:string):Promise<model.Project>;
+
+export function UpdateProjectTheme(arg1:string,arg2:string):Promise<model.Project>;

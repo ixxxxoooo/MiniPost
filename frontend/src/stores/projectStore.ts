@@ -18,8 +18,10 @@ interface ProjectState {
   error: string | null
 
   loadProjects: () => Promise<void>
-  createProject: (name: string) => Promise<void>
+  createProject: (name: string) => Promise<model.Project | null>
   renameProject: (id: string, name: string) => Promise<void>
+  updateProjectDescription: (id: string, description: string) => Promise<void>
+  updateProjectTheme: (id: string, color: string) => Promise<void>
   deleteProject: (id: string) => Promise<void>
   selectProject: (id: string) => Promise<void>
 
@@ -114,10 +116,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   createProject: async (name) => {
     try {
-      await projectService.createProject(name)
+      const project = await projectService.createProject(name)
       await get().loadProjects()
+      return project
     } catch (err) {
       set({ error: String(err) })
+      return null
     }
   },
 
@@ -125,6 +129,32 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     try {
       await projectService.renameProject(id, name)
       await get().loadProjects()
+    } catch (err) {
+      set({ error: String(err) })
+    }
+  },
+
+  updateProjectDescription: async (id, description) => {
+    try {
+      const updatedProject = await projectService.updateProjectDescription(id, description)
+      set((state) => ({
+        projects: state.projects.map((project) => (
+          project.id === id ? { ...project, description: updatedProject?.description ?? description } : project
+        )),
+      }))
+    } catch (err) {
+      set({ error: String(err) })
+    }
+  },
+
+  updateProjectTheme: async (id, color) => {
+    try {
+      const updatedProject = await projectService.updateProjectTheme(id, color)
+      set((state) => ({
+        projects: state.projects.map((project) => (
+          project.id === id ? { ...project, themeColor: updatedProject?.themeColor ?? color } : project
+        )),
+      }))
     } catch (err) {
       set({ error: String(err) })
     }
@@ -148,7 +178,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   selectProject: async (id) => {
-    useUIStore.getState().clearEnvironmentTabs()
+    const uiStore = useUIStore.getState()
+    uiStore.clearEnvironmentTabs()
+    uiStore.setWorkspaceView("project")
     useTabStore.getState().setCurrentProject(id)
     persistLastProjectId(id)
     set({ currentProjectId: id })

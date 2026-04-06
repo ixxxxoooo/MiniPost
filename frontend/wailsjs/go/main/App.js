@@ -157,3 +157,11 @@ export function SendRequest(arg1) {
 export function SendRequestWithEnv(arg1, arg2, arg3) {
   return window['go']['main']['App']['SendRequestWithEnv'](arg1, arg2, arg3);
 }
+
+export function UpdateProjectDescription(arg1, arg2) {
+  return window['go']['main']['App']['UpdateProjectDescription'](arg1, arg2);
+}
+
+export function UpdateProjectTheme(arg1, arg2) {
+  return window['go']['main']['App']['UpdateProjectTheme'](arg1, arg2);
+}
