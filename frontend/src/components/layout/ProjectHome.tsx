@@ -1,23 +1,25 @@
 import { useMemo, useState } from "react"
 import { AppIcon } from "@/components/ui/icon"
+import { useI18n } from "@/hooks/useI18n"
 import { cn } from "@/lib/utils"
 import { PROJECT_THEME_COLORS } from "@/lib/projectTheme"
 import { useProjectStore } from "@/stores/projectStore"
 import { useUIStore } from "@/stores/uiStore"
 
-function formatUpdatedAt(value: string): string {
+function formatUpdatedAt(value: string, locale: string, prefix: string): string {
   const timestamp = Date.parse(value)
-  if (!Number.isFinite(timestamp)) return "最近更新: --"
-  const formatter = new Intl.DateTimeFormat("zh-CN", {
+  if (!Number.isFinite(timestamp)) return `${prefix}: --`
+  const formatter = new Intl.DateTimeFormat(locale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   })
-  return `最近更新: ${formatter.format(new Date(timestamp))}`
+  return `${prefix}: ${formatter.format(new Date(timestamp))}`
 }
 
 export function ProjectHome() {
+  const { t, locale } = useI18n()
   const [newProjectName, setNewProjectName] = useState("")
   const [themePickerProjectId, setThemePickerProjectId] = useState<string | null>(null)
   const [descriptionDrafts, setDescriptionDrafts] = useState<Record<string, string>>({})
@@ -73,12 +75,12 @@ export function ProjectHome() {
       <div className="mx-auto w-full max-w-[1080px]">
         <div className="mb-5 flex items-end justify-between gap-4">
           <div>
-            <h2 className="text-[20px] font-semibold text-[var(--fg)]">项目主页</h2>
+            <h2 className="text-[20px] font-semibold text-[var(--fg)]">{t("项目主页", "Project home")}</h2>
             <p className="mt-1 text-[13px] text-[var(--fg-secondary)]">
-              选择项目继续工作，并在这里配置项目主题色。
+              {t("选择项目继续工作，并在这里配置项目主题色。", "Select a project to continue and configure its theme color here.")}
             </p>
             <p className="mt-1 text-[12px] text-[var(--fg-muted)]">
-              项目主题色会同步应用到选中态、高亮态以及发送按钮。
+              {t("项目主题色会同步应用到选中态、高亮态以及发送按钮。", "Project theme color will be applied to selected states, highlights, and the send button.")}
             </p>
           </div>
           <div className="flex w-[320px] items-center gap-2">
@@ -92,7 +94,7 @@ export function ProjectHome() {
               onKeyDown={(event) => {
                 if (event.key === "Enter") void handleCreateProject()
               }}
-              placeholder="输入项目名后回车新建"
+              placeholder={t("输入项目名后回车新建", "Enter project name and press Enter")}
             />
             <button
               type="button"
@@ -102,7 +104,7 @@ export function ProjectHome() {
                 "bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]"
               )}
             >
-              新建项目
+              {t("新建项目", "New project")}
             </button>
           </div>
         </div>
@@ -113,7 +115,7 @@ export function ProjectHome() {
               <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-[10px] bg-[var(--surface-secondary)]">
                 <AppIcon name="folderOpen" size={18} className="text-[var(--fg-muted)]" />
               </div>
-              <p className="text-[14px] text-[var(--fg-secondary)]">还没有项目，先创建一个开始吧</p>
+              <p className="text-[14px] text-[var(--fg-secondary)]">{t("还没有项目，先创建一个开始吧", "No projects yet. Create one to get started.")}</p>
             </div>
           </div>
         ) : (
@@ -150,11 +152,11 @@ export function ProjectHome() {
                     <div className="truncate text-[14px] font-semibold text-[var(--fg)]">{project.name}</div>
                     {active && (
                       <span className="ml-auto rounded-full bg-[var(--accent)]/14 px-2 py-0.5 text-[11px] text-[var(--accent)]">
-                        当前
+                        {t("当前", "Current")}
                       </span>
                     )}
                   </div>
-                  <div className="mb-3 text-[12px] text-[var(--fg-muted)]">{formatUpdatedAt(project.updatedAt)}</div>
+                  <div className="mb-3 text-[12px] text-[var(--fg-muted)]">{formatUpdatedAt(project.updatedAt, locale, t("最近更新", "Updated"))}</div>
                   <div className="mb-2">
                     <input
                       value={descriptionDrafts[project.id] ?? project.description ?? ""}
@@ -174,7 +176,7 @@ export function ProjectHome() {
                         "text-[11px] text-[var(--fg-secondary)] outline-none transition-colors",
                         "focus:border-[var(--accent)] placeholder:text-[var(--fg-muted)]"
                       )}
-                      placeholder="输入项目描述（回车或失焦保存）"
+                      placeholder={t("输入项目描述（回车或失焦保存）", "Enter project description (save on Enter/blur)")}
                     />
                   </div>
                   <div className="relative mt-2">
@@ -193,7 +195,7 @@ export function ProjectHome() {
                         className="h-2.5 w-2.5 rounded-full"
                         style={{ backgroundColor: project.themeColor || "var(--accent)" }}
                       />
-                      <span>主题色</span>
+                      <span>{t("主题色", "Theme color")}</span>
                       <AppIcon
                         name="arrowDown"
                         size={10}
@@ -208,7 +210,7 @@ export function ProjectHome() {
                         )}
                         onClick={(event) => event.stopPropagation()}
                       >
-                        <div className="mb-2 text-[10px] text-[var(--fg-muted)]">选择项目主题色</div>
+                        <div className="mb-2 text-[10px] text-[var(--fg-muted)]">{t("选择项目主题色", "Pick a project theme color")}</div>
                         <div className="flex flex-wrap gap-1.5">
                           {PROJECT_THEME_COLORS.map((color) => {
                             const selected = (project.themeColor || "").toUpperCase() === color.toUpperCase()

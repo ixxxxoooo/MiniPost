@@ -9,6 +9,7 @@ import { ResponseHeaders } from "./ResponseHeaders"
 import { ResponseCookies } from "./ResponseCookies"
 import { cn } from "@/lib/utils"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
+import { useI18n } from "@/hooks/useI18n"
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -69,36 +70,37 @@ function statusDotClass(code: number): string {
   return "bg-[var(--danger)]"
 }
 
-function getStatusExplanation(code: number): string {
+function getStatusExplanation(code: number, isZh: boolean): string {
+  const t = (zh: string, en: string) => (isZh ? zh : en)
   const explicit: Record<number, string> = {
-    200: "请求成功，服务器已返回预期结果。",
-    201: "资源创建成功。",
-    204: "请求成功，但响应体为空。",
-    301: "资源已永久移动到新地址。",
-    302: "资源临时重定向到其他地址。",
-    304: "资源未修改，可使用缓存。",
-    400: "请求参数或格式错误，服务器无法处理。",
-    401: "未通过身份认证，请检查凭据。",
-    403: "服务器理解请求，但拒绝访问。",
-    404: "请求资源不存在。",
-    405: "请求方法不被该资源允许。",
-    408: "请求超时，服务器等待客户端过久。",
-    409: "请求冲突，通常与资源状态有关。",
-    413: "请求体过大，服务器拒绝处理。",
-    415: "请求媒体类型不受支持。",
-    422: "请求格式正确，但语义校验失败。",
-    429: "请求过于频繁，触发限流。",
-    500: "服务器内部错误。",
-    501: "服务器不支持该请求能力。",
-    502: "网关收到上游无效响应。",
-    503: "服务暂时不可用。",
-    504: "网关等待上游响应超时。",
+    200: t("请求成功，服务器已返回预期结果。", "Request succeeded and the server returned the expected result."),
+    201: t("资源创建成功。", "Resource created successfully."),
+    204: t("请求成功，但响应体为空。", "Request succeeded, but the response body is empty."),
+    301: t("资源已永久移动到新地址。", "Resource has moved permanently to a new location."),
+    302: t("资源临时重定向到其他地址。", "Resource is temporarily redirected to another location."),
+    304: t("资源未修改，可使用缓存。", "Resource not modified; cached content can be used."),
+    400: t("请求参数或格式错误，服务器无法处理。", "Invalid request params or format; server cannot process it."),
+    401: t("未通过身份认证，请检查凭据。", "Authentication failed. Check your credentials."),
+    403: t("服务器理解请求，但拒绝访问。", "Server understood the request but refuses access."),
+    404: t("请求资源不存在。", "Requested resource was not found."),
+    405: t("请求方法不被该资源允许。", "Request method is not allowed for this resource."),
+    408: t("请求超时，服务器等待客户端过久。", "Request timed out; server waited too long for the client."),
+    409: t("请求冲突，通常与资源状态有关。", "Request conflict, usually related to resource state."),
+    413: t("请求体过大，服务器拒绝处理。", "Request body is too large; server rejected it."),
+    415: t("请求媒体类型不受支持。", "Unsupported request media type."),
+    422: t("请求格式正确，但语义校验失败。", "Request format is valid but semantic validation failed."),
+    429: t("请求过于频繁，触发限流。", "Too many requests; rate limit triggered."),
+    500: t("服务器内部错误。", "Internal server error."),
+    501: t("服务器不支持该请求能力。", "Server does not support this request capability."),
+    502: t("网关收到上游无效响应。", "Gateway received an invalid upstream response."),
+    503: t("服务暂时不可用。", "Service is temporarily unavailable."),
+    504: t("网关等待上游响应超时。", "Gateway timed out waiting for upstream response."),
   }
   if (explicit[code]) return explicit[code]
-  if (code >= 200 && code < 300) return "请求已成功处理。"
-  if (code >= 300 && code < 400) return "请求被重定向，请关注 Location 或重定向策略。"
-  if (code >= 400 && code < 500) return "客户端请求存在问题，请检查 URL、参数、认证和方法。"
-  return "服务器处理请求时发生错误，请检查服务端日志或网关链路。"
+  if (code >= 200 && code < 300) return t("请求已成功处理。", "Request was handled successfully.")
+  if (code >= 300 && code < 400) return t("请求被重定向，请关注 Location 或重定向策略。", "Request was redirected. Check Location or redirect policy.")
+  if (code >= 400 && code < 500) return t("客户端请求存在问题，请检查 URL、参数、认证和方法。", "Client request issue. Check URL, params, authentication, and method.")
+  return t("服务器处理请求时发生错误，请检查服务端日志或网关链路。", "Server error while processing request. Check server logs or gateway path.")
 }
 
 function parseResponseCookies(headers: Record<string, string[]>): Array<{ name: string; value: string; attributes: string }> {
@@ -145,79 +147,81 @@ type TimingRow = {
   barClass: string
 }
 
-function parseRequestError(raw: string): ParsedRequestError {
+function parseRequestError(raw: string, isZh: boolean): ParsedRequestError {
+  const t = (zh: string, en: string) => (isZh ? zh : en)
   const trimmed = raw.trim()
   const match = trimmed.match(/^\[([A-Z0-9_]+)\]\s*([^:]+)(?::\s*(.*))?$/)
   if (!match) {
-    return { code: "REQUEST_FAILED", message: "请求发送失败", detail: trimmed }
+    return { code: "REQUEST_FAILED", message: t("请求发送失败", "Request failed"), detail: trimmed }
   }
   return {
     code: match[1] || "REQUEST_FAILED",
-    message: (match[2] || "请求发送失败").trim(),
+    message: (match[2] || t("请求发送失败", "Request failed")).trim(),
     detail: (match[3] || "").trim(),
   }
 }
 
-function getRequestErrorPresentation(parsed: ParsedRequestError): RequestErrorPresentation {
+function getRequestErrorPresentation(parsed: ParsedRequestError, isZh: boolean): RequestErrorPresentation {
+  const t = (zh: string, en: string) => (isZh ? zh : en)
   const detail = parsed.detail || parsed.message
   const lower = detail.toLowerCase()
 
   if (parsed.code === "DNS_LOOKUP_FAILED" || lower.includes("no such host")) {
     return {
-      title: "Could not send request",
+      title: t("无法发送请求", "Could not send request"),
       badgeToneClass: "bg-[#fbeceb] text-[#b44840]",
       badgeText: `Error: ${detail}`,
-      description: "无法解析目标域名，DNS 查询失败。",
-      suggestion: "请检查域名拼写、网络 DNS 设置，或尝试切换网络后重试。",
+      description: t("无法解析目标域名，DNS 查询失败。", "Failed to resolve target hostname (DNS lookup failed)."),
+      suggestion: t("请检查域名拼写、网络 DNS 设置，或尝试切换网络后重试。", "Check domain spelling and DNS settings, or switch network and retry."),
     }
   }
 
   if (parsed.code === "CONNECTION_REFUSED" || lower.includes("connection refused") || lower.includes("econnrefused")) {
     return {
-      title: "Could not send request",
+      title: t("无法发送请求", "Could not send request"),
       badgeToneClass: "bg-[#fbeceb] text-[#b44840]",
       badgeText: `Error: ${detail}`,
-      description: "连接被目标地址拒绝，服务可能未启动或端口不可达。",
-      suggestion: "请检查目标服务状态、端口、代理或防火墙策略。",
+      description: t("连接被目标地址拒绝，服务可能未启动或端口不可达。", "Connection was refused by target. Service may be down or port unreachable."),
+      suggestion: t("请检查目标服务状态、端口、代理或防火墙策略。", "Check service status, port, proxy, or firewall policy."),
     }
   }
 
   if (parsed.code === "REQUEST_TIMEOUT" || lower.includes("timeout") || lower.includes("deadline exceeded")) {
     return {
-      title: "Could not send request",
+      title: t("无法发送请求", "Could not send request"),
       badgeToneClass: "bg-[#fbf2e6] text-[#a56412]",
       badgeText: `Error: ${detail}`,
-      description: "请求在超时时间内未完成。",
-      suggestion: "请增大请求超时、检查网络连通性，或确认服务是否响应较慢。",
+      description: t("请求在超时时间内未完成。", "Request did not complete within timeout."),
+      suggestion: t("请增大请求超时、检查网络连通性，或确认服务是否响应较慢。", "Increase timeout, check network connectivity, or verify whether the service responds slowly."),
     }
   }
 
   if (parsed.code === "TLS_HANDSHAKE_FAILED" || lower.includes("x509") || lower.includes("certificate") || lower.includes("tls")) {
     return {
-      title: "Could not send request",
+      title: t("无法发送请求", "Could not send request"),
       badgeToneClass: "bg-[#fbf2e6] text-[#a56412]",
       badgeText: `Error: ${detail}`,
-      description: "TLS 握手或证书校验失败。",
-      suggestion: "请检查证书有效期、证书链配置，或在调试时临时关闭 SSL 校验。",
+      description: t("TLS 握手或证书校验失败。", "TLS handshake or certificate validation failed."),
+      suggestion: t("请检查证书有效期、证书链配置，或在调试时临时关闭 SSL 校验。", "Check certificate validity and chain configuration, or temporarily disable SSL verification for debugging."),
     }
   }
 
   if (parsed.code === "CONNECTION_CLOSED" || lower.includes("eof")) {
     return {
-      title: "Could not send request",
+      title: t("无法发送请求", "Could not send request"),
       badgeToneClass: "bg-[#fbeceb] text-[#b44840]",
       badgeText: `Error: ${detail}`,
-      description: "连接在请求过程中被提前关闭。",
-      suggestion: "这通常与网络链路、代理拦截或目标服务异常有关，请查看控制台日志定位。",
+      description: t("连接在请求过程中被提前关闭。", "Connection was closed before the request finished."),
+      suggestion: t("这通常与网络链路、代理拦截或目标服务异常有关，请查看控制台日志定位。", "Usually related to network path, proxy interception, or target service issues. Check console logs."),
     }
   }
 
   return {
-    title: "Could not send request",
+    title: t("无法发送请求", "Could not send request"),
     badgeToneClass: "bg-[#fbeceb] text-[#b44840]",
     badgeText: `Error: ${detail}`,
-    description: "请求未能成功发送。",
-    suggestion: "请检查 URL、协议、代理、证书或超时设置后重试。",
+    description: t("请求未能成功发送。", "The request could not be sent."),
+    suggestion: t("请检查 URL、协议、代理、证书或超时设置后重试。", "Check URL, protocol, proxy, certificate, or timeout settings and retry."),
   }
 }
 
@@ -230,6 +234,7 @@ function LoadingTopShimmer() {
 }
 
 export function ResponseViewer() {
+  const { t, isZh } = useI18n()
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const { isSending, resolved } = useUIStore()
   const [activeTabValue, setActiveTabValue] = useState("body")
@@ -242,22 +247,22 @@ export function ResponseViewer() {
   const streamActive = activeTab?.streamActive ?? false
   const hasStreamEntries = streamEntries.length > 0
   const safeHeaders = response?.headers ?? {}
-  const parsedError = responseError ? parseRequestError(responseError) : null
-  const errorPresentation = parsedError ? getRequestErrorPresentation(parsedError) : null
+  const parsedError = responseError ? parseRequestError(responseError, isZh) : null
+  const errorPresentation = parsedError ? getRequestErrorPresentation(parsedError, isZh) : null
   const canSendFromEmptyState = Boolean(activeTab?.request.url?.trim())
 
   const timingRows = useMemo<TimingRow[]>(() => {
     if (!response) return []
     const timings = response.timings
     const phaseRows: Array<Omit<TimingRow, "start">> = [
-      { key: "prepare", label: "Prepare", value: timings?.prepare ?? 0, barClass: "bg-[#b7bdc6]" },
-      { key: "socketInitialization", label: "Socket Initialization", value: timings?.socketInitialization ?? 0, barClass: "bg-[#f2be42]" },
-      { key: "dnsLookup", label: "DNS Lookup", value: timings?.dnsLookup ?? 0, barClass: "bg-[#f2be42]" },
-      { key: "tcpHandshake", label: "TCP Handshake", value: timings?.tcpHandshake ?? 0, barClass: "bg-[#4c89e3]" },
-      { key: "sslHandshake", label: "SSL Handshake", value: timings?.sslHandshake ?? 0, barClass: "bg-[#3d78cf]" },
-      { key: "waitingTTFB", label: "Waiting (TTFB)", value: timings?.waitingTTFB ?? response.duration, barClass: "bg-[#ef8f67]" },
-      { key: "download", label: "Download", value: timings?.download ?? 0, barClass: "bg-[#5ca379]" },
-      { key: "process", label: "Process", value: timings?.process ?? 0, barClass: "bg-[#a5adb8]" },
+      { key: "prepare", label: t("准备", "Prepare"), value: timings?.prepare ?? 0, barClass: "bg-[#b7bdc6]" },
+      { key: "socketInitialization", label: t("Socket 初始化", "Socket Initialization"), value: timings?.socketInitialization ?? 0, barClass: "bg-[#f2be42]" },
+      { key: "dnsLookup", label: t("DNS 查询", "DNS Lookup"), value: timings?.dnsLookup ?? 0, barClass: "bg-[#f2be42]" },
+      { key: "tcpHandshake", label: t("TCP 握手", "TCP Handshake"), value: timings?.tcpHandshake ?? 0, barClass: "bg-[#4c89e3]" },
+      { key: "sslHandshake", label: t("SSL 握手", "SSL Handshake"), value: timings?.sslHandshake ?? 0, barClass: "bg-[#3d78cf]" },
+      { key: "waitingTTFB", label: t("等待首字节 (TTFB)", "Waiting (TTFB)"), value: timings?.waitingTTFB ?? response.duration, barClass: "bg-[#ef8f67]" },
+      { key: "download", label: t("下载", "Download"), value: timings?.download ?? 0, barClass: "bg-[#5ca379]" },
+      { key: "process", label: t("处理", "Process"), value: timings?.process ?? 0, barClass: "bg-[#a5adb8]" },
     ]
     let cursor = 0
     return phaseRows.map((row) => {
@@ -266,7 +271,7 @@ export function ResponseViewer() {
       cursor += normalizedValue
       return next
     })
-  }, [response])
+  }, [response, t])
 
   const timingTotal = useMemo(() => {
     if (!response) return 1
@@ -376,7 +381,7 @@ export function ResponseViewer() {
     return (
       <div className="flex h-full flex-col bg-[var(--surface)]">
         <div className="flex h-[32px] items-center px-[var(--size-padding-sm)]">
-          <span className="text-[13px] font-semibold text-[var(--fg)]">Response</span>
+          <span className="text-[13px] font-semibold text-[var(--fg)]">{t("响应", "Response")}</span>
         </div>
 
         <div className="flex flex-1 items-center justify-center px-4">
@@ -393,7 +398,7 @@ export function ResponseViewer() {
             style={{ backgroundColor: resolved === "dark" ? "rgb(52,52,52)" : "rgb(249,249,249)" }}
           >
             <AppIcon name="clock" size={15} />
-            <span>Send + Get a successful response</span>
+            <span>{t("发送并获取成功响应", "Send + Get a successful response")}</span>
             <span className="ml-1 inline-flex items-center gap-1 text-[10px] text-[var(--fg-muted)]">
               <kbd className="h-4 min-w-4 rounded-[4px] border border-[var(--button-border)] bg-[var(--surface)] px-1 font-mono">⌘</kbd>
               <kbd className="h-4 min-w-4 rounded-[4px] border border-[var(--button-border)] bg-[var(--surface)] px-1 font-mono">Enter</kbd>
@@ -408,10 +413,10 @@ export function ResponseViewer() {
     return (
       <div className="relative h-full bg-[var(--surface)]">
         <div className="flex h-[32px] items-center px-[var(--size-padding-sm)]">
-          <span className="text-[13px] font-semibold text-[var(--fg)]">Response</span>
+          <span className="text-[13px] font-semibold text-[var(--fg)]">{t("响应", "Response")}</span>
         </div>
         <div className="flex h-[calc(100%-32px)] items-center justify-center px-4">
-          <span className="text-[13px] text-[var(--fg-secondary)]">发送请求...</span>
+          <span className="text-[13px] text-[var(--fg-secondary)]">{t("发送请求...", "Sending request...")}</span>
         </div>
       </div>
     )
@@ -429,7 +434,7 @@ export function ResponseViewer() {
         </div>
       )}
 
-      {/* 发送中的叠加层 */}
+      {/* sending overlay */}
       {isSending && !hasStreamEntries && (
         <div className="absolute inset-x-0 bottom-0 top-[32px] z-10 pointer-events-auto bg-[var(--response-loading-overlay)]" />
       )}
@@ -437,15 +442,15 @@ export function ResponseViewer() {
       <Tabs value={activeTabValue} onValueChange={setActiveTabValue} className="flex-1 flex flex-col min-h-0">
         <div className="flex items-center h-[32px] px-[var(--size-padding-sm)]">
           <TabsList className="flex-1 justify-start">
-            <TabsTrigger value="body">Body</TabsTrigger>
+            <TabsTrigger value="body">{t("响应体", "Body")}</TabsTrigger>
             <TabsTrigger value="headers">
-              Headers
+              {t("响应头", "Headers")}
               <span className="ml-1 text-2xs text-[var(--fg-muted)]">
                 ({headerCount})
               </span>
             </TabsTrigger>
             <TabsTrigger value="cookies">
-              Cookies
+              {t("Cookies", "Cookies")}
               <span className="ml-1 text-2xs text-[var(--fg-muted)]">
                 ({cookieCount})
               </span>
@@ -457,7 +462,7 @@ export function ResponseViewer() {
               {response.warnings && response.warnings.length > 0 && (
                 <>
                   <span className="inline-flex h-5 items-center rounded-[7px] bg-[#fbf2e6] px-1.5 text-[10px] font-medium text-[#a56412]">
-                    Warning: {response.warnings[0]}
+                    {t("警告", "Warning")}: {response.warnings[0]}
                   </span>
                   <span className="text-[var(--fg-muted)]">•</span>
                 </>
@@ -483,7 +488,7 @@ export function ResponseViewer() {
                         {response.statusCode} {response.statusText}
                       </div>
                       <div className="mt-1 text-[12px] text-[var(--fg-secondary)] leading-5">
-                        {getStatusExplanation(response.statusCode)}
+                        {getStatusExplanation(response.statusCode, isZh)}
                       </div>
                     </div>
                   </div>
@@ -504,7 +509,7 @@ export function ResponseViewer() {
                   <div className="mb-1 flex items-center justify-between">
                     <div className="flex items-center gap-2 text-[13px] font-semibold text-[var(--fg)]">
                       <AppIcon name="clock" size={14} className="text-[var(--fg-muted)]" />
-                      <span>Response Time</span>
+                      <span>{t("响应时间", "Response Time")}</span>
                     </div>
                     <div className="text-[12px] font-semibold text-[var(--fg)] [font-variant-numeric:tabular-nums]">
                       {formatDuration(displayDuration)}
@@ -558,40 +563,40 @@ export function ResponseViewer() {
                 >
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-[var(--fg)]">
-                        <AppIcon name="download" size={14} className="text-[#2f6fd3]" />
-                        <span>Response Size</span>
+                        <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-[var(--fg)]">
+                          <AppIcon name="download" size={14} className="text-[#2f6fd3]" />
+                        <span>{t("响应大小", "Response Size")}</span>
                       </span>
                       <span className="text-[13px] font-semibold text-[var(--fg)] [font-variant-numeric:tabular-nums]">
                         {formatSize(sizeDetails?.responseTotal ?? displaySize)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-[12px] text-[var(--fg-secondary)]">
-                      <span>Headers</span>
+                      <span>{t("响应头", "Headers")}</span>
                       <span className="[font-variant-numeric:tabular-nums]">{formatSize(sizeDetails?.responseHeaders ?? 0)}</span>
                     </div>
                     <div className="flex items-center justify-between text-[12px] text-[var(--fg-secondary)]">
-                      <span>Body</span>
+                      <span>{t("响应体", "Body")}</span>
                       <span className="[font-variant-numeric:tabular-nums]">{formatSize(sizeDetails?.responseBody ?? displaySize)}</span>
                     </div>
                   </div>
                   <div className="my-2 h-px bg-[var(--border-subtle)]" />
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-[var(--fg)]">
-                        <AppIcon name="upload" size={14} className="text-[#a8821f]" />
-                        <span>Request Size</span>
+                        <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-[var(--fg)]">
+                          <AppIcon name="upload" size={14} className="text-[#a8821f]" />
+                        <span>{t("请求大小", "Request Size")}</span>
                       </span>
                       <span className="text-[13px] font-semibold text-[var(--fg)] [font-variant-numeric:tabular-nums]">
                         {formatSize(sizeDetails?.requestTotal ?? 0)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-[12px] text-[var(--fg-secondary)]">
-                      <span>Headers</span>
+                      <span>{t("请求头", "Headers")}</span>
                       <span className="[font-variant-numeric:tabular-nums]">{formatSize(sizeDetails?.requestHeaders ?? 0)}</span>
                     </div>
                     <div className="flex items-center justify-between text-[12px] text-[var(--fg-secondary)]">
-                      <span>Body</span>
+                      <span>{t("请求体", "Body")}</span>
                       <span className="[font-variant-numeric:tabular-nums]">{formatSize(sizeDetails?.requestBody ?? 0)}</span>
                     </div>
                   </div>
@@ -622,7 +627,7 @@ export function ResponseViewer() {
                     <span className="inline-flex items-center justify-center rounded-[6px] bg-[var(--surface-secondary)] p-1">
                       <AppIcon name="globe" size={12} className="text-[var(--fg-secondary)]" />
                     </span>
-                    <span className="text-[12px] font-semibold text-[var(--fg)]">Network</span>
+                    <span className="text-[12px] font-semibold text-[var(--fg)]">{t("网络", "Network")}</span>
                     <span className="relative group/network-info ml-auto inline-flex h-5 w-5 items-center justify-center rounded-[6px] text-[var(--fg-muted)] hover:bg-[var(--surface-secondary)]">
                       <AppIcon name="info" size={11} />
                       <span
@@ -633,37 +638,37 @@ export function ResponseViewer() {
                           "group-hover/network-info:opacity-100 group-hover/network-info:translate-y-0"
                         )}
                       >
-                        这里展示本次请求的网络连接与 TLS 协商结果，便于定位代理、证书和链路问题。
+                        {t("这里展示本次请求的网络连接与 TLS 协商结果，便于定位代理、证书和链路问题。", "Shows network and TLS negotiation details for this request to help diagnose proxy, certificate, and connection issues.")}
                       </span>
                     </span>
                   </div>
 
                   <div className="grid grid-cols-[126px_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12px] leading-5">
-                    <span className="text-[var(--fg-secondary)]">HTTP Version</span>
+                    <span className="text-[var(--fg-secondary)]">{t("HTTP 版本", "HTTP Version")}</span>
                     <span className="font-mono text-[var(--fg)]">{displayNetworkValue(response.network?.httpVersion)}</span>
-                    <span className="text-[var(--fg-secondary)]">Local Address</span>
+                    <span className="text-[var(--fg-secondary)]">{t("本地地址", "Local Address")}</span>
                     <span className="font-mono text-[var(--fg)]">{displayNetworkValue(response.network?.localAddress)}</span>
-                    <span className="text-[var(--fg-secondary)]">Remote Address</span>
+                    <span className="text-[var(--fg-secondary)]">{t("远端地址", "Remote Address")}</span>
                     <span className="font-mono text-[var(--fg)]">{displayNetworkValue(response.network?.remoteAddress)}</span>
                   </div>
 
                   <div className="my-1.5 h-px bg-[var(--border-subtle)]" />
 
                   <div className="grid grid-cols-[126px_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12px] leading-5">
-                    <span className="text-[var(--fg-secondary)]">TLS Protocol</span>
+                    <span className="text-[var(--fg-secondary)]">{t("TLS 协议", "TLS Protocol")}</span>
                     <span className="font-mono text-[var(--fg)]">{displayNetworkValue(response.network?.tlsProtocol)}</span>
-                    <span className="text-[var(--fg-secondary)]">Cipher Name</span>
+                    <span className="text-[var(--fg-secondary)]">{t("加密套件", "Cipher Name")}</span>
                     <span className="font-mono text-[var(--fg)] break-all">{displayNetworkValue(response.network?.cipherName)}</span>
                   </div>
 
                   <div className="my-1.5 h-px bg-[var(--border-subtle)]" />
 
                   <div className="grid grid-cols-[126px_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12px] leading-5">
-                    <span className="text-[var(--fg-secondary)]">Certificate CN</span>
+                    <span className="text-[var(--fg-secondary)]">{t("证书 CN", "Certificate CN")}</span>
                     <span className="font-mono text-[var(--fg)] break-all">{displayNetworkValue(response.network?.certificateCN)}</span>
-                    <span className="text-[var(--fg-secondary)]">Issuer CN</span>
+                    <span className="text-[var(--fg-secondary)]">{t("签发者 CN", "Issuer CN")}</span>
                     <span className="font-mono text-[var(--fg)] break-all">{displayNetworkValue(response.network?.issuerCN)}</span>
-                    <span className="text-[var(--fg-secondary)]">Valid Until</span>
+                    <span className="text-[var(--fg-secondary)]">{t("有效期至", "Valid Until")}</span>
                     <span className="font-mono text-[var(--fg)]">{formatNetworkValidUntil(response.network?.validUntil)}</span>
                   </div>
                 </div>
@@ -685,7 +690,7 @@ export function ResponseViewer() {
                         </div>
                         <div className="min-w-0 flex-1 space-y-2">
                           <div className="text-[14px] font-semibold text-[var(--fg)] leading-5">
-                            无法发送请求
+                            {t("无法发送请求", "Could not send request")}
                           </div>
                           <div className="flex items-center gap-2 text-[12px] font-mono">
                             <span className={cn("font-semibold uppercase", METHOD_COLORS[(activeTab?.request.method as HttpMethod)] || "text-[var(--fg-muted)]")}>
@@ -695,7 +700,7 @@ export function ResponseViewer() {
                           </div>
 
                           <div className={cn("inline-flex max-w-full items-center rounded-[8px] px-2.5 py-1.5 text-[12px] break-all", errorPresentation?.badgeToneClass || "bg-[#fbeceb] text-[#b44840]")}>
-                            Error: {errorPresentation?.badgeText?.replace(/^Error:\s*/i, "") || responseError}
+                            {t("错误", "Error")}: {errorPresentation?.badgeText?.replace(/^Error:\s*/i, "") || responseError}
                           </div>
 
                           <div className="text-[12px] leading-6 text-[var(--fg-secondary)]">
@@ -710,10 +715,10 @@ export function ResponseViewer() {
                               onClick={() => useUIStore.setState({ consoleOpen: true })}
                             >
                               <AppIcon name="commandLine" size={12} />
-                              View in console
+                              {t("在控制台查看", "View in console")}
                             </button>
                             <span>•</span>
-                            <span>Code: {parsedError?.code || "REQUEST_FAILED"}</span>
+                            <span>{t("错误码", "Code")}: {parsedError?.code || "REQUEST_FAILED"}</span>
                           </div>
                         </div>
                       </div>
@@ -726,7 +731,7 @@ export function ResponseViewer() {
                 <ResponseBody body={response.body} contentType={response.contentType} isDark={isDark} />
               ) : (
                 <div className="flex h-full items-center justify-center text-2xs text-[var(--fg-muted)]">
-                  暂无响应内容
+                  {t("暂无响应内容", "No response content")}
                 </div>
               )}
             </div>

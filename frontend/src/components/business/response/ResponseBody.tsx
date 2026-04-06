@@ -5,6 +5,7 @@ import { CodeEditor, type EditorLanguage } from "@/components/ui/CodeEditor"
 import { AppIcon } from "@/components/ui/icon"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useUIStore } from "@/stores/uiStore"
+import { useI18n } from "@/hooks/useI18n"
 
 interface ResponseBodyProps {
   body: string
@@ -21,15 +22,28 @@ interface DisplayOption {
   glyph: string
 }
 
-const DISPLAY_OPTIONS: DisplayOption[] = [
-  { value: "json", label: "JSON", group: "structured", glyph: "{}" },
-  { value: "xml", label: "XML", group: "structured", glyph: "</>" },
-  { value: "html", label: "HTML", group: "structured", glyph: "</>" },
-  { value: "javascript", label: "JavaScript", group: "structured", glyph: "JS" },
-  { value: "raw", label: "Raw", group: "encoded", glyph: "T" },
-  { value: "hex", label: "Hex", group: "encoded", glyph: "0x" },
-  { value: "base64", label: "Base64", group: "encoded", glyph: "64" },
+const DISPLAY_OPTION_META: Array<Omit<DisplayOption, "label">> = [
+  { value: "json", group: "structured", glyph: "{}" },
+  { value: "xml", group: "structured", glyph: "</>" },
+  { value: "html", group: "structured", glyph: "</>" },
+  { value: "javascript", group: "structured", glyph: "JS" },
+  { value: "raw", group: "encoded", glyph: "T" },
+  { value: "hex", group: "encoded", glyph: "0x" },
+  { value: "base64", group: "encoded", glyph: "64" },
 ]
+
+function getDisplayOptionLabel(value: DisplayMode, isZh: boolean): string {
+  if (value === "raw") return isZh ? "原始" : "Raw"
+  if (value === "hex") return isZh ? "十六进制" : "Hex"
+  return value === "javascript" ? "JavaScript" : value.toUpperCase()
+}
+
+function getDisplayOptions(isZh: boolean): DisplayOption[] {
+  return DISPLAY_OPTION_META.map((option) => ({
+    ...option,
+    label: getDisplayOptionLabel(option.value, isZh),
+  }))
+}
 
 function looksLikeJson(text: string): boolean {
   const trimmed = text.trimStart()
@@ -266,23 +280,27 @@ function parseJsonPathTokens(expression: string): Array<string | number> | null 
   return tokens
 }
 
-function tryApplyJsonFilter(rawBody: string, expression: string): { text: string; error: string | null } {
+function tryApplyJsonFilter(
+  rawBody: string,
+  expression: string,
+  t: (zh: string, en: string) => string
+): { text: string; error: string | null } {
   try {
     const parsed = JSON.parse(rawBody)
     const tokens = parseJsonPathTokens(expression)
     if (!tokens) {
-      return { text: rawBody, error: "JSONPath 表达式无效（示例：$.headers.host）" }
+      return { text: rawBody, error: t("JSONPath 表达式无效（示例：$.headers.host）", "Invalid JSONPath expression (example: $.headers.host)") }
     }
     let current: unknown = parsed
     for (const token of tokens) {
       if (typeof token === "number") {
         if (!Array.isArray(current) || token < 0 || token >= current.length) {
-          return { text: rawBody, error: "过滤结果为空" }
+          return { text: rawBody, error: t("过滤结果为空", "No results after filtering") }
         }
         current = current[token]
       } else {
         if (typeof current !== "object" || current === null || !(token in (current as Record<string, unknown>))) {
-          return { text: rawBody, error: "过滤结果为空" }
+          return { text: rawBody, error: t("过滤结果为空", "No results after filtering") }
         }
         current = (current as Record<string, unknown>)[token]
       }
@@ -293,15 +311,19 @@ function tryApplyJsonFilter(rawBody: string, expression: string): { text: string
     }
     return { text: JSON.stringify(current, null, 2), error: null }
   } catch {
-    return { text: rawBody, error: "JSON 解析失败，无法按路径过滤" }
+    return { text: rawBody, error: t("JSON 解析失败，无法按路径过滤", "JSON parse failed, cannot filter by path") }
   }
 }
 
-function tryApplyTextFilter(text: string, expression: string): { text: string; error: string | null } {
+function tryApplyTextFilter(
+  text: string,
+  expression: string,
+  t: (zh: string, en: string) => string
+): { text: string; error: string | null } {
   const query = expression.trim().toLowerCase()
   if (!query) return { text, error: null }
   const lines = text.split("\n").filter((line) => line.toLowerCase().includes(query))
-  if (lines.length === 0) return { text, error: "过滤结果为空" }
+  if (lines.length === 0) return { text, error: t("过滤结果为空", "No results after filtering") }
   return { text: lines.join("\n"), error: null }
 }
 
@@ -365,8 +387,8 @@ function buildJsonNodeRows(node: unknown): JsonNodeRow[] {
   return []
 }
 
-function buildPathSegments(tokens: JsonPathToken[]): Array<{ label: string; tokens: JsonPathToken[] }> {
-  const segments: Array<{ label: string; tokens: JsonPathToken[] }> = [{ label: "Root", tokens: [] }]
+function buildPathSegments(tokens: JsonPathToken[], rootLabel: string): Array<{ label: string; tokens: JsonPathToken[] }> {
+  const segments: Array<{ label: string; tokens: JsonPathToken[] }> = [{ label: rootLabel, tokens: [] }]
   const currentTokens: JsonPathToken[] = []
   tokens.forEach((token) => {
     currentTokens.push(token)
@@ -385,11 +407,19 @@ function formatPreviewPrimitive(value: unknown): string {
   return ""
 }
 
-function JsonStructuredPreview({ value }: { value: unknown }) {
+function JsonStructuredPreview({
+  value,
+  rootLabel,
+  valueLabel,
+}: {
+  value: unknown
+  rootLabel: string
+  valueLabel: string
+}) {
   const [tokens, setTokens] = useState<JsonPathToken[]>([])
   const currentNode = useMemo(() => resolveJsonPath(value, tokens), [tokens, value])
   const rows = useMemo(() => buildJsonNodeRows(currentNode), [currentNode])
-  const segments = useMemo(() => buildPathSegments(tokens), [tokens])
+  const segments = useMemo(() => buildPathSegments(tokens, rootLabel), [rootLabel, tokens])
 
   useEffect(() => {
     setTokens([])
@@ -461,7 +491,7 @@ function JsonStructuredPreview({ value }: { value: unknown }) {
             )
           }) : (
             <tr>
-              <td className="w-[32%] border-r border-[var(--border-subtle)] px-3 py-1.5 align-top font-semibold text-[var(--fg)]">value</td>
+              <td className="w-[32%] border-r border-[var(--border-subtle)] px-3 py-1.5 align-top font-semibold text-[var(--fg)]">{valueLabel}</td>
               <td className="px-3 py-1.5 align-top">
                 <span className={cn(
                   "break-all",
@@ -478,12 +508,12 @@ function JsonStructuredPreview({ value }: { value: unknown }) {
   )
 }
 
-function getDisplayLabel(mode: DisplayMode): string {
-  return DISPLAY_OPTIONS.find((option) => option.value === mode)?.label ?? "Raw"
+function getDisplayLabel(mode: DisplayMode, isZh: boolean): string {
+  return getDisplayOptions(isZh).find((option) => option.value === mode)?.label ?? (isZh ? "原始" : "Raw")
 }
 
 function getDisplayGlyph(mode: DisplayMode): string {
-  return DISPLAY_OPTIONS.find((option) => option.value === mode)?.glyph ?? "T"
+  return DISPLAY_OPTION_META.find((option) => option.value === mode)?.glyph ?? "T"
 }
 
 function ModeIcon({ glyph, checked = false }: { glyph: string; checked?: boolean }) {
@@ -505,17 +535,19 @@ function FormatDropdown({
   onChange,
   previewActive,
   onSwitchToCodeView,
+  isZh,
 }: {
   value: DisplayMode
   onChange: (mode: DisplayMode) => void
   previewActive: boolean
   onSwitchToCodeView: () => void
+  isZh: boolean
 }) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const longestLabelLength = useMemo(
-    () => DISPLAY_OPTIONS.reduce((max, option) => Math.max(max, option.label.length), 0),
-    []
+    () => getDisplayOptions(isZh).reduce((max, option) => Math.max(max, option.label.length), 0),
+    [isZh]
   )
   const [menuRect, setMenuRect] = useState<{ top: number; left: number; width: number }>({
     top: 0,
@@ -559,8 +591,9 @@ function FormatDropdown({
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [open])
 
-  const structured = DISPLAY_OPTIONS.filter((option) => option.group === "structured")
-  const encoded = DISPLAY_OPTIONS.filter((option) => option.group === "encoded")
+  const options = useMemo(() => getDisplayOptions(isZh), [isZh])
+  const structured = options.filter((option) => option.group === "structured")
+  const encoded = options.filter((option) => option.group === "encoded")
 
   return (
     <div className="relative">
@@ -583,7 +616,7 @@ function FormatDropdown({
         }}
       >
         <ModeIcon glyph={getDisplayGlyph(value)} checked />
-        <span>{getDisplayLabel(value)}</span>
+        <span>{getDisplayLabel(value, isZh)}</span>
         <AppIcon name="arrowDown" size={8} className="text-[var(--fg-muted)]" />
       </button>
 
@@ -671,6 +704,7 @@ function WrapGlyph() {
 }
 
 export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
+  const { t, isZh } = useI18n()
   const rootRef = useRef<HTMLDivElement>(null)
   const responseFormatDetection = useUIStore((s) => s.responseFormatDetection)
   const defaultMode = useMemo(
@@ -707,9 +741,9 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
 
   const filteredBodyState = useMemo(() => {
     if (!filterOpen || !filterExpr.trim()) return { text: formattedBody, error: null as string | null }
-    if (mode === "json") return tryApplyJsonFilter(body, filterExpr)
-    return tryApplyTextFilter(formattedBody, filterExpr)
-  }, [body, filterExpr, filterOpen, formattedBody, mode])
+    if (mode === "json") return tryApplyJsonFilter(body, filterExpr, t)
+    return tryApplyTextFilter(formattedBody, filterExpr, t)
+  }, [body, filterExpr, filterOpen, formattedBody, mode, t])
 
   const displayBody = filteredBodyState.text
 
@@ -782,6 +816,7 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
             onChange={setMode}
             previewActive={preview}
             onSwitchToCodeView={() => setPreview(false)}
+            isZh={isZh}
           />
           <Tooltip>
             <TooltipTrigger asChild>
@@ -797,10 +832,10 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
                 onClick={() => setPreview(true)}
               >
                 <AppIcon name="arrowRight" size={10} />
-                Preview
+                {t("预览", "Preview")}
               </button>
             </TooltipTrigger>
-            <TooltipContent>预览</TooltipContent>
+            <TooltipContent>{t("预览", "Preview")}</TooltipContent>
           </Tooltip>
         </div>
 
@@ -820,7 +855,7 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
                 <WrapGlyph />
               </button>
             </TooltipTrigger>
-            <TooltipContent>自动换行</TooltipContent>
+            <TooltipContent>{t("自动换行", "Line wrap")}</TooltipContent>
           </Tooltip>
           <span className="mx-0.5 h-3.5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
           <Tooltip>
@@ -838,7 +873,7 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
                 <FilterGlyph />
               </button>
             </TooltipTrigger>
-            <TooltipContent>过滤</TooltipContent>
+            <TooltipContent>{t("过滤", "Filter")}</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -850,7 +885,7 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
                 <AppIcon name="search" size={12} />
               </button>
             </TooltipTrigger>
-            <TooltipContent>查找 (⌘F)</TooltipContent>
+            <TooltipContent>{t("查找 (⌘F)", "Search (⌘F)")}</TooltipContent>
           </Tooltip>
           <span className="mx-0.5 h-3.5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
           <Tooltip>
@@ -863,7 +898,7 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
                 <AppIcon name="copy" size={12} className={cn(copied && "text-[var(--accent)]")} />
               </button>
             </TooltipTrigger>
-            <TooltipContent>{copied ? "已复制" : "复制响应体"}</TooltipContent>
+            <TooltipContent>{copied ? t("已复制", "Copied") : t("复制响应体", "Copy response body")}</TooltipContent>
           </Tooltip>
         </div>
       </div>
@@ -874,7 +909,9 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
             <input
               value={filterExpr}
               onChange={(e) => setFilterExpr(e.target.value)}
-              placeholder={mode === "json" ? "JSONPath 过滤（如 $.headers.host）" : "输入关键字过滤行"}
+              placeholder={mode === "json"
+                ? t("JSONPath 过滤（如 $.headers.host）", "JSONPath filter (e.g. $.headers.host)")
+                : t("输入关键字过滤行", "Filter lines by keyword")}
               className="h-7 flex-1 rounded-[8px] border border-[var(--button-border)] bg-[var(--surface)] px-2.5 text-[11px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
             />
             {filterExpr && (
@@ -883,7 +920,7 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
                 className="h-7 rounded-[8px] border border-[var(--button-border)] px-2 text-[11px] text-[var(--fg-secondary)] hover:bg-[var(--button-bg)]"
                 onClick={() => setFilterExpr("")}
               >
-                清空
+                {t("清空", "Clear")}
               </button>
             )}
           </div>
@@ -896,10 +933,10 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
       <div className="flex-1 min-h-0">
         {preview && previewAvailable ? (
           mode === "json" && jsonPreviewValue !== null ? (
-            <JsonStructuredPreview value={jsonPreviewValue} />
+            <JsonStructuredPreview value={jsonPreviewValue} rootLabel={t("根节点", "Root")} valueLabel={t("值", "value")} />
           ) : (
             <iframe
-              title="Response Preview"
+              title={t("响应预览", "Response Preview")}
               sandbox=""
               srcDoc={previewDoc}
               className="h-full w-full bg-[var(--surface)]"
@@ -908,7 +945,7 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
           )
         ) : (
           <CodeEditor
-            value={displayBody || "(空响应)"}
+            value={displayBody || t("(空响应)", "(empty response)")}
             language={editorLanguage}
             isDark={isDark}
             readOnly

@@ -1,8 +1,10 @@
 import { AUTH_TYPES, type AuthType } from "@/lib/constants"
+import { useI18n } from "@/hooks/useI18n"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { cn } from "@/lib/utils"
 
 export function AuthEditor() {
+  const { t } = useI18n()
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
 
@@ -45,14 +47,14 @@ export function AuthEditor() {
       <div className="pl-2">
         {auth.type === "none" && (
           <div className="text-center py-8 text-2xs text-[var(--fg-muted)]">
-            此请求不需要认证
+            {t("此请求不需要认证", "This request does not require authentication")}
           </div>
         )}
 
         {auth.type === "basic" && (
           <div className="space-y-2 max-w-md">
             <div>
-              <label className="text-2xs text-[var(--fg-secondary)] mb-1 block">用户名</label>
+              <label className="text-2xs text-[var(--fg-secondary)] mb-1 block">{t("用户名", "Username")}</label>
               <input
                 value={auth.basic?.username ?? ""}
                 onChange={(e) => updateTabRequest(tabId, {
@@ -63,7 +65,7 @@ export function AuthEditor() {
               />
             </div>
             <div>
-              <label className="text-2xs text-[var(--fg-secondary)] mb-1 block">密码</label>
+              <label className="text-2xs text-[var(--fg-secondary)] mb-1 block">{t("密码", "Password")}</label>
               <input
                 type="password"
                 value={auth.basic?.password ?? ""}
@@ -116,7 +118,7 @@ export function AuthEditor() {
               />
             </div>
             <div>
-              <label className="text-2xs text-[var(--fg-secondary)] mb-1 block">添加位置</label>
+              <label className="text-2xs text-[var(--fg-secondary)] mb-1 block">{t("添加位置", "Add to")}</label>
               <div className="flex items-center gap-2">
                 {(["header", "query"] as const).map((pos) => (
                   <button

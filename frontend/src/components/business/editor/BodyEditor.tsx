@@ -6,6 +6,7 @@ import { KeyValueEditor } from "./KeyValueEditor"
 import { FormDataEditor } from "./FormDataEditor"
 import { CodeEditor, formatJsonWithComments } from "@/components/ui/CodeEditor"
 import { AppIcon } from "@/components/ui/icon"
+import { useI18n } from "@/hooks/useI18n"
 import { cn } from "@/lib/utils"
 
 const BODY_TYPE_LABELS: Record<string, string> = {
@@ -19,6 +20,7 @@ const BODY_TYPE_LABELS: Record<string, string> = {
 const ALL_BODY_TYPES = BODY_TYPES
 
 export function BodyEditor() {
+  const { t } = useI18n()
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
   const { resolved } = useUIStore()
@@ -96,7 +98,7 @@ export function BodyEditor() {
       <div className={cn("flex-1 min-h-0", isCodeBody ? "overflow-hidden" : "overflow-auto")}>
         {body.type === "none" && (
           <div className="text-center py-8 text-2xs text-[var(--fg-muted)]">
-            此请求没有请求体
+            {t("此请求没有请求体", "This request has no body")}
           </div>
         )}
 
@@ -122,7 +124,7 @@ export function BodyEditor() {
                 value={body.raw ?? ""}
                 onChange={(val) => updateTabRequest(tabId, { body: { ...body, raw: val } })}
                 language="text"
-                placeholder="请求体内容..."
+                placeholder={t("请求体内容...", "Request body...")}
                 isDark={isDark}
                 fillParent
               />

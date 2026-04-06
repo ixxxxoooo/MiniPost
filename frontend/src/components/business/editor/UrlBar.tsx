@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
+import { useI18n } from "@/hooks/useI18n"
 import { cn } from "@/lib/utils"
 
 interface UrlBarProps {
@@ -15,6 +16,7 @@ interface UrlBarProps {
 }
 
 export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
+  const { t } = useI18n()
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
   const updateTab = useTabStore((s) => s.updateTab)
@@ -163,7 +165,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
                   <span className="block truncate">{requestName}</span>
                 </button>
               </TooltipTrigger>
-              <TooltipContent>单击编辑请求名称</TooltipContent>
+              <TooltipContent>{t("单击编辑请求名称", "Click to edit request name")}</TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -185,7 +187,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
                 METHOD_COLORS[request.method as HttpMethod]
               )}
             >
-              <SelectValue placeholder="方法" />
+              <SelectValue placeholder={t("方法", "Method")} />
             </SelectTrigger>
             <SelectContent>
               {HTTP_METHODS.map((method) => (
@@ -206,7 +208,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
           <input
             value={request.url}
             onChange={(e) => updateTabRequest(activeTab.id, { url: e.target.value })}
-            placeholder="输入请求 URL..."
+            placeholder={t("输入请求 URL...", "Enter request URL...")}
             className={cn(
               "h-[30px] min-w-0 flex-1 bg-transparent px-3",
               "border-0 text-[var(--fg)] font-mono text-[length:var(--size-font-xs)]",
@@ -234,7 +236,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
               Save
             </button>
           </TooltipTrigger>
-          <TooltipContent>保存 (⌘S)</TooltipContent>
+          <TooltipContent>{t("保存", "Save")} (⌘S)</TooltipContent>
         </Tooltip>
 
         {/* 发送/取消按钮组 */}

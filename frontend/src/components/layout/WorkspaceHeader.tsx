@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 import { AppIcon } from "@/components/ui/icon"
+import { useI18n } from "@/hooks/useI18n"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore, getProjectTabsFromState, getProjectActiveTabIdFromState } from "@/stores/tabStore"
@@ -30,6 +31,7 @@ function isSameTarget(a: NavigationTarget | undefined, b: NavigationTarget | und
 }
 
 export function WorkspaceHeader() {
+  const { t } = useI18n()
   const { currentProjectId, projects, selectProject, createProject, deleteProject, exportProjectJSON } = useProjectStore()
   const projectTabs = useTabStore(getProjectTabsFromState)
   const activeTabId = useTabStore(getProjectActiveTabIdFromState)
@@ -44,7 +46,7 @@ export function WorkspaceHeader() {
   const navigatingRef = useRef(false)
 
   const current = projects.find((project) => project.id === currentProjectId)
-  const currentLabel = current?.name || "选择项目"
+  const currentLabel = current?.name || t("选择项目", "Select project")
   const longestProjectNameLength = useMemo(() => {
     return projects.reduce((max, project) => Math.max(max, project.name.length), currentLabel.length)
   }, [projects, currentLabel])
@@ -260,7 +262,7 @@ export function WorkspaceHeader() {
               <AppIcon name="arrowLeft" size={14} strokeWidth={1.9} />
             </button>
           </TooltipTrigger>
-          <TooltipContent>后退</TooltipContent>
+          <TooltipContent>{t("后退", "Back")}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -278,7 +280,7 @@ export function WorkspaceHeader() {
               <AppIcon name="arrowRight" size={14} strokeWidth={1.9} />
             </button>
           </TooltipTrigger>
-          <TooltipContent>前进</TooltipContent>
+          <TooltipContent>{t("前进", "Forward")}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -303,7 +305,7 @@ export function WorkspaceHeader() {
               <AppIcon name="home" size={15} strokeWidth={1.65} />
             </button>
           </TooltipTrigger>
-          <TooltipContent>{workspaceView === "home" ? "关闭主页" : "打开主页"}</TooltipContent>
+          <TooltipContent>{workspaceView === "home" ? t("关闭主页", "Close home") : t("打开主页", "Open home")}</TooltipContent>
         </Tooltip>
 
         <div className="relative" style={{ width: `${triggerWidth}px`, maxWidth: `${BUTTON_MAX_WIDTH}px` }}>
@@ -317,7 +319,7 @@ export function WorkspaceHeader() {
           >
             <AppIcon name="folderShared" size={15} strokeWidth={1.65} className="text-[var(--fg-secondary)]" />
             <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-[var(--fg)]">
-              {current?.name || "选择项目"}
+              {current?.name || t("选择项目", "Select project")}
             </span>
             <AppIcon
               name="arrowDown"
@@ -348,7 +350,7 @@ export function WorkspaceHeader() {
                       "h-7 w-full rounded-[7px] border border-[var(--button-border)] bg-[var(--surface)] pl-7 pr-2.5",
                       "text-[10px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
                     )}
-                    placeholder="搜索或新建项目..."
+                    placeholder={t("搜索或新建项目...", "Search or create project...")}
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") void handleCreate() }}
@@ -364,7 +366,7 @@ export function WorkspaceHeader() {
                   }}
                   type="button"
                 >
-                  新建
+                  {t("新建", "New")}
                 </button>
               </div>
 
@@ -399,7 +401,7 @@ export function WorkspaceHeader() {
                         </div>
                       </button>
                       {selected && (
-                        <span className="text-[9px] font-medium text-[var(--fg-muted)] flex-shrink-0">当前</span>
+                        <span className="text-[9px] font-medium text-[var(--fg-muted)] flex-shrink-0">{t("当前", "Current")}</span>
                       )}
                       <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 flex-shrink-0 transition-opacity">
                         <Tooltip>
@@ -412,7 +414,7 @@ export function WorkspaceHeader() {
                               <AppIcon name="download" size={11} className="text-[var(--fg-muted)]" />
                             </button>
                           </TooltipTrigger>
-                          <TooltipContent>导出项目</TooltipContent>
+                          <TooltipContent>{t("导出项目", "Export project")}</TooltipContent>
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -424,7 +426,7 @@ export function WorkspaceHeader() {
                               <AppIcon name="delete" size={11} className="text-[var(--fg-muted)]" />
                             </button>
                           </TooltipTrigger>
-                          <TooltipContent>删除项目</TooltipContent>
+                          <TooltipContent>{t("删除项目", "Delete project")}</TooltipContent>
                         </Tooltip>
                       </div>
                     </div>
@@ -436,7 +438,7 @@ export function WorkspaceHeader() {
         </div>
       </div>
 
-      {/* 删除项目确认弹窗 */}
+      {/* delete project confirm modal */}
       {deleteConfirm && createPortal(
         <div className="fixed inset-0 z-[300] flex items-center justify-center" onClick={() => setDeleteConfirm(null)}>
           <div className="absolute inset-0 bg-black/40" />
@@ -447,9 +449,9 @@ export function WorkspaceHeader() {
             )}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-[length:var(--size-font-sm)] font-semibold text-[var(--fg)] mb-2">确认删除项目</h3>
+            <h3 className="text-[length:var(--size-font-sm)] font-semibold text-[var(--fg)] mb-2">{t("确认删除项目", "Confirm project deletion")}</h3>
             <p className="text-[length:var(--size-font-2xs)] text-[var(--fg-secondary)] mb-4">
-              确定要删除项目 <span className="font-semibold text-[var(--fg)]">「{deleteConfirm.name}」</span> 吗？该操作不可撤销，项目下的所有请求和文件夹都将被永久删除。
+              {t("确定要删除项目", "Are you sure you want to delete project")} <span className="font-semibold text-[var(--fg)]">「{deleteConfirm.name}」</span>{t("吗？该操作不可撤销，项目下的所有请求和文件夹都将被永久删除。", "? This action cannot be undone. All requests and folders under this project will be permanently deleted.")}
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -459,7 +461,7 @@ export function WorkspaceHeader() {
                 )}
                 onClick={() => setDeleteConfirm(null)}
               >
-                取消
+                {t("取消", "Cancel")}
               </button>
               <button
                 className={cn(
@@ -468,7 +470,7 @@ export function WorkspaceHeader() {
                 )}
                 onClick={() => void handleDeleteProject(deleteConfirm.id)}
               >
-                确认删除
+                {t("确认删除", "Delete")}
               </button>
             </div>
           </div>
@@ -486,11 +488,11 @@ export function WorkspaceHeader() {
             )}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-[length:var(--size-font-sm)] font-semibold text-[var(--fg)] mb-2">切换项目确认</h3>
+            <h3 className="text-[length:var(--size-font-sm)] font-semibold text-[var(--fg)] mb-2">{t("切换项目确认", "Confirm project switch")}</h3>
             <p className="text-[length:var(--size-font-2xs)] text-[var(--fg-secondary)] mb-4">
-              当前工作区存在未保存的标签。切换到
+              {t("当前工作区存在未保存的标签。切换到", "There are unsaved tabs in current workspace. When switching to")}
               <span className="font-semibold text-[var(--fg)]">「{switchConfirm.name}」</span>
-              后，这些修改仍会保留在原项目标签中，但你将离开当前编辑上下文。确定继续吗？
+              {t("后，这些修改仍会保留在原项目标签中，但你将离开当前编辑上下文。确定继续吗？", ", those changes remain in original project tabs, but you'll leave the current editing context. Continue?")}
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -500,7 +502,7 @@ export function WorkspaceHeader() {
                 )}
                 onClick={() => setSwitchConfirm(null)}
               >
-                取消
+                {t("取消", "Cancel")}
               </button>
               <button
                 className={cn(
@@ -509,7 +511,7 @@ export function WorkspaceHeader() {
                 )}
                 onClick={() => void handleConfirmSwitchProject()}
               >
-                继续切换
+                {t("继续切换", "Continue")}
               </button>
             </div>
           </div>

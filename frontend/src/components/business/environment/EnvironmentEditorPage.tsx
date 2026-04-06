@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { AppIcon } from "@/components/ui/icon"
+import { useI18n } from "@/hooks/useI18n"
 import { cn } from "@/lib/utils"
 import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
@@ -51,6 +52,7 @@ function createSnapshot(name: string, rows: EditableVariable[], fallbackName = "
 }
 
 export function EnvironmentEditorPage() {
+  const { t } = useI18n()
   const editingEnvironmentId = useUIStore((s) => s.editingEnvironmentId)
   const closeActiveEnvironmentTab = useUIStore((s) => s.closeActiveEnvironmentTab)
   const { currentProjectId } = useProjectStore()
@@ -126,16 +128,16 @@ export function EnvironmentEditorPage() {
     return (
       <div className="flex h-full flex-col bg-[var(--surface)]">
         <div className="flex items-center justify-between h-[44px] px-4 flex-shrink-0">
-          <h2 className="text-[13px] font-semibold text-[var(--fg)]">环境变量</h2>
+          <h2 className="text-[13px] font-semibold text-[var(--fg)]">{t("环境变量", "Environment variables")}</h2>
           <button
             className="h-6 w-6 flex items-center justify-center rounded-[6px] hover:bg-[var(--sidebar-hover)] text-[var(--fg-muted)] transition-colors"
             onClick={closeActiveEnvironmentTab}
-            title="关闭"
+            title={t("关闭", "Close")}
           >
             <AppIcon name="clear" size={14} />
           </button>
         </div>
-        <div className="flex-1 flex items-center justify-center text-[12px] text-[var(--fg-muted)]">正在加载环境...</div>
+        <div className="flex-1 flex items-center justify-center text-[12px] text-[var(--fg-muted)]">{t("正在加载环境...", "Loading environment...")}</div>
       </div>
     )
   }
@@ -169,15 +171,15 @@ export function EnvironmentEditorPage() {
             )}
             disabled={!isDirty || saving}
             onClick={() => void handleSave()}
-            title="保存 (⌘S)"
+            title={`${t("保存", "Save")} (⌘S)`}
           >
             <AppIcon name="save" size={12} strokeWidth={1.9} />
-            {saving ? "保存中..." : "保存"}
+            {saving ? t("保存中...", "Saving...") : t("保存", "Save")}
           </button>
           <button
             className="h-6 w-6 flex items-center justify-center rounded-[6px] hover:bg-[var(--sidebar-hover)] text-[var(--fg-muted)] transition-colors"
             onClick={closeActiveEnvironmentTab}
-            title="关闭"
+            title={t("关闭", "Close")}
           >
             <AppIcon name="clear" size={14} />
           </button>
@@ -237,7 +239,7 @@ export function EnvironmentEditorPage() {
                     <button
                       className="h-6 w-6 flex items-center justify-center rounded-[6px] text-[var(--fg-muted)] hover:text-[var(--danger)] hover:bg-[var(--sidebar-hover)] transition-colors opacity-0 group-hover:opacity-100"
                       onClick={() => removeVariable(v.id)}
-                      title="删除变量"
+                      title={t("删除变量", "Delete variable")}
                     >
                       <AppIcon name="delete" size={12} />
                     </button>

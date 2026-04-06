@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 import { AppIcon } from "@/components/ui/icon"
 import type { HttpStreamEntry } from "@/types/response"
 import { CodeEditor, type EditorLanguage } from "@/components/ui/CodeEditor"
+import { useI18n } from "@/hooks/useI18n"
 
 type EntryViewMode = "text" | "json"
 
@@ -33,9 +34,9 @@ function tryPrettyJson(text: string): string {
   }
 }
 
-function normalizeEntrySummary(entry: HttpStreamEntry): string {
-  if (entry.kind === "connection_closed") return "Connection closed"
-  if (entry.kind === "error") return entry.data || "Stream error"
+function normalizeEntrySummary(entry: HttpStreamEntry, t: (zh: string, en: string) => string): string {
+  if (entry.kind === "connection_closed") return t("连接已关闭", "Connection closed")
+  if (entry.kind === "error") return entry.data || t("流式错误", "Stream error")
   return entry.data || entry.raw || ""
 }
 
@@ -44,6 +45,7 @@ function modeToLanguage(mode: EntryViewMode): EditorLanguage {
 }
 
 export function ResponseStream({ entries, isDark }: ResponseStreamProps) {
+  const { t } = useI18n()
   const [expandedById, setExpandedById] = useState<Record<string, boolean>>({})
   const [modeById, setModeById] = useState<Record<string, EntryViewMode>>({})
   const [lineWrap, setLineWrap] = useState(false)
@@ -68,7 +70,7 @@ export function ResponseStream({ entries, isDark }: ResponseStreamProps) {
   if (orderedEntries.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-2xs text-[var(--fg-muted)]">
-        暂无流式消息
+        {t("暂无流式消息", "No stream messages")}
       </div>
     )
   }
@@ -81,7 +83,7 @@ export function ResponseStream({ entries, isDark }: ResponseStreamProps) {
           <input
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search"
+            placeholder={t("搜索", "Search")}
             className="h-7 w-full rounded-[7px] border border-[var(--border-color)] bg-[var(--surface)] pl-7 pr-7 text-[12px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)]"
           />
           {searchQuery && (
@@ -99,7 +101,7 @@ export function ResponseStream({ entries, isDark }: ResponseStreamProps) {
       {filteredEntries.map((entry, index) => {
         const expanded = Boolean(expandedById[entry.id])
         const isClosableInfo = entry.kind === "connection_closed"
-        const rowText = normalizeEntrySummary(entry)
+        const rowText = normalizeEntrySummary(entry, t)
         const mode = modeById[entry.id] ?? "json"
         const detailText = mode === "json" ? tryPrettyJson(entry.data || entry.raw || "") : (entry.data || entry.raw || "")
 
@@ -130,7 +132,7 @@ export function ResponseStream({ entries, isDark }: ResponseStreamProps) {
               </span>
 
               <span className="min-w-0 flex-1 truncate font-mono text-[var(--fg)]">
-                {rowText || "(empty chunk)"}
+                {rowText || t("(空消息块)", "(empty chunk)")}
               </span>
 
               <span className="flex items-center gap-1">
@@ -159,7 +161,7 @@ export function ResponseStream({ entries, isDark }: ResponseStreamProps) {
                     }}
                   >
                     <option value="json">JSON</option>
-                    <option value="text">Text</option>
+                    <option value="text">{t("文本", "Text")}</option>
                   </select>
 
                   <button
@@ -170,7 +172,7 @@ export function ResponseStream({ entries, isDark }: ResponseStreamProps) {
                         ? "border-[var(--accent)] bg-[var(--selected-bg)] text-[var(--fg)]"
                         : "border-[var(--border-color)] text-[var(--fg-secondary)] hover:text-[var(--fg)]"
                     )}
-                    title="Toggle line wrap"
+                    title={t("切换自动换行", "Toggle line wrap")}
                     onClick={() => setLineWrap((prev) => !prev)}
                   >
                     <AppIcon name="arrowLeftRight" size={11} />
@@ -179,7 +181,7 @@ export function ResponseStream({ entries, isDark }: ResponseStreamProps) {
                   <button
                     type="button"
                     className="no-press-feedback inline-flex h-6 w-6 items-center justify-center rounded-[6px] border border-[var(--border-color)] text-[var(--fg-secondary)] transition-colors hover:text-[var(--fg)]"
-                    title="Copy"
+                    title={t("复制", "Copy")}
                     onClick={() => void navigator.clipboard.writeText(detailText)}
                   >
                     <AppIcon name="copy" size={11} />
@@ -206,7 +208,7 @@ export function ResponseStream({ entries, isDark }: ResponseStreamProps) {
 
       {filteredEntries.length === 0 && (
         <div className="px-3 py-8 text-center text-[12px] text-[var(--fg-muted)]">
-          没有匹配的流式消息
+          {t("没有匹配的流式消息", "No matching stream messages")}
         </div>
       )}
     </div>

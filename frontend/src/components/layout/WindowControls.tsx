@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
+import { useI18n } from "@/hooks/useI18n"
 
 type ControlType = "close" | "minimise" | "maximise"
 
@@ -102,6 +103,7 @@ function TrafficLightButton({ hovered, onClick, title, type }: TrafficLightButto
 
 export function WindowControls() {
   const [hovered, setHovered] = useState(false)
+  const { t } = useI18n()
 
   const handleClose = () => {
     import("../../../wailsjs/runtime/runtime").then((r) => r.Quit())
@@ -121,9 +123,9 @@ export function WindowControls() {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <TrafficLightButton hovered={hovered} onClick={handleClose} title="关闭" type="close" />
-      <TrafficLightButton hovered={hovered} onClick={handleMinimise} title="最小化" type="minimise" />
-      <TrafficLightButton hovered={hovered} onClick={handleMaximise} title="最大化/还原" type="maximise" />
+      <TrafficLightButton hovered={hovered} onClick={handleClose} title={t("关闭", "Close")} type="close" />
+      <TrafficLightButton hovered={hovered} onClick={handleMinimise} title={t("最小化", "Minimize")} type="minimise" />
+      <TrafficLightButton hovered={hovered} onClick={handleMaximise} title={t("最大化/还原", "Maximize/Restore")} type="maximise" />
     </div>
   )
 }
