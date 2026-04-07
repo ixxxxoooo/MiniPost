@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect } from "react"
+import { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect, type DragEvent as ReactDragEvent } from "react"
 import { createPortal } from "react-dom"
 import { AppIcon } from "@/components/ui/icon"
 import { useI18n } from "@/hooks/useI18n"
@@ -20,8 +20,8 @@ const TREE_INDENT_STEP = 12
 const REQUEST_METHOD_SPACER = 12
 type CollectionNodeType = "folder" | "request"
 type DropPosition = "before" | "after" | "inside"
-type ImportMode = "file" | "curl"
-type DetectedImportType = "postman" | "swagger" | "unknown"
+type ImportMode = "file" | "url" | "curl"
+type DetectedImportType = "postman" | "postman-environment" | "swagger" | "unknown"
 
 interface DropdownMenuState {
   x: number
@@ -79,6 +79,13 @@ function detectImportType(content: string, t: (zh: string, en: string) => string
           description: t("检测到 Postman v2.x 集合结构", "Detected Postman v2.x collection structure"),
         }
       }
+      if ("values" in parsed && !("item" in parsed)) {
+        return {
+          type: "postman-environment",
+          title: "Postman Environment",
+          description: t("检测到 Postman 环境变量结构", "Detected Postman environment structure"),
+        }
+      }
       if ("paths" in parsed && ("openapi" in parsed || "swagger" in parsed)) {
         return {
           type: "swagger",
@@ -108,8 +115,24 @@ function detectImportType(content: string, t: (zh: string, en: string) => string
   return {
     type: "unknown",
     title: t("未识别格式", "Unrecognized format"),
-    description: t("支持 Postman Collection / OpenAPI / Swagger（JSON 或 YAML）", "Supports Postman Collection / OpenAPI / Swagger (JSON or YAML)"),
+    description: t("支持 Postman Collection / Environment / OpenAPI / Swagger（JSON 或 YAML）", "Supports Postman Collection / Environment / OpenAPI / Swagger (JSON or YAML)"),
   }
+}
+
+function getImportErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message.trim()) return err.message
+  if (typeof err === "string" && err.trim()) return err
+  if (err && typeof err === "object") {
+    const maybeMessage = Reflect.get(err, "message")
+    if (typeof maybeMessage === "string" && maybeMessage.trim()) return maybeMessage
+    try {
+      const serialized = JSON.stringify(err)
+      if (serialized && serialized !== "{}") return serialized
+    } catch {
+      // ignore serialization errors
+    }
+  }
+  return fallback
 }
 
 function buildCurlCommand(request: model.RequestItem): string {
@@ -175,24 +198,25 @@ function convertRequestToData(request: model.RequestItem) {
     name: request.name,
     method: request.method as HttpMethod,
     url: request.url,
-    params: (request.params ?? []).map((p: { key: string; value: string }) => ({
-      id: crypto.randomUUID(), key: p.key, value: p.value, enabled: true,
+    params: (request.params ?? []).map((p: { key: string; value: string; description?: string }) => ({
+      id: crypto.randomUUID(), key: p.key, value: p.value, enabled: true, description: p.description ?? "",
     })),
-    headers: (request.headers ?? []).map((h: { key: string; value: string }) => ({
-      id: crypto.randomUUID(), key: h.key, value: h.value, enabled: true,
+    headers: (request.headers ?? []).map((h: { key: string; value: string; description?: string }) => ({
+      id: crypto.randomUUID(), key: h.key, value: h.value, enabled: true, description: h.description ?? "",
     })),
     body: request.body
       ? {
           type: request.body.type as "none" | "raw" | "json" | "form-urlencoded" | "form-data",
           raw: request.body.raw,
           json: request.body.json,
-          formUrlEncoded: (request.body.formUrlEncoded ?? []).map((f: { key: string; value: string }) => ({
-            id: crypto.randomUUID(), key: f.key, value: f.value, enabled: true,
+          formUrlEncoded: (request.body.formUrlEncoded ?? []).map((f: { key: string; value: string; description?: string }) => ({
+            id: crypto.randomUUID(), key: f.key, value: f.value, enabled: true, description: f.description ?? "",
           })),
-          formData: (request.body.formData ?? []).map((f: { key: string; value: string; type?: string; filePath?: string; fileName?: string }) => ({
+          formData: (request.body.formData ?? []).map((f: { key: string; value: string; description?: string; type?: string; filePath?: string; fileName?: string }) => ({
             id: crypto.randomUUID(),
             key: f.key,
             value: f.value ?? "",
+            description: f.description ?? "",
             enabled: true,
             type: (f.type as "text" | "file") || "text",
             filePath: f.filePath,
@@ -241,6 +265,7 @@ export function Sidebar() {
     moveCollectionNode,
     exportProjectJSON,
     importFromFile,
+    importFromURL,
   } = useProjectStore()
   const { openRequestTab, addTab } = useTabStore()
   const tabs = useTabStore(getProjectTabsFromState)
@@ -263,6 +288,8 @@ export function Sidebar() {
   const [importProgress, setImportProgress] = useState(0)
   const [importError, setImportError] = useState("")
   const [importSuccess, setImportSuccess] = useState("")
+  const [isImportFileDragActive, setIsImportFileDragActive] = useState(false)
+  const [urlImportInput, setUrlImportInput] = useState("")
   const [curlImportInput, setCurlImportInput] = useState("")
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null)
   const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false)
@@ -272,6 +299,7 @@ export function Sidebar() {
   const autoExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoExpandTargetRef = useRef<string | null>(null)
   const importProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const importFileDragDepthRef = useRef(0)
 
   const isDragging = dragging !== null
   const isSearching = searchQuery.trim().length > 0
@@ -571,6 +599,9 @@ export function Sidebar() {
     setImportError("")
     setImportSuccess("")
     setImportProgress(0)
+    setIsImportFileDragActive(false)
+    importFileDragDepthRef.current = 0
+    setUrlImportInput("")
     setCurlImportInput("")
   }
 
@@ -589,9 +620,69 @@ export function Sidebar() {
       setImportContent(content)
       setDetectedImport(detectImportType(content, t))
     } catch (err) {
-      setImportError(err instanceof Error ? err.message : t("选择文件失败", "Failed to choose file"))
+      setImportError(getImportErrorMessage(err, t("选择文件失败", "Failed to choose file")))
     }
   }
+
+  const isFileDragEvent = (event: ReactDragEvent<HTMLElement>) => (
+    Array.from(event.dataTransfer?.types ?? []).includes("Files")
+  )
+
+  const handleImportFileDragEnter = (event: ReactDragEvent<HTMLElement>) => {
+    if (importLoading || importMode !== "file" || !isFileDragEvent(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    importFileDragDepthRef.current += 1
+    event.dataTransfer.dropEffect = "copy"
+    setIsImportFileDragActive(true)
+  }
+
+  const handleImportFileDragOver = (event: ReactDragEvent<HTMLElement>) => {
+    if (importLoading || importMode !== "file" || !isFileDragEvent(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = "copy"
+    if (!isImportFileDragActive) setIsImportFileDragActive(true)
+  }
+
+  const handleImportFileDragLeave = (event: ReactDragEvent<HTMLElement>) => {
+    if (importLoading || importMode !== "file" || !isFileDragEvent(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    importFileDragDepthRef.current = Math.max(0, importFileDragDepthRef.current - 1)
+    if (importFileDragDepthRef.current === 0) {
+      setIsImportFileDragActive(false)
+    }
+  }
+
+  const handleImportFileDrop = async (event: ReactDragEvent<HTMLElement>) => {
+    if (importLoading || importMode !== "file" || !isFileDragEvent(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    importFileDragDepthRef.current = 0
+    setIsImportFileDragActive(false)
+    const file = event.dataTransfer.files?.[0]
+    if (!file) return
+    try {
+      setImportError("")
+      setImportSuccess("")
+      const content = await file.text()
+      if (!content) {
+        setImportError(t("文件内容为空", "The file is empty"))
+        return
+      }
+      setImportContent(content)
+      setDetectedImport(detectImportType(content, t))
+    } catch (err) {
+      setImportError(getImportErrorMessage(err, t("读取拖拽文件失败", "Failed to read dropped file")))
+    }
+  }
+
+  useEffect(() => {
+    if (importMode === "file" && showImportDialog) return
+    setIsImportFileDragActive(false)
+    importFileDragDepthRef.current = 0
+  }, [importMode, showImportDialog])
 
   const startImportProgress = () => {
     setImportProgress(8)
@@ -628,7 +719,7 @@ export function Sidebar() {
       if (importProgressTimerRef.current) clearInterval(importProgressTimerRef.current)
       importProgressTimerRef.current = null
       setImportProgress(0)
-      setImportError(err instanceof Error ? err.message : t("导入失败", "Import failed"))
+      setImportError(getImportErrorMessage(err, t("导入失败", "Import failed")))
     } finally {
       setImportLoading(false)
     }
@@ -670,7 +761,39 @@ export function Sidebar() {
       if (importProgressTimerRef.current) clearInterval(importProgressTimerRef.current)
       importProgressTimerRef.current = null
       setImportProgress(0)
-      setImportError(err instanceof Error ? err.message : t("cURL 导入失败", "cURL import failed"))
+      setImportError(getImportErrorMessage(err, t("cURL 导入失败", "cURL import failed")))
+    } finally {
+      setImportLoading(false)
+    }
+  }
+
+  const handleUrlImportConfirm = async () => {
+    const sourceURL = urlImportInput.trim()
+    if (!sourceURL) {
+      setImportError(t("请输入导入地址", "Please enter an import URL"))
+      return
+    }
+    if (!/^https?:\/\//i.test(sourceURL)) {
+      setImportError(t("导入地址需以 http:// 或 https:// 开头", "Import URL must start with http:// or https://"))
+      return
+    }
+
+    setImportLoading(true)
+    setImportError("")
+    setImportSuccess("")
+    startImportProgress()
+
+    try {
+      await importFromURL("auto", sourceURL)
+      finishImportProgress()
+      setImportSuccess(t("已从地址导入完成", "Imported successfully from URL"))
+      setActiveTab("requests")
+      setSearchQuery("")
+    } catch (err) {
+      if (importProgressTimerRef.current) clearInterval(importProgressTimerRef.current)
+      importProgressTimerRef.current = null
+      setImportProgress(0)
+      setImportError(getImportErrorMessage(err, t("地址导入失败", "URL import failed")))
     } finally {
       setImportLoading(false)
     }
@@ -1364,7 +1487,7 @@ export function Sidebar() {
                 </div>
                 <div>
                   <div className="text-[13px] font-semibold text-[var(--fg)]">{t("导入", "Import")}</div>
-                  <div className="text-[11px] text-[var(--fg-muted)]">{t("支持文件导入与 cURL 导入", "Supports file import and cURL import")}</div>
+                  <div className="text-[11px] text-[var(--fg-muted)]">{t("支持文件、URL 与 cURL 导入", "Supports file, URL, and cURL import")}</div>
                 </div>
               </div>
               <button
@@ -1397,6 +1520,19 @@ export function Sidebar() {
                   disabled={importLoading}
                   className={cn(
                     "h-7 px-3 rounded-[7px] text-[12px] font-medium transition-colors",
+                    importMode === "url"
+                      ? "bg-[var(--surface)] text-[var(--fg)] shadow-sm"
+                      : "text-[var(--fg-secondary)] hover:text-[var(--fg)]",
+                  )}
+                  onClick={() => { setImportMode("url"); setImportError(""); setImportSuccess("") }}
+                >
+                  {t("URL 导入", "URL import")}
+                </button>
+                <button
+                  type="button"
+                  disabled={importLoading}
+                  className={cn(
+                    "h-7 px-3 rounded-[7px] text-[12px] font-medium transition-colors",
                     importMode === "curl"
                       ? "bg-[var(--surface)] text-[var(--fg)] shadow-sm"
                       : "text-[var(--fg-secondary)] hover:text-[var(--fg)]",
@@ -1410,20 +1546,30 @@ export function Sidebar() {
 
             <div className="px-4 py-3">
               {importMode === "file" ? (
-                <div className="space-y-3">
+                <div
+                  className="space-y-3"
+                  onDragEnter={handleImportFileDragEnter}
+                  onDragOver={handleImportFileDragOver}
+                  onDragLeave={handleImportFileDragLeave}
+                  onDrop={(event) => { void handleImportFileDrop(event) }}
+                >
                   <button
                     type="button"
                     disabled={importLoading}
                     onClick={() => void pickImportFile()}
                     className={cn(
                       "w-full h-[88px] rounded-[10px] border border-dashed transition-colors",
-                      "border-[var(--border-color)] bg-[var(--surface-secondary)] hover:bg-[var(--button-bg)]",
+                      isImportFileDragActive
+                        ? "border-[var(--accent)] bg-[var(--accent)]/10"
+                        : "border-[var(--border-color)] bg-[var(--surface-secondary)] hover:bg-[var(--button-bg)]",
                       "flex flex-col items-center justify-center gap-1.5"
                     )}
                   >
                     <AppIcon name="upload" size={16} className="text-[var(--fg-secondary)]" />
-                    <span className="text-[12px] text-[var(--fg)]">{t("选择导入文件", "Select import file")}</span>
-                    <span className="text-[10px] text-[var(--fg-muted)]">Postman / OpenAPI / Swagger（JSON/YAML）</span>
+                    <span className="text-[12px] text-[var(--fg)]">
+                      {isImportFileDragActive ? t("松开即可导入文件", "Drop file to import") : t("选择导入文件", "Select import file")}
+                    </span>
+                    <span className="text-[10px] text-[var(--fg-muted)]">Postman Collection / Environment / OpenAPI / Swagger（JSON/YAML）</span>
                   </button>
 
                   <div className="rounded-[10px] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2.5">
@@ -1435,6 +1581,34 @@ export function Sidebar() {
                         {t("已读取", "Read")} {new Blob([importContent]).size} bytes
                       </div>
                     )}
+                  </div>
+                </div>
+              ) : importMode === "url" ? (
+                <div className="space-y-3">
+                  <input
+                    type="url"
+                    value={urlImportInput}
+                    disabled={importLoading}
+                    onChange={(event) => setUrlImportInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault()
+                        void handleUrlImportConfirm()
+                      }
+                    }}
+                    className={cn(
+                      "w-full h-10 rounded-[10px] border border-[var(--border-color)]",
+                      "bg-[var(--surface-secondary)] px-3 text-[12px] text-[var(--fg)]",
+                      "placeholder:text-[var(--fg-muted)] focus:outline-none focus:border-[var(--accent)]"
+                    )}
+                    placeholder={t("粘贴 Swagger / OpenAPI / Postman 文档地址", "Paste a Swagger / OpenAPI / Postman document URL")}
+                  />
+                  <div className="rounded-[10px] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2.5">
+                    <div className="text-[11px] text-[var(--fg-muted)]">{t("导入方式", "Import method")}</div>
+                    <div className="mt-1 text-[12px] font-medium text-[var(--fg)]">{t("自动拉取并识别远程文档", "Fetch and auto-detect remote document")}</div>
+                    <div className="mt-0.5 text-[11px] text-[var(--fg-secondary)]">
+                      {t("支持 http/https 地址，内容会按 Postman / OpenAPI / Swagger 自动识别。", "Supports http/https URLs and auto-detects Postman / OpenAPI / Swagger content.")}
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -1498,7 +1672,15 @@ export function Sidebar() {
               </button>
               <button
                 type="button"
-                disabled={importLoading || (importMode === "file" ? !importContent.trim() : !curlImportInput.trim())}
+                disabled={
+                  importLoading || (
+                    importMode === "file"
+                      ? !importContent.trim()
+                      : importMode === "url"
+                        ? !urlImportInput.trim()
+                        : !curlImportInput.trim()
+                  )
+                }
                 className={cn(
                   "h-8 px-4 rounded-[8px] text-[12px] font-medium text-white",
                   "bg-[var(--accent)] hover:brightness-105 disabled:opacity-40 disabled:pointer-events-none"
@@ -1508,10 +1690,18 @@ export function Sidebar() {
                     void handleFileImportConfirm()
                     return
                   }
+                  if (importMode === "url") {
+                    void handleUrlImportConfirm()
+                    return
+                  }
                   void handleCurlImportConfirm()
                 }}
               >
-                {importMode === "file" ? t("导入文件", "Import file") : t("导入 cURL", "Import cURL")}
+                {importMode === "file"
+                  ? t("导入文件", "Import file")
+                  : importMode === "url"
+                    ? t("导入地址", "Import URL")
+                    : t("导入 cURL", "Import cURL")}
               </button>
             </div>
           </div>

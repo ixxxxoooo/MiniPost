@@ -103,6 +103,7 @@ export namespace model {
 	export class FormData {
 	    key: string;
 	    value: string;
+	    description?: string;
 	    type: string;
 	    filePath?: string;
 	    fileName?: string;
@@ -115,6 +116,7 @@ export namespace model {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.key = source["key"];
 	        this.value = source["value"];
+	        this.description = source["description"];
 	        this.type = source["type"];
 	        this.filePath = source["filePath"];
 	        this.fileName = source["fileName"];
@@ -161,6 +163,7 @@ export namespace model {
 	export class KeyValue {
 	    key: string;
 	    value: string;
+	    description?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new KeyValue(source);
@@ -170,6 +173,7 @@ export namespace model {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.key = source["key"];
 	        this.value = source["value"];
+	        this.description = source["description"];
 	    }
 	}
 	export class RequestItem {

@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	neturl "net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -35,6 +40,8 @@ type App struct {
 const httpStreamEventName = "minipost:http-stream"
 const binarySavePrefix = "__MINIPOST_BASE64__:"
 
+var swaggerUIURLPattern = regexp.MustCompile(`(?i)\burl\s*:\s*["']([^"']+)["']`)
+
 type httpStreamEventPayload struct {
 	StreamID   string `json:"streamId"`
 	Kind       string `json:"kind"`
@@ -43,6 +50,79 @@ type httpStreamEventPayload struct {
 	Timestamp  string `json:"timestamp"`
 	Sequence   int    `json:"sequence"`
 	BytesTotal int64  `json:"bytesTotal,omitempty"`
+}
+
+func stripJSONComments(raw []byte) []byte {
+	if len(raw) == 0 {
+		return raw
+	}
+
+	result := make([]byte, 0, len(raw))
+	inString := false
+	escapeNext := false
+	inLineComment := false
+	inBlockComment := false
+
+	for i := 0; i < len(raw); i++ {
+		ch := raw[i]
+		next := byte(0)
+		hasNext := i+1 < len(raw)
+		if hasNext {
+			next = raw[i+1]
+		}
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+				result = append(result, ch)
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && hasNext && next == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
+
+		if inString {
+			result = append(result, ch)
+			if escapeNext {
+				escapeNext = false
+				continue
+			}
+			if ch == '\\' {
+				escapeNext = true
+				continue
+			}
+			if ch == '"' {
+				inString = false
+			}
+			continue
+		}
+
+		if ch == '"' {
+			inString = true
+			result = append(result, ch)
+			continue
+		}
+
+		if ch == '/' && hasNext && next == '/' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && hasNext && next == '*' {
+			inBlockComment = true
+			i++
+			continue
+		}
+
+		result = append(result, ch)
+	}
+
+	return result
 }
 
 func NewApp() *App {
@@ -498,8 +578,17 @@ func (a *App) ImportPostmanCollection(projectID, jsonStr string) error {
 	return nil
 }
 
+func (a *App) ImportPostmanEnvironment(projectID, jsonStr string) error {
+	if err := a.requestSvc.ImportPostmanEnvironment(projectID, []byte(jsonStr)); err != nil {
+		logger.Error("导入 Postman Environment 失败", "projectID", projectID, "error", err.Error())
+		return err
+	}
+	logger.Info("导入 Postman Environment 成功", "projectID", projectID)
+	return nil
+}
+
 func (a *App) ImportSwagger(projectID, jsonStr string) error {
-	if err := a.requestSvc.ImportSwagger(projectID, []byte(jsonStr)); err != nil {
+	if err := a.requestSvc.ImportSwaggerWithSource(projectID, []byte(jsonStr), ""); err != nil {
 		logger.Error("导入 Swagger 失败", "projectID", projectID, "error", err.Error())
 		return err
 	}
@@ -507,11 +596,17 @@ func (a *App) ImportSwagger(projectID, jsonStr string) error {
 	return nil
 }
 
-func (a *App) ImportFromFile(projectID, format, content string) error {
+func (a *App) importCollectionContent(projectID, format, content, sourceURL string) error {
 	parseAsObject := func(raw string) (map[string]json.RawMessage, string, error) {
 		var data map[string]json.RawMessage
 		if err := json.Unmarshal([]byte(raw), &data); err == nil {
 			return data, raw, nil
+		}
+		cleaned := stripJSONComments([]byte(raw))
+		if !bytes.Equal(cleaned, []byte(raw)) {
+			if err := json.Unmarshal(cleaned, &data); err == nil {
+				return data, raw, nil
+			}
 		}
 
 		// fallback: YAML -> JSON
@@ -532,8 +627,10 @@ func (a *App) ImportFromFile(projectID, format, content string) error {
 	switch format {
 	case "postman":
 		return a.ImportPostmanCollection(projectID, content)
+	case "postman-environment":
+		return a.ImportPostmanEnvironment(projectID, content)
 	case "swagger", "openapi":
-		return a.ImportSwagger(projectID, content)
+		return a.requestSvc.ImportSwaggerWithSource(projectID, []byte(content), sourceURL)
 	default:
 		// 自动检测格式
 		raw, normalizedContent, err := parseAsObject(content)
@@ -545,11 +642,100 @@ func (a *App) ImportFromFile(projectID, format, content string) error {
 				return a.ImportPostmanCollection(projectID, normalizedContent)
 			}
 		}
+		if _, ok := raw["values"]; ok {
+			if _, hasItem := raw["item"]; !hasItem {
+				return a.ImportPostmanEnvironment(projectID, normalizedContent)
+			}
+		}
 		if _, ok := raw["paths"]; ok {
-			return a.ImportSwagger(projectID, normalizedContent)
+			return a.requestSvc.ImportSwaggerWithSource(projectID, []byte(normalizedContent), sourceURL)
 		}
 		return fmt.Errorf("无法识别文件格式，请选择正确的导入格式")
 	}
+}
+
+func fetchRemoteImportContent(ctx context.Context, sourceURL string) (string, string, error) {
+	client := &http.Client{Timeout: 20 * time.Second}
+	fetch := func(targetURL string) (string, string, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+		if err != nil {
+			return "", "", fmt.Errorf("创建导入请求失败: %w", err)
+		}
+		req.Header.Set("Accept", "application/json, application/yaml, text/yaml, text/plain, text/html, */*")
+		req.Header.Set("User-Agent", "MiniPost/1.0")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return "", "", fmt.Errorf("拉取导入地址失败: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return "", "", fmt.Errorf("拉取导入地址失败: HTTP %d", resp.StatusCode)
+		}
+
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+		if err != nil {
+			return "", "", fmt.Errorf("读取导入内容失败: %w", err)
+		}
+
+		finalURL := targetURL
+		if resp.Request != nil && resp.Request.URL != nil {
+			finalURL = resp.Request.URL.String()
+		}
+		content := strings.TrimSpace(string(body))
+		if content == "" {
+			return "", "", fmt.Errorf("导入地址返回内容为空")
+		}
+		return content, finalURL, nil
+	}
+
+	content, finalURL, err := fetch(sourceURL)
+	if err != nil {
+		return "", "", err
+	}
+	if strings.Contains(strings.ToLower(content), "swaggeruibundle") {
+		if matches := swaggerUIURLPattern.FindStringSubmatch(content); len(matches) == 2 {
+			baseURL, parseErr := neturl.Parse(finalURL)
+			if parseErr != nil {
+				return content, finalURL, nil
+			}
+			refURL, resolveErr := baseURL.Parse(strings.TrimSpace(matches[1]))
+			if resolveErr != nil {
+				return content, finalURL, nil
+			}
+			return fetch(refURL.String())
+		}
+	}
+
+	return content, finalURL, nil
+}
+
+func (a *App) ImportFromFile(projectID, format, content string) error {
+	return a.importCollectionContent(projectID, format, content, "")
+}
+
+func (a *App) ImportFromURL(projectID, format, sourceURL string) error {
+	trimmedURL := strings.TrimSpace(sourceURL)
+	if trimmedURL == "" {
+		return fmt.Errorf("导入地址不能为空")
+	}
+
+	parsedURL, err := neturl.Parse(trimmedURL)
+	if err != nil {
+		return fmt.Errorf("导入地址无效: %w", err)
+	}
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return fmt.Errorf("仅支持 http/https 导入地址")
+	}
+
+	content, resolvedURL, err := fetchRemoteImportContent(a.ctx, trimmedURL)
+	if err != nil {
+		return err
+	}
+
+	logger.Info("开始从 URL 导入集合", "projectID", projectID, "url", trimmedURL, "resolvedURL", resolvedURL, "size", len(content))
+	return a.importCollectionContent(projectID, format, content, resolvedURL)
 }
 
 // ---- 导入 ----

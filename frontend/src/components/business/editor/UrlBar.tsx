@@ -334,7 +334,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
           "bg-[var(--surface)]"
         )}
       >
-        <div className="flex min-w-0 flex-1 items-center rounded-[10px] border border-[var(--button-border)] bg-[var(--surface)] focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]/20">
+        <div className="flex min-w-0 flex-1 items-center rounded-[10px] border border-[var(--button-border)] bg-[var(--surface)] focus-within:border-[var(--accent)]">
           <Select value={request.method} onValueChange={(value) => updateTabRequest(activeTab.id, { method: value as HttpMethod })}>
             <SelectTrigger
               className={cn(
@@ -377,9 +377,9 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
                         <span
                           key={`${token.type}-${index}-${token.value}`}
                           className={cn(
-                            "mx-[1px] inline-flex h-4 items-center rounded-[999px] px-1.5 align-middle",
-                            "border border-[var(--accent)]/30 bg-[var(--accent)]/12",
-                            "text-[10px] font-semibold text-[var(--accent)]"
+                            "inline-flex items-center rounded-[6px] align-middle",
+                            "bg-[var(--selected-bg)]",
+                            "text-[length:var(--size-font-xs)] font-normal leading-normal text-[var(--accent)]"
                           )}
                         >
                           {`{{${token.value}}}`}

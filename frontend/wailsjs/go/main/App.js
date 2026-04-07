@@ -70,8 +70,16 @@ export function ImportFromFile(arg1, arg2, arg3) {
   return window['go']['main']['App']['ImportFromFile'](arg1, arg2, arg3);
 }
 
+export function ImportFromURL(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ImportFromURL'](arg1, arg2, arg3);
+}
+
 export function ImportPostmanCollection(arg1, arg2) {
   return window['go']['main']['App']['ImportPostmanCollection'](arg1, arg2);
+}
+
+export function ImportPostmanEnvironment(arg1, arg2) {
+  return window['go']['main']['App']['ImportPostmanEnvironment'](arg1, arg2);
 }
 
 export function ImportSwagger(arg1, arg2) {

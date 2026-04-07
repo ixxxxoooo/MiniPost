@@ -20,6 +20,7 @@ import {
   DuplicateFolder,
   ExportProjectJSON,
   ImportFromFile,
+  ImportFromURL,
   UpdateProjectDescription,
   UpdateProjectTheme,
 } from "../../wailsjs/go/main/App"
@@ -48,6 +49,8 @@ export const collectionService = {
   ) => MoveCollectionNode(projectID, nodeID, nodeType, targetParentFolderID, targetIndex),
   importFromFile: (projectID: string, format: string, content: string) =>
     ImportFromFile(projectID, format, content),
+  importFromURL: (projectID: string, format: string, sourceURL: string) =>
+    ImportFromURL(projectID, format, sourceURL),
 }
 
 export const folderService = {
