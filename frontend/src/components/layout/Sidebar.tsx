@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
+import { buildDraftRequestFromCurl } from "@/lib/curlImportDraft"
 import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore, getProjectActiveTabIdFromState, getProjectTabsFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
@@ -240,9 +241,8 @@ export function Sidebar() {
     moveCollectionNode,
     exportProjectJSON,
     importFromFile,
-    saveRequestToBackend,
   } = useProjectStore()
-  const { openRequestTab } = useTabStore()
+  const { openRequestTab, addTab } = useTabStore()
   const tabs = useTabStore(getProjectTabsFromState)
   const activeTabId = useTabStore(getProjectActiveTabIdFromState)
   const [activeTab, setActiveTab] = useState<SidebarTab>("requests")
@@ -649,40 +649,21 @@ export function Sidebar() {
 
     try {
       const parsed = await ImportCurl(command)
-      const createdRequest = await createRequest("", "Imported cURL")
-      if (!createdRequest) throw new Error(t("新建请求失败", "Failed to create request"))
-
-      const requestToSave = {
-        ...createdRequest,
-        method: parsed.method || createdRequest.method,
-        url: parsed.url || createdRequest.url,
-        params: (parsed.params ?? []).map((p) => ({ key: p.key ?? "", value: p.value ?? "" })),
-        headers: (parsed.headers ?? []).map((h) => ({ key: h.key ?? "", value: h.value ?? "" })),
-        body: parsed.body
-          ? {
-              type: parsed.body.type ?? "none",
-              raw: parsed.body.raw ?? "",
-              json: parsed.body.json ?? "",
-              formUrlEncoded: (parsed.body.formUrlEncoded ?? []).map((f) => ({
-                key: f.key ?? "",
-                value: f.value ?? "",
-              })),
-              formData: (parsed.body.formData ?? []).map((f) => ({
-                key: f.key ?? "",
-                value: f.value ?? "",
-                type: f.type ?? "text",
-                filePath: f.filePath ?? "",
-                fileName: f.fileName ?? "",
-              })),
-            }
-          : createdRequest.body,
-        auth: parsed.auth ?? createdRequest.auth,
-        updatedAt: new Date().toISOString(),
-      }
-      await saveRequestToBackend(requestToSave as model.RequestItem)
-      openRequestTab(currentProjectId, convertRequestToData(requestToSave as model.RequestItem))
+      const draftRequest = buildDraftRequestFromCurl(parsed, {
+        projectId: currentProjectId,
+        name: "Imported cURL",
+      })
+      addTab({
+        title: draftRequest.name || "Imported cURL",
+        projectId: currentProjectId,
+        closable: true,
+        dirty: true,
+        request: draftRequest,
+        response: null,
+        responseError: null,
+      })
       finishImportProgress()
-      setImportSuccess(t("cURL 导入完成", "cURL import completed"))
+      setImportSuccess(t("cURL 已导入为未保存草稿", "cURL imported as an unsaved draft"))
       setActiveTab("requests")
       setSearchQuery("")
     } catch (err) {
@@ -1100,15 +1081,15 @@ export function Sidebar() {
   return (
     <div
       className={cn(
-        "relative flex min-h-0 flex-col overflow-hidden border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)]"
+        "relative flex min-h-0 flex-col overflow-y-hidden overflow-x-visible border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)]"
       )}
       style={{ width: sidebarWidth }}
     >
       <div
-        className="absolute right-0 top-0 h-full w-[5px] cursor-col-resize z-10 group"
+        className="absolute -right-[3px] top-0 h-full w-[6px] cursor-col-resize z-10 group"
         onMouseDown={handleSidebarResizeStart}
       >
-        <div className="absolute inset-y-0 right-1/2 translate-x-1/2 w-px bg-transparent group-hover:bg-[var(--accent)]/40 transition-colors duration-200" />
+        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-transparent group-hover:bg-[var(--accent)]/40 transition-colors duration-200" />
       </div>
 
       {currentProjectId && (

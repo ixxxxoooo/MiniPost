@@ -476,7 +476,7 @@ func normalizeSocketAddress(addr net.Addr) string {
 
 func (s *HttpService) buildURL(rawURL string, params []model.KeyValue) (string, error) {
 	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
-		rawURL = "https://" + rawURL
+		rawURL = "http://" + rawURL
 	}
 
 	u, err := url.Parse(rawURL)

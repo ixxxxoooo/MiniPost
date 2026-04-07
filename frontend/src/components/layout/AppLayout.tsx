@@ -145,8 +145,8 @@ export function AppLayout() {
                         className={cn(
                           "absolute z-10",
                           layoutDirection === "vertical"
-                            ? "inset-x-0 -top-2 h-[5px] cursor-row-resize"
-                            : "inset-y-0 -left-2 w-[5px] cursor-col-resize"
+                            ? "left-0 right-0 top-1/2 h-[6px] -translate-y-1/2 cursor-row-resize"
+                            : "top-0 bottom-0 left-1/2 w-[6px] -translate-x-1/2 cursor-col-resize"
                         )}
                         onMouseDown={handleSplitDragStart}
                       />

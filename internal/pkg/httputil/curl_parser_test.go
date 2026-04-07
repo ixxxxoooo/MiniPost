@@ -71,3 +71,47 @@ func TestParseCurlCommand_FormData(t *testing.T) {
 		t.Fatalf("unexpected file form-data item: %+v", input.Body.FormData[1])
 	}
 }
+
+func TestParseCurlCommand_CookieFlag(t *testing.T) {
+	cmd := `curl https://example.com/api -b "sid=abc; uid=1001" -H "Accept: application/json"`
+	input, err := ParseCurlCommand(cmd)
+	if err != nil {
+		t.Fatalf("ParseCurlCommand returned error: %v", err)
+	}
+	if input.Method != "GET" {
+		t.Fatalf("expected GET, got %s", input.Method)
+	}
+	if input.URL != "https://example.com/api" {
+		t.Fatalf("expected URL to be parsed, got %s", input.URL)
+	}
+
+	var cookieValue string
+	for _, header := range input.Headers {
+		if header.Key == "Cookie" {
+			cookieValue = header.Value
+			break
+		}
+	}
+	if cookieValue != "sid=abc; uid=1001" {
+		t.Fatalf("expected cookie header to be parsed, got %q", cookieValue)
+	}
+}
+
+func TestParseCurlCommand_CookieFlagEquals(t *testing.T) {
+	cmd := `curl https://example.com/api --cookie=sid=abc123`
+	input, err := ParseCurlCommand(cmd)
+	if err != nil {
+		t.Fatalf("ParseCurlCommand returned error: %v", err)
+	}
+
+	var cookieValue string
+	for _, header := range input.Headers {
+		if header.Key == "Cookie" {
+			cookieValue = header.Value
+			break
+		}
+	}
+	if cookieValue != "sid=abc123" {
+		t.Fatalf("expected cookie header from --cookie=..., got %q", cookieValue)
+	}
+}

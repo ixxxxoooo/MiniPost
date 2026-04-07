@@ -11,8 +11,7 @@ import { ImportCurl } from "../../../wailsjs/go/main/App"
 import { WindowControls } from "./WindowControls"
 import { WorkspaceHeader } from "./WorkspaceHeader"
 import { cn } from "@/lib/utils"
-import type { HttpMethod } from "@/lib/constants"
-import type { model } from "../../../wailsjs/go/models"
+import { buildDraftRequestFromCurl } from "@/lib/curlImportDraft"
 
 function useTitlebarDoubleClick() {
   const lastClickRef = useRef<{ time: number; x: number; y: number }>({
@@ -35,8 +34,8 @@ function useTitlebarDoubleClick() {
 export function Toolbar() {
   const { t } = useI18n()
   const { resolved, setTheme, setSettingsOpen } = useUIStore()
-  const { currentProjectId, createRequest, saveRequestToBackend } = useProjectStore()
-  const openRequestTab = useTabStore((s) => s.openRequestTab)
+  const { currentProjectId } = useProjectStore()
+  const addTab = useTabStore((s) => s.addTab)
   const [showCurlDialog, setShowCurlDialog] = useState(false)
   const [curlCommand, setCurlCommand] = useState("")
   const [curlError, setCurlError] = useState("")
@@ -80,106 +79,18 @@ export function Toolbar() {
       }
 
       const result = await ImportCurl(curlCommand.trim())
-      const createdRequest = await createRequest("", "Imported cURL")
-      if (!createdRequest) {
-        setCurlError(t("新建请求失败，请稍后重试", "Failed to create request. Please try again."))
-        return
-      }
-
-      const requestToSave = {
-        ...createdRequest,
-        method: (result.method || createdRequest.method) as HttpMethod,
-        url: result.url || createdRequest.url,
-        params: (result.params ?? []).map((p) => ({ key: p.key ?? "", value: p.value ?? "" })),
-        headers: (result.headers ?? []).map((h) => ({ key: h.key ?? "", value: h.value ?? "" })),
-        body: result.body
-          ? {
-              type: result.body.type ?? "none",
-              raw: result.body.raw ?? "",
-              json: result.body.json ?? "",
-              formUrlEncoded: (result.body.formUrlEncoded ?? []).map((f) => ({
-                key: f.key ?? "",
-                value: f.value ?? "",
-              })),
-              formData: (result.body.formData ?? []).map((f) => ({
-                key: f.key ?? "",
-                value: f.value ?? "",
-                type: f.type ?? "text",
-                filePath: f.filePath ?? "",
-                fileName: f.fileName ?? "",
-              })),
-            }
-          : createdRequest.body,
-        auth: result.auth ?? createdRequest.auth,
-        updatedAt: new Date().toISOString(),
-      }
-
-      await saveRequestToBackend(requestToSave as model.RequestItem)
-
-      openRequestTab(currentProjectId, {
-        id: requestToSave.id,
-        name: requestToSave.name,
-        method: requestToSave.method as HttpMethod,
-        url: requestToSave.url,
-        params: (requestToSave.params ?? []).map((p) => ({
-          id: crypto.randomUUID(),
-          key: p.key,
-          value: p.value,
-          enabled: true,
-        })),
-        headers: (requestToSave.headers ?? []).map((h) => ({
-          id: crypto.randomUUID(),
-          key: h.key,
-          value: h.value,
-          enabled: true,
-        })),
-        body: requestToSave.body
-          ? {
-              type: requestToSave.body.type as "none" | "raw" | "json" | "form-urlencoded" | "form-data",
-              raw: requestToSave.body.raw,
-              json: requestToSave.body.json,
-              formUrlEncoded: (requestToSave.body.formUrlEncoded ?? []).map((f) => ({
-                id: crypto.randomUUID(),
-                key: f.key,
-                value: f.value,
-                enabled: true,
-              })),
-              formData: (requestToSave.body.formData ?? []).map((f) => ({
-                id: crypto.randomUUID(),
-                key: f.key,
-                value: f.value ?? "",
-                enabled: true,
-                type: (f.type as "text" | "file") || "text",
-                filePath: f.filePath,
-                fileName: f.fileName,
-              })),
-            }
-          : { type: "none" as const },
-        auth: requestToSave.auth
-          ? {
-              type: requestToSave.auth.type as "none" | "basic" | "bearer" | "api-key",
-              basic: requestToSave.auth.basic
-                ? {
-                    username: requestToSave.auth.basic.username,
-                    password: requestToSave.auth.basic.password,
-                  }
-                : undefined,
-              bearer: requestToSave.auth.bearer
-                ? { token: requestToSave.auth.bearer.token }
-                : undefined,
-              apiKey: requestToSave.auth.apiKey
-                ? {
-                    key: requestToSave.auth.apiKey.key,
-                    value: requestToSave.auth.apiKey.value,
-                    addTo: (requestToSave.auth.apiKey.addTo as "header" | "query") || "header",
-                  }
-                : undefined,
-            }
-          : { type: "none" as const },
-        folderId: requestToSave.folderId,
-        projectId: requestToSave.projectId,
-        createdAt: requestToSave.createdAt,
-        updatedAt: requestToSave.updatedAt,
+      const draftRequest = buildDraftRequestFromCurl(result, {
+        projectId: currentProjectId,
+        name: "Imported cURL",
+      })
+      addTab({
+        title: draftRequest.name || "Imported cURL",
+        projectId: currentProjectId,
+        closable: true,
+        dirty: true,
+        request: draftRequest,
+        response: null,
+        responseError: null,
       })
 
       setCurlCommand("")

@@ -59,10 +59,6 @@ export function HistoryPanel() {
   }, [currentProjectId])
 
   useEffect(() => { loadHistory() }, [loadHistory])
-  useEffect(() => {
-    const interval = setInterval(loadHistory, 3000)
-    return () => clearInterval(interval)
-  }, [loadHistory])
 
   const dayGroups = useMemo<DayGroup[]>(() => {
     const groups = new Map<string, model.HistoryEntry[]>()
@@ -88,6 +84,10 @@ export function HistoryPanel() {
     if (!confirm(t("确认清空所有历史记录？", "Clear all history records?"))) return
     await historyService.clearHistory(currentProjectId)
     setEntries([])
+  }
+
+  const handleRefresh = async () => {
+    await loadHistory()
   }
 
   const handleRestore = (entry: model.HistoryEntry) => {
@@ -117,21 +117,33 @@ export function HistoryPanel() {
           <span>{t("历史", "History")}</span>
           {entries.length > 0 && <span>({entries.length})</span>}
         </div>
-        {entries.length > 0 && (
+        <div className="flex items-center gap-1">
           <button
-            className="flex items-center gap-0.5 h-5 px-1.5 rounded-[var(--radius-sm)] text-2xs text-[var(--fg-muted)] hover:text-[var(--danger)] hover:bg-[var(--sidebar-hover)] transition-colors"
-            onClick={handleClear}
+            className="flex items-center gap-0.5 h-5 px-1.5 rounded-[var(--radius-sm)] text-2xs text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--sidebar-hover)] transition-colors disabled:opacity-50"
+            onClick={() => void handleRefresh()}
+            disabled={loading}
+            title={t("刷新历史", "Refresh history")}
           >
-            <AppIcon name="delete" size={10} /> {t("清空", "Clear")}
+            <AppIcon name="arrowUpDown" size={10} className={loading ? "animate-spin" : undefined} /> {t("刷新", "Refresh")}
           </button>
-        )}
+          {entries.length > 0 && (
+            <button
+              className="flex items-center gap-0.5 h-5 px-1.5 rounded-[var(--radius-sm)] text-2xs text-[var(--fg-muted)] hover:text-[var(--danger)] hover:bg-[var(--sidebar-hover)] transition-colors"
+              onClick={handleClear}
+            >
+              <AppIcon name="delete" size={10} /> {t("清空", "Clear")}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {loading ? (
-          <div className="text-center py-6 text-2xs text-[var(--fg-muted)]">{t("加载中...", "Loading...")}</div>
-        ) : entries.length === 0 ? (
-          <div className="text-center py-6 text-2xs text-[var(--fg-muted)]">{t("暂无历史记录", "No history yet")}</div>
+        {entries.length === 0 ? (
+          loading ? (
+            <div className="text-center py-6 text-2xs text-[var(--fg-muted)]">{t("加载中...", "Loading...")}</div>
+          ) : (
+            <div className="text-center py-6 text-2xs text-[var(--fg-muted)]">{t("暂无历史记录", "No history yet")}</div>
+          )
         ) : (
           dayGroups.map((group) => {
             const isCollapsed = collapsedDays.has(group.label)

@@ -24,6 +24,17 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 		Auth:    model.AuthConfig{Type: "none"},
 	}
 
+	appendLiteralCookieHeader := func(value string) {
+		cookieValue := strings.TrimSpace(value)
+		if cookieValue == "" || !strings.Contains(cookieValue, "=") {
+			return
+		}
+		input.Headers = append(input.Headers, model.KeyValue{
+			Key:   "Cookie",
+			Value: cookieValue,
+		})
+	}
+
 	parts := tokenize(curlCmd)
 	if len(parts) == 0 {
 		return nil, errors.New("cURL 命令为空")
@@ -37,6 +48,10 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 
 	for i := 0; i < len(parts); i++ {
 		part := parts[i]
+		if strings.HasPrefix(part, "--cookie=") {
+			appendLiteralCookieHeader(strings.TrimPrefix(part, "--cookie="))
+			continue
+		}
 		switch part {
 		case "-X", "--request":
 			if i+1 < len(parts) {
@@ -60,6 +75,11 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 						Value: strings.TrimSpace(headerStr[idx+1:]),
 					})
 				}
+			}
+		case "-b", "--cookie":
+			if i+1 < len(parts) {
+				i++
+				appendLiteralCookieHeader(parts[i])
 			}
 		case "-d", "--data", "--data-raw", "--data-binary", "--data-urlencode":
 			if i+1 < len(parts) {

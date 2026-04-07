@@ -23,9 +23,12 @@ interface CookieState {
   removeCookie: (id: string) => void
   clearCookies: () => void
   clearDomainCookies: (domain: string) => void
+  importCookieHeader: (rawHeader: string, domain: string, path?: string) => number
   absorbResponseCookies: (requestUrl: string, headers: Record<string, string[]>) => void
   getCookieHeader: (url: string) => string
 }
+
+const COOKIE_STORAGE_KEY = "minipost:cookies"
 
 function isExpired(cookie: Pick<CookieItem, "expires">): boolean {
   if (!cookie.expires) return false
@@ -48,6 +51,56 @@ function normalizeDomain(domain: string): string {
   value = value.split("/")[0]
   value = value.split(":")[0]
   return value
+}
+
+function sanitizeCookie(input: unknown): CookieItem | null {
+  if (!input || typeof input !== "object") return null
+  const raw = input as Partial<CookieItem>
+
+  const name = typeof raw.name === "string" ? raw.name : ""
+  const value = typeof raw.value === "string" ? raw.value : ""
+  const domain = typeof raw.domain === "string" ? raw.domain : ""
+  const path = typeof raw.path === "string" && raw.path.trim() ? raw.path : "/"
+  const expires = typeof raw.expires === "string" ? raw.expires : ""
+  const id = typeof raw.id === "string" && raw.id.trim() ? raw.id : crypto.randomUUID()
+
+  return {
+    id,
+    domain,
+    name,
+    value,
+    path,
+    expires,
+    secure: Boolean(raw.secure),
+    httpOnly: Boolean(raw.httpOnly),
+    enabled: raw.enabled ?? true,
+  }
+}
+
+function readPersistedCookies(): CookieItem[] {
+  if (typeof window === "undefined") return []
+  try {
+    const raw = window.localStorage.getItem(COOKIE_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    const cookies = parsed
+      .map((item) => sanitizeCookie(item))
+      .filter((item): item is CookieItem => item !== null)
+      .filter((item) => !isExpired(item))
+    return cookies
+  } catch {
+    return []
+  }
+}
+
+function persistCookies(cookies: CookieItem[]) {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(COOKIE_STORAGE_KEY, JSON.stringify(cookies))
+  } catch {
+    // ignore persistence errors
+  }
 }
 
 function parseSetCookie(
@@ -115,6 +168,20 @@ function parseSetCookie(
   }
 }
 
+function parseRequestUrl(rawUrl: string): URL | null {
+  const value = rawUrl.trim()
+  if (!value) return null
+  try {
+    return new URL(value)
+  } catch {
+    try {
+      return new URL(`http://${value}`)
+    } catch {
+      return null
+    }
+  }
+}
+
 function upsertCookie(list: CookieItem[], nextCookie: Omit<CookieItem, "id">): CookieItem[] {
   const idx = list.findIndex((cookie) =>
     normalizeDomain(cookie.domain) === normalizeDomain(nextCookie.domain)
@@ -134,8 +201,32 @@ function upsertCookie(list: CookieItem[], nextCookie: Omit<CookieItem, "id">): C
   return updated
 }
 
+function parseCookieHeader(rawHeader: string): Array<{ name: string; value: string }> {
+  const cleaned = rawHeader
+    .trim()
+    .replace(/^[*\-•]\s*/, "")
+    .replace(/^cookie:\s*/i, "")
+    .replace(/\r?\n/g, "; ")
+  if (!cleaned) return []
+
+  const attributeNames = new Set(["path", "domain", "expires", "max-age", "secure", "httponly", "samesite", "priority", "partitioned"])
+  const pairs: Array<{ name: string; value: string }> = []
+
+  cleaned.split(";").forEach((segment) => {
+    const token = segment.trim()
+    if (!token) return
+    const sep = token.indexOf("=")
+    if (sep <= 0) return
+    const name = token.slice(0, sep).trim()
+    if (!name || attributeNames.has(name.toLowerCase())) return
+    pairs.push({ name, value: token.slice(sep + 1).trim() })
+  })
+
+  return pairs
+}
+
 export const useCookieStore = create<CookieState>((set, get) => ({
-  cookies: [],
+  cookies: readPersistedCookies(),
   cookiePanelOpen: false,
 
   toggleCookiePanel: () => set((s) => ({ cookiePanelOpen: !s.cookiePanelOpen })),
@@ -153,31 +244,76 @@ export const useCookieStore = create<CookieState>((set, get) => ({
       httpOnly: cookie.httpOnly ?? false,
       enabled: cookie.enabled ?? true,
     }
-    set((s) => ({ cookies: [...s.cookies, item] }))
+    set((s) => {
+      const next = [...s.cookies, item]
+      persistCookies(next)
+      return { cookies: next }
+    })
   },
 
   updateCookie: (id, updates) => {
     set((s) => ({
-      cookies: s.cookies.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+      cookies: (() => {
+        const next = s.cookies.map((c) => (c.id === id ? { ...c, ...updates } : c))
+        persistCookies(next)
+        return next
+      })(),
     }))
   },
 
   removeCookie: (id) => {
-    set((s) => ({ cookies: s.cookies.filter((c) => c.id !== id) }))
+    set((s) => {
+      const next = s.cookies.filter((c) => c.id !== id)
+      persistCookies(next)
+      return { cookies: next }
+    })
   },
 
-  clearCookies: () => set({ cookies: [] }),
+  clearCookies: () => {
+    persistCookies([])
+    set({ cookies: [] })
+  },
   clearDomainCookies: (domain) => set((s) => ({
-    cookies: s.cookies.filter((cookie) => normalizeDomain(cookie.domain) !== normalizeDomain(domain)),
+    cookies: (() => {
+      const next = s.cookies.filter((cookie) => normalizeDomain(cookie.domain) !== normalizeDomain(domain))
+      persistCookies(next)
+      return next
+    })(),
   })),
+  importCookieHeader: (rawHeader, domain, path = "/") => {
+    const normalizedDomain = normalizeDomain(domain)
+    if (!normalizedDomain) return 0
+
+    const parsed = parseCookieHeader(rawHeader)
+    if (parsed.length === 0) return 0
+
+    let importedCount = 0
+    set((s) => {
+      let next = [...s.cookies]
+      parsed.forEach((item) => {
+        const candidate: Omit<CookieItem, "id"> = {
+          domain: normalizedDomain,
+          name: item.name,
+          value: item.value,
+          path: path || "/",
+          expires: "",
+          secure: false,
+          httpOnly: false,
+          enabled: true,
+        }
+        next = upsertCookie(next, candidate)
+        importedCount += 1
+      })
+      persistCookies(next)
+      return { cookies: next }
+    })
+    return importedCount
+  },
 
   absorbResponseCookies: (requestUrl, headers) => {
-    let requestHost = ""
-    try {
-      requestHost = new URL(requestUrl).hostname
-    } catch {
-      return
-    }
+    const parsedRequestURL = parseRequestUrl(requestUrl)
+    if (!parsedRequestURL) return
+    const requestHost = parsedRequestURL.hostname
 
     const setCookieValues: string[] = []
     Object.entries(headers).forEach(([key, values]) => {
@@ -206,25 +342,24 @@ export const useCookieStore = create<CookieState>((set, get) => ({
         }
         next = upsertCookie(next, candidate)
       }
+      persistCookies(next)
       return { cookies: next }
     })
   },
 
   getCookieHeader: (url: string) => {
-    try {
-      const u = new URL(url)
-      const { cookies } = get()
-      const matching = cookies.filter((c) => {
-        if (!c.enabled || !c.name) return false
-        if (isExpired(c)) return false
-        if (c.domain && !u.hostname.endsWith(normalizeDomain(c.domain))) return false
-        if (c.path && !u.pathname.startsWith(c.path)) return false
-        if (c.secure && u.protocol !== "https:") return false
-        return true
-      })
-      return matching.map((c) => `${c.name}=${c.value}`).join("; ")
-    } catch {
-      return ""
-    }
+    const parsedURL = parseRequestUrl(url)
+    if (!parsedURL) return ""
+
+    const { cookies } = get()
+    const matching = cookies.filter((c) => {
+      if (!c.enabled || !c.name) return false
+      if (isExpired(c)) return false
+      if (c.domain && !parsedURL.hostname.endsWith(normalizeDomain(c.domain))) return false
+      if (c.path && !parsedURL.pathname.startsWith(c.path)) return false
+      if (c.secure && parsedURL.protocol !== "https:") return false
+      return true
+    })
+    return matching.map((c) => `${c.name}=${c.value}`).join("; ")
   },
 }))
