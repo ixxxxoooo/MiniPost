@@ -308,6 +308,7 @@ export function BottomBar() {
   } = useUIStore()
   const { cookiePanelOpen, toggleCookiePanel, cookies } = useCookieStore()
   const errorCount = consoleLogs.filter((l) => l.error).length
+  const isVerticalLayout = layoutDirection === "vertical"
   const scrollRef = useRef<HTMLDivElement>(null)
   const consolePanelRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
@@ -495,34 +496,25 @@ export function BottomBar() {
               <button
                 className={cn(
                   "flex h-5 w-5 items-center justify-center rounded-[6px] transition-colors hover:bg-[var(--button-bg)]",
-                  layoutDirection === "vertical" ? "text-[var(--fg)] bg-[var(--button-bg)]" : "text-[var(--fg-secondary)]"
+                  "text-[var(--fg)] bg-[var(--button-bg)]"
                 )}
-                onClick={() => setLayoutDirection("vertical")}
+                onClick={() => setLayoutDirection(isVerticalLayout ? "horizontal" : "vertical")}
                 type="button"
               >
                 <span className="relative h-[11px] w-[13px] rounded-[2px] border border-current">
-                  <span className="absolute left-[1px] right-[1px] top-1/2 h-px -translate-y-1/2 bg-current" />
+                  {isVerticalLayout ? (
+                    <span className="absolute bottom-[1px] left-1/2 top-[1px] w-px -translate-x-1/2 bg-current" />
+                  ) : (
+                    <span className="absolute left-[1px] right-[1px] top-1/2 h-px -translate-y-1/2 bg-current" />
+                  )}
                 </span>
               </button>
             </TooltipTrigger>
-            <TooltipContent>{t("上下布局", "Vertical layout")}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                className={cn(
-                  "flex h-5 w-5 items-center justify-center rounded-[6px] transition-colors hover:bg-[var(--button-bg)]",
-                  layoutDirection === "horizontal" ? "text-[var(--fg)] bg-[var(--button-bg)]" : "text-[var(--fg-secondary)]"
-                )}
-                onClick={() => setLayoutDirection("horizontal")}
-                type="button"
-              >
-                <span className="relative h-[11px] w-[13px] rounded-[2px] border border-current">
-                  <span className="absolute bottom-[1px] left-1/2 top-[1px] w-px -translate-x-1/2 bg-current" />
-                </span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>{t("左右布局", "Horizontal layout")}</TooltipContent>
+            <TooltipContent>
+              {isVerticalLayout
+                ? t("切换到左右布局", "Switch to horizontal layout")
+                : t("切换到上下布局", "Switch to vertical layout")}
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>

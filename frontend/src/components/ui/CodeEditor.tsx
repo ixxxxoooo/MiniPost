@@ -47,6 +47,8 @@ interface CodeEditorProps {
   foldAllSignal?: number
   /** 每次值变更时触发全部展开 */
   unfoldAllSignal?: number
+  /** 是否启用 ⌘/Ctrl+Enter 发送快捷键 */
+  enableSendShortcut?: boolean
 }
 
 export function stripJsonComments(text: string): string {
@@ -135,6 +137,7 @@ export function CodeEditor({
   lineWrap = true,
   foldAllSignal,
   unfoldAllSignal,
+  enableSendShortcut = false,
 }: CodeEditorProps) {
   const monaco = useMonaco()
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null)
@@ -345,9 +348,13 @@ export function CodeEditor({
         value={value}
         theme={theme}
         options={options}
-        onMount={(editor) => {
+        onMount={(editor, monacoInstance) => {
           editorRef.current = editor
           stabilizeFindWidgetTooltips(editor)
+          if (!enableSendShortcut || readOnly) return
+          editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.Enter, () => {
+            window.dispatchEvent(new CustomEvent("minipost:send"))
+          })
         }}
         onChange={(nextValue) => onChange?.(nextValue ?? "")}
       />
