@@ -362,7 +362,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
             </SelectContent>
           </Select>
 
-          <div className="relative h-[30px] min-w-0 flex-1 overflow-hidden">
+          <div className="relative h-[30px] min-w-0 flex-1">
             <div
               className={cn(
                 "pointer-events-none absolute inset-0 z-[1] flex items-center overflow-hidden px-3",

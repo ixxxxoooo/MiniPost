@@ -112,6 +112,7 @@ export function BodyEditor() {
                 placeholder='{"key": "value"}'
                 isDark={isDark}
                 fillParent
+                enableSendShortcut
               />
             </div>
           </div>
@@ -127,6 +128,7 @@ export function BodyEditor() {
                 placeholder={t("请求体内容...", "Request body...")}
                 isDark={isDark}
                 fillParent
+                enableSendShortcut
               />
             </div>
           </div>
