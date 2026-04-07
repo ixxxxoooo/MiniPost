@@ -718,6 +718,8 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
   const [filterExpr, setFilterExpr] = useState("")
   const [searchSignal, setSearchSignal] = useState<number | undefined>(undefined)
   const [lineWrap, setLineWrap] = useState(true)
+  const [foldAllSignal, setFoldAllSignal] = useState<number | undefined>(undefined)
+  const [unfoldAllSignal, setUnfoldAllSignal] = useState<number | undefined>(undefined)
 
   useEffect(() => {
     setMode(defaultMode)
@@ -767,6 +769,18 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
     if (preview) setPreview(false)
     window.setTimeout(() => setSearchSignal(Date.now()), 0)
   }, [preview])
+
+  const handleFoldAll = useCallback(() => {
+    if (preview) setPreview(false)
+    window.setTimeout(() => setFoldAllSignal(Date.now()), 0)
+  }, [preview])
+
+  const handleUnfoldAll = useCallback(() => {
+    if (preview) setPreview(false)
+    window.setTimeout(() => setUnfoldAllSignal(Date.now()), 0)
+  }, [preview])
+
+  const showJsonFoldActions = mode === "json" && !preview
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -887,6 +901,35 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
             </TooltipTrigger>
             <TooltipContent>{t("查找 (⌘F)", "Search (⌘F)")}</TooltipContent>
           </Tooltip>
+          {showJsonFoldActions && (
+            <>
+              <span className="mx-0.5 h-3.5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="h-6 rounded-[8px] border border-transparent px-2 text-[10px] text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors"
+                    onClick={handleFoldAll}
+                  >
+                    {t("全部折叠", "Fold all")}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{t("一键折叠所有 JSON 节点", "Collapse all JSON nodes")}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="h-6 rounded-[8px] border border-transparent px-2 text-[10px] text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors"
+                    onClick={handleUnfoldAll}
+                  >
+                    {t("全部展开", "Unfold all")}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{t("一键展开所有 JSON 节点", "Expand all JSON nodes")}</TooltipContent>
+              </Tooltip>
+            </>
+          )}
           <span className="mx-0.5 h-3.5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
           <Tooltip>
             <TooltipTrigger asChild>
@@ -953,6 +996,8 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
             syntaxStyle="postman"
             searchSignal={searchSignal}
             lineWrap={lineWrap}
+            foldAllSignal={foldAllSignal}
+            unfoldAllSignal={unfoldAllSignal}
           />
         )}
       </div>

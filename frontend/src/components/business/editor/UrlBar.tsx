@@ -4,7 +4,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AppIcon } from "@/components/ui/icon"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
-import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
 import { useEnvironmentStore } from "@/stores/environmentStore"
 import { useI18n } from "@/hooks/useI18n"
@@ -55,7 +54,6 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
   const updateTab = useTabStore((s) => s.updateTab)
-  const { isSending } = useUIStore()
   const environments = useEnvironmentStore((s) => s.environments)
   const activeEnvironmentId = useEnvironmentStore((s) => s.activeEnvironmentId)
   const projects = useProjectStore((s) => s.projects)
@@ -90,6 +88,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
   if (!activeTab) return null
 
   const { request } = activeTab
+  const isSending = activeTab.isSending
   const requestName = request.name?.trim() || activeTab.title || "Untitled"
 
   const folderPath = useMemo(() => {
@@ -331,11 +330,11 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
 
       <div
         className={cn(
-          "flex items-center gap-[var(--size-gap)] px-[var(--size-padding)] py-1",
+          "flex min-w-0 items-center gap-[var(--size-gap)] px-[var(--size-padding)] py-1",
           "bg-[var(--surface)]"
         )}
       >
-        <div className="flex flex-1 items-center rounded-[10px] border border-[var(--button-border)] bg-[var(--surface)] focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]/20">
+        <div className="flex min-w-0 flex-1 items-center rounded-[10px] border border-[var(--button-border)] bg-[var(--surface)] focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]/20">
           <Select value={request.method} onValueChange={(value) => updateTabRequest(activeTab.id, { method: value as HttpMethod })}>
             <SelectTrigger
               className={cn(
@@ -363,10 +362,10 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
             </SelectContent>
           </Select>
 
-          <div className="relative h-[30px] min-w-0 flex-1">
+          <div className="relative h-[30px] min-w-0 flex-1 overflow-hidden">
             <div
               className={cn(
-                "pointer-events-none absolute inset-0 z-[1] flex items-center px-3",
+                "pointer-events-none absolute inset-0 z-[1] flex items-center overflow-hidden px-3",
                 "font-mono text-[length:var(--size-font-xs)] text-[var(--fg)]"
               )}
             >
@@ -478,7 +477,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
           <TooltipTrigger asChild>
             <button
               className={cn(
-                "h-[var(--size-btn)] px-3 flex items-center justify-center gap-1 rounded-[var(--radius-btn)]",
+                "h-[var(--size-btn)] flex-shrink-0 px-3 flex items-center justify-center gap-1 rounded-[var(--radius-btn)]",
                 "text-[length:var(--size-font-2xs)] font-medium transition-colors",
                 "hover:bg-[var(--sidebar-hover)]",
                 activeTab.dirty ? "text-[var(--fg-secondary)]" : "text-[var(--fg-muted)]"

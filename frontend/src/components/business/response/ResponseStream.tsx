@@ -12,6 +12,8 @@ interface ResponseStreamProps {
   isDark: boolean
 }
 
+const MAX_RENDERED_STREAM_ROWS = 240
+
 function pad2(value: number): string {
   return String(value).padStart(2, "0")
 }
@@ -52,9 +54,13 @@ export function ResponseStream({ entries, isDark }: ResponseStreamProps) {
   const [searchQuery, setSearchQuery] = useState("")
 
   const orderedEntries = useMemo(
-    () => [...entries]
-      .filter((entry) => entry.kind !== "response_start")
-      .sort((a, b) => b.sequence - a.sequence),
+    () => {
+      const filtered = entries.filter((entry) => entry.kind !== "response_start")
+      const sliced = filtered.length > MAX_RENDERED_STREAM_ROWS
+        ? filtered.slice(filtered.length - MAX_RENDERED_STREAM_ROWS)
+        : filtered
+      return [...sliced].reverse()
+    },
     [entries]
   )
 
@@ -78,6 +84,11 @@ export function ResponseStream({ entries, isDark }: ResponseStreamProps) {
   return (
     <div className="h-full overflow-auto rounded-[10px] border border-[var(--border-color)] bg-[var(--surface)]">
       <div className="sticky top-0 z-10 border-b border-[var(--border-subtle)] bg-[var(--surface)] px-2 py-2">
+        {entries.length > MAX_RENDERED_STREAM_ROWS && (
+          <div className="mb-1 text-[10px] text-[var(--fg-muted)]">
+            {t("仅展示最近流消息，避免页面卡顿。", "Showing recent stream messages only to keep UI responsive.")}
+          </div>
+        )}
         <div className="relative">
           <AppIcon name="search" size={12} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[var(--fg-muted)]" />
           <input

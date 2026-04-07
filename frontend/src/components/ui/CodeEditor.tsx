@@ -43,6 +43,10 @@ interface CodeEditorProps {
   searchSignal?: number
   /** 是否启用自动换行 */
   lineWrap?: boolean
+  /** 每次值变更时触发全部折叠 */
+  foldAllSignal?: number
+  /** 每次值变更时触发全部展开 */
+  unfoldAllSignal?: number
 }
 
 export function stripJsonComments(text: string): string {
@@ -129,6 +133,8 @@ export function CodeEditor({
   syntaxStyle = "default",
   searchSignal,
   lineWrap = true,
+  foldAllSignal,
+  unfoldAllSignal,
 }: CodeEditorProps) {
   const monaco = useMonaco()
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null)
@@ -293,6 +299,32 @@ export function CodeEditor({
     editor.focus()
     void editor.getAction("actions.find")?.run()
   }, [searchSignal])
+
+  useEffect(() => {
+    if (foldAllSignal === undefined) return
+    const editor = editorRef.current
+    if (!editor) return
+    editor.focus()
+    const action = editor.getAction("editor.foldAll")
+    if (action) {
+      void action.run()
+      return
+    }
+    editor.trigger("minipost", "editor.foldAll", null)
+  }, [foldAllSignal])
+
+  useEffect(() => {
+    if (unfoldAllSignal === undefined) return
+    const editor = editorRef.current
+    if (!editor) return
+    editor.focus()
+    const action = editor.getAction("editor.unfoldAll")
+    if (action) {
+      void action.run()
+      return
+    }
+    editor.trigger("minipost", "editor.unfoldAll", null)
+  }, [unfoldAllSignal])
 
   useEffect(() => () => {
     tooltipObserverRef.current?.disconnect()

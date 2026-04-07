@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
@@ -229,7 +229,7 @@ function getRequestErrorPresentation(parsed: ParsedRequestError, isZh: boolean):
 
 function LoadingTopShimmer() {
   return (
-    <div className="absolute left-0 top-0 h-[3px] w-full overflow-hidden bg-[var(--border-subtle)]/60">
+    <div className="absolute left-0 top-0 h-[3px] w-full overflow-hidden bg-[var(--border-subtle)]/75">
       <div className="response-loading-sheen h-full w-[34%]" />
     </div>
   )
@@ -238,13 +238,16 @@ function LoadingTopShimmer() {
 export function ResponseViewer() {
   const { t, isZh } = useI18n()
   const activeTab = useTabStore(getProjectActiveTabFromState)
-  const { isSending, resolved } = useUIStore()
+  const { resolved } = useUIStore()
   const environments = useEnvironmentStore((s) => s.environments)
   const activeEnvironmentId = useEnvironmentStore((s) => s.activeEnvironmentId)
   const [activeTabValue, setActiveTabValue] = useState("body")
   const [liveNow, setLiveNow] = useState(() => Date.now())
+  const [showLoadingShimmer, setShowLoadingShimmer] = useState(false)
+  const loadingShimmerStartedAtRef = useRef<number>(0)
 
   const isDark = resolved === "dark"
+  const isSending = activeTab?.isSending ?? false
   const response = activeTab?.response ?? null
   const responseError = activeTab?.responseError ?? null
   const streamEntries = activeTab?.streamEntries ?? []
@@ -390,6 +393,22 @@ export function ResponseViewer() {
     }
   }, [responseError])
 
+  useEffect(() => {
+    const MIN_SHIMMER_MS = 450
+
+    if (isSending) {
+      loadingShimmerStartedAtRef.current = Date.now()
+      setShowLoadingShimmer(true)
+      return
+    }
+
+    if (!showLoadingShimmer) return
+    const elapsed = Date.now() - loadingShimmerStartedAtRef.current
+    const remain = Math.max(0, MIN_SHIMMER_MS - elapsed)
+    const timer = window.setTimeout(() => setShowLoadingShimmer(false), remain)
+    return () => window.clearTimeout(timer)
+  }, [isSending, showLoadingShimmer])
+
   const triggerSendFromEmptyState = () => {
     if (!canSendFromEmptyState || isSending) return
     window.dispatchEvent(new CustomEvent("minipost:send"))
@@ -430,23 +449,32 @@ export function ResponseViewer() {
   if (!response && !responseError && isSending && !hasStreamEntries) {
     return (
       <div className="relative h-full bg-[var(--surface)]">
+        {showLoadingShimmer && (
+          <div className="absolute inset-x-0 top-0 z-20 pointer-events-none">
+            <LoadingTopShimmer />
+          </div>
+        )}
+        <div className="absolute inset-x-0 bottom-0 top-[32px] z-10 pointer-events-auto bg-[var(--response-loading-overlay)] backdrop-blur-[1px]" />
+
         <div className="flex h-[32px] items-center px-[var(--size-padding-sm)]">
           <span className="text-[13px] font-semibold text-[var(--fg)]">{t("响应", "Response")}</span>
         </div>
-        <div className="flex h-[calc(100%-32px)] items-center justify-center px-4">
+        <div className="relative z-20 flex h-[calc(100%-32px)] items-center justify-center px-4">
           <span className="text-[13px] text-[var(--fg-secondary)]">{t("发送请求...", "Sending request...")}</span>
         </div>
       </div>
     )
   }
 
-  const headerCount = Object.keys(safeHeaders).length
+  const shouldClearResponseMeta = isSending && !hasStreamEntries && !streamActive
+  const headerCount = shouldClearResponseMeta ? 0 : Object.keys(safeHeaders).length
   const cookies = parseResponseCookies(safeHeaders)
-  const cookieCount = cookies.length
+  const cookieCount = shouldClearResponseMeta ? 0 : cookies.length
+  const showResponseMeta = Boolean(response && !responseError && !shouldClearResponseMeta)
 
   return (
     <div className="flex h-full flex-col bg-[var(--surface)] relative">
-      {isSending && (
+      {showLoadingShimmer && (
         <div className="absolute inset-x-0 top-0 z-20 pointer-events-none">
           <LoadingTopShimmer />
         </div>
@@ -454,7 +482,7 @@ export function ResponseViewer() {
 
       {/* sending overlay */}
       {isSending && !hasStreamEntries && (
-        <div className="absolute inset-x-0 bottom-0 top-[32px] z-10 pointer-events-auto bg-[var(--response-loading-overlay)]" />
+        <div className="absolute inset-x-0 bottom-0 top-[32px] z-10 pointer-events-auto bg-[var(--response-loading-overlay)] backdrop-blur-[1px]" />
       )}
 
       <Tabs value={activeTabValue} onValueChange={setActiveTabValue} className="flex-1 flex flex-col min-h-0">
@@ -475,7 +503,7 @@ export function ResponseViewer() {
             </TabsTrigger>
           </TabsList>
 
-          {response && !responseError && (
+          {showResponseMeta && response && !responseError && (
             <div className="ml-auto flex items-center gap-2 text-[11px] text-[var(--fg-muted)]">
               {response.warnings && response.warnings.length > 0 && (
                 <>
