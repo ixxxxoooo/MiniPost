@@ -35,6 +35,8 @@ export interface HttpResponse {
   statusText: string
   headers: Record<string, string[]>
   body: string
+  bodyBase64?: string
+  bodyIsBinary?: boolean
   duration: number
   size: number
   contentType: string

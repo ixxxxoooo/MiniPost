@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,6 +33,7 @@ type App struct {
 }
 
 const httpStreamEventName = "minipost:http-stream"
+const binarySavePrefix = "__MINIPOST_BASE64__:"
 
 type httpStreamEventPayload struct {
 	StreamID   string `json:"streamId"`
@@ -666,10 +668,6 @@ func (a *App) SaveResponseToFile(defaultFilename string, content string) error {
 	selection, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
 		Title:           "保存响应",
 		DefaultFilename: defaultFilename,
-		Filters: []wailsRuntime.FileFilter{
-			{DisplayName: "JSON 文件 (*.json)", Pattern: "*.json"},
-			{DisplayName: "所有文件", Pattern: "*.*"},
-		},
 	})
 	if err != nil {
 		return err
@@ -677,5 +675,13 @@ func (a *App) SaveResponseToFile(defaultFilename string, content string) error {
 	if selection == "" {
 		return nil
 	}
-	return os.WriteFile(selection, []byte(content), 0644)
+	data := []byte(content)
+	if strings.HasPrefix(content, binarySavePrefix) {
+		decoded, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(content, binarySavePrefix))
+		if err != nil {
+			return appErrors.Wrap("INVALID_BINARY_PAYLOAD", "下载内容解析失败", err)
+		}
+		data = decoded
+	}
+	return os.WriteFile(selection, data, 0644)
 }

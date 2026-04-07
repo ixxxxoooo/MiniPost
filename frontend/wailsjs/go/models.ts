@@ -448,6 +448,8 @@ export namespace model {
 	    statusText: string;
 	    headers: Record<string, Array<string>>;
 	    body: string;
+	    bodyBase64?: string;
+	    bodyIsBinary?: boolean;
 	    duration: number;
 	    size: number;
 	    contentType: string;
@@ -467,6 +469,8 @@ export namespace model {
 	        this.statusText = source["statusText"];
 	        this.headers = source["headers"];
 	        this.body = source["body"];
+	        this.bodyBase64 = source["bodyBase64"];
+	        this.bodyIsBinary = source["bodyIsBinary"];
 	        this.duration = source["duration"];
 	        this.size = source["size"];
 	        this.contentType = source["contentType"];

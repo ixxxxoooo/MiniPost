@@ -21,6 +21,7 @@ import { getSuppressedAutoHeaders, isAutoHeaderDisabledMarkerKey, normalizeHeade
 import { stripJsonComments } from "@/components/ui/CodeEditor"
 import { ensureRequestProtocol, resolveTemplateVariables } from "@/lib/variableResolver"
 import { areParamsEquivalent, syncParamsWithUrlQuery } from "@/lib/urlQuerySync"
+import { buildSaveResponsePayload, suggestResponseFilename } from "@/lib/responseDownload"
 import { useI18n } from "@/hooks/useI18n"
 
 const TOKEN_HEADER_NAME = "MiniPost-Token"
@@ -433,8 +434,17 @@ function useRequestEditorActions() {
       })
       if (downloadAfter) {
         const { SaveResponseToFile } = await import("../../../../wailsjs/go/main/App")
-        const filename = `response-${Date.now()}.json`
-        await SaveResponseToFile(filename, result.body)
+        const filename = suggestResponseFilename({
+          headers: result.headers,
+          contentType: result.contentType,
+          requestUrl: resolvedRequestUrl,
+        })
+        const payload = buildSaveResponsePayload({
+          body: result.body,
+          bodyBase64: result.bodyBase64,
+          bodyIsBinary: result.bodyIsBinary,
+        })
+        await SaveResponseToFile(filename, payload)
       }
     } catch (err) {
       if (!isCurrentTabSend()) return
