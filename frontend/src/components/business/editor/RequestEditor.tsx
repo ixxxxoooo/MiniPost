@@ -480,20 +480,25 @@ function useRequestEditorActions() {
       name: requestName,
       method: req.method,
       url: req.url,
-      params: req.params.filter((p: { key: string }) => p.key).map((p: { key: string; value: string }) => ({ key: p.key, value: p.value })),
+      params: req.params
+        .filter((p: { key: string }) => p.key)
+        .map((p: { key: string; value: string; description?: string }) => ({ key: p.key, value: p.value, description: p.description ?? "" })),
       headers: req.headers
         .filter((h: { key: string }) => h.key && !isAutoHeaderDisabledMarkerKey(h.key))
-        .map((h: { key: string; value: string }) => ({ key: h.key, value: h.value })),
+        .map((h: { key: string; value: string; description?: string }) => ({ key: h.key, value: h.value, description: h.description ?? "" })),
       body: {
         type: req.body.type,
         raw: req.body.raw ?? "",
         json: req.body.json ?? "",
-        formUrlEncoded: (req.body.formUrlEncoded ?? []).filter((f: { key: string }) => f.key).map((f: { key: string; value: string }) => ({ key: f.key, value: f.value })),
+        formUrlEncoded: (req.body.formUrlEncoded ?? [])
+          .filter((f: { key: string }) => f.key)
+          .map((f: { key: string; value: string; description?: string }) => ({ key: f.key, value: f.value, description: f.description ?? "" })),
         formData: (req.body.formData ?? [])
           .filter((f: { key: string }) => f.key)
-          .map((f: { key: string; value: string; type: string; filePath?: string; fileName?: string }) => ({
+          .map((f: { key: string; value: string; description?: string; type: string; filePath?: string; fileName?: string }) => ({
             key: f.key,
             value: f.value,
+            description: f.description ?? "",
             type: f.type,
             filePath: f.filePath ?? "",
             fileName: f.fileName ?? "",

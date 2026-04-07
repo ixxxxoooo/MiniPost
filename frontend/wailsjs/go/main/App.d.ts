@@ -36,7 +36,11 @@ export function ImportCurl(arg1:string):Promise<model.SendRequestInput>;
 
 export function ImportFromFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function ImportFromURL(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function ImportPostmanCollection(arg1:string,arg2:string):Promise<void>;
+
+export function ImportPostmanEnvironment(arg1:string,arg2:string):Promise<void>;
 
 export function ImportSwagger(arg1:string,arg2:string):Promise<void>;
 

@@ -130,22 +130,23 @@ export function TabBar() {
       name: req.name,
       method: req.method,
       url: req.url,
-      params: req.params.filter((p) => p.key).map((p) => ({ key: p.key, value: p.value })),
+      params: req.params.filter((p) => p.key).map((p) => ({ key: p.key, value: p.value, description: p.description ?? "" })),
       headers: req.headers
         .filter((h) => h.key && !isAutoHeaderDisabledMarkerKey(h.key))
-        .map((h) => ({ key: h.key, value: h.value })),
+        .map((h) => ({ key: h.key, value: h.value, description: h.description ?? "" })),
       body: {
         type: req.body.type,
         raw: req.body.raw ?? "",
         json: req.body.json ?? "",
         formUrlEncoded: (req.body.formUrlEncoded ?? [])
           .filter((f) => f.key)
-          .map((f) => ({ key: f.key, value: f.value })),
+          .map((f) => ({ key: f.key, value: f.value, description: f.description ?? "" })),
         formData: (req.body.formData ?? [])
           .filter((f) => f.key)
           .map((f) => ({
             key: f.key,
             value: f.value,
+            description: f.description ?? "",
             type: f.type,
             filePath: f.filePath ?? "",
             fileName: f.fileName ?? "",
@@ -518,7 +519,7 @@ export function TabBar() {
                   )}>
                     {tab.request.method || "GET"}
                   </span>
-                  <span className={cn("truncate max-w-[100px]", isActive ? "text-[var(--fg)]" : "text-[var(--fg-muted)]")}>
+                  <span className={cn("truncate max-w-[100px]", isActive ? "text-[var(--fg)]" : "text-[var(--fg-secondary)]")}>
                     {tab.title}
                   </span>
                   {tab.dirty && (
@@ -583,7 +584,7 @@ export function TabBar() {
                   isEnvironmentTabActive ? "text-[var(--accent)]" : "text-[var(--fg-muted)]"
                 )}
               />
-              <span className={cn("truncate max-w-[120px]", isEnvironmentTabActive ? "text-[var(--fg)]" : "text-[var(--fg-muted)]")}>
+              <span className={cn("truncate max-w-[120px]", isEnvironmentTabActive ? "text-[var(--fg)]" : "text-[var(--fg-secondary)]")}>
                 {environmentTab.name}
               </span>
               <button

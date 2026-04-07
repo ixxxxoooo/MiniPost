@@ -11,8 +11,9 @@ type SendRequestInput struct {
 }
 
 type KeyValue struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	Key         string `json:"key"`
+	Value       string `json:"value"`
+	Description string `json:"description,omitempty"`
 }
 
 type RequestBody struct {
@@ -24,11 +25,12 @@ type RequestBody struct {
 }
 
 type FormData struct {
-	Key      string `json:"key"`
-	Value    string `json:"value"`
-	Type     string `json:"type"` // text | file
-	FilePath string `json:"filePath,omitempty"`
-	FileName string `json:"fileName,omitempty"`
+	Key         string `json:"key"`
+	Value       string `json:"value"`
+	Description string `json:"description,omitempty"`
+	Type        string `json:"type"` // text | file
+	FilePath    string `json:"filePath,omitempty"`
+	FileName    string `json:"fileName,omitempty"`
 }
 
 type AuthConfig struct {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 import { AppIcon } from "@/components/ui/icon"
@@ -43,7 +43,10 @@ export function WorkspaceHeader() {
   const [switchConfirm, setSwitchConfirm] = useState<{ id: string; name: string } | null>(null)
   const [navigation, setNavigation] = useState<NavigationState>({ history: [], index: -1 })
   const ref = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const navigatingRef = useRef(false)
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
 
   const current = projects.find((project) => project.id === currentProjectId)
   const currentLabel = current?.name || t("选择项目", "Select project")
@@ -87,6 +90,25 @@ export function WorkspaceHeader() {
     }
     return false
   }, [hasNavigableAt, navigation.history.length, navigation.index])
+
+  const updateDropdownPosition = useCallback(() => {
+    const trigger = triggerRef.current
+    if (!trigger || typeof window === "undefined") return
+
+    const rect = trigger.getBoundingClientRect()
+    const margin = 8
+    const width = Math.min(Math.max(triggerWidth, panelWidth), window.innerWidth - margin * 2)
+    const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin))
+    const spaceBelow = window.innerHeight - rect.bottom - margin
+    const spaceAbove = rect.top - margin
+    const preferAbove = spaceBelow < 190 && spaceAbove > spaceBelow
+    const maxHeight = Math.min(320, Math.max(140, (preferAbove ? spaceAbove : spaceBelow) - 6))
+    const top = preferAbove
+      ? Math.max(margin, rect.top - maxHeight - 6)
+      : Math.max(margin, rect.bottom + 6)
+
+    setDropdownPosition({ top, left, width, maxHeight })
+  }, [panelWidth, triggerWidth])
 
   useEffect(() => {
     if (!currentProjectId) {
@@ -154,15 +176,27 @@ export function WorkspaceHeader() {
   useEffect(() => {
     if (!open) return
 
+    updateDropdownPosition()
+
     const handleOutside = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      const clickedTrigger = triggerRef.current?.contains(target)
+      const clickedPanel = panelRef.current?.contains(target)
+      if (!clickedTrigger && !clickedPanel) {
         setOpen(false)
       }
     }
 
+    const syncPosition = () => updateDropdownPosition()
     document.addEventListener("mousedown", handleOutside)
-    return () => document.removeEventListener("mousedown", handleOutside)
-  }, [open])
+    window.addEventListener("resize", syncPosition)
+    window.addEventListener("scroll", syncPosition, true)
+    return () => {
+      document.removeEventListener("mousedown", handleOutside)
+      window.removeEventListener("resize", syncPosition)
+      window.removeEventListener("scroll", syncPosition, true)
+    }
+  }, [open, updateDropdownPosition])
 
   useEffect(() => {
     if (!open && !deleteConfirm && !switchConfirm) return
@@ -244,6 +278,123 @@ export function WorkspaceHeader() {
     setOpen(false)
   }
 
+  const projectDropdownPortal = open && dropdownPosition && createPortal(
+    <>
+      <div className="fixed inset-0 z-[118]" aria-hidden="true" />
+      <div
+        ref={panelRef}
+        className={cn(
+          "fixed z-[120] overflow-hidden rounded-[9px] border shadow-[var(--shadow-lg)]",
+          "border-[var(--button-border)] bg-[var(--surface-elevated)]"
+        )}
+        style={{
+          left: `${dropdownPosition.left}px`,
+          top: `${dropdownPosition.top}px`,
+          width: `${dropdownPosition.width}px`,
+        }}
+      >
+        <div className="flex items-center gap-1.5 border-b border-[var(--border-subtle)] p-1.5">
+          <div className="relative flex-1">
+            <AppIcon
+              name="search"
+              size={10}
+              strokeWidth={1.9}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fg-muted)]"
+            />
+            <input
+              className={cn(
+                "h-7 w-full rounded-[7px] border border-[var(--button-border)] bg-[var(--surface)] pl-7 pr-2.5",
+                "text-[10px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
+              )}
+              placeholder={t("搜索或新建项目...", "Search or create project...")}
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") void handleCreate() }}
+              autoFocus
+            />
+          </div>
+          <button
+            className={cn(
+              "h-7 rounded-[7px] border px-2.5 text-[10px] font-medium transition-colors",
+              "border-[var(--button-border)] bg-[var(--surface)] text-[var(--fg)] hover:bg-[var(--surface-secondary)]"
+            )}
+            onClick={() => {
+              void handleCreate()
+            }}
+            type="button"
+          >
+            {t("新建", "New")}
+          </button>
+        </div>
+
+        <div className="overflow-y-auto p-1" style={{ maxHeight: `${dropdownPosition.maxHeight}px` }}>
+          {projects
+            .filter((project) => project.name.toLowerCase().includes(searchQuery.toLowerCase()))
+            .map((project) => {
+              const selected = project.id === currentProjectId
+              return (
+                <div
+                  key={project.id}
+                  className={cn(
+                    "group flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 text-left transition-colors",
+                    selected
+                      ? "bg-[var(--selected-bg)] text-[var(--fg)]"
+                      : "text-[var(--fg)] hover:bg-[var(--surface-secondary)]"
+                  )}
+                >
+                  <button
+                    className="flex min-w-0 flex-1 items-center gap-2"
+                    onClick={() => {
+                      void handleSelectProject(project.id)
+                    }}
+                    type="button"
+                  >
+                    <span
+                      className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                      style={{ backgroundColor: project.themeColor || "var(--accent)" }}
+                    />
+                    <div className="min-w-0 flex-1 text-left">
+                      <div className="truncate text-[12px] font-medium">{project.name}</div>
+                    </div>
+                  </button>
+                  {selected && (
+                    <span className="flex-shrink-0 text-[9px] font-medium text-[var(--fg-muted)]">{t("当前", "Current")}</span>
+                  )}
+                  <div className="flex flex-shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          className="flex h-5 w-5 items-center justify-center rounded-[4px] transition-colors hover:bg-[var(--button-bg)]"
+                          onClick={(e) => { e.stopPropagation(); void handleExportProject(project.id) }}
+                          type="button"
+                        >
+                          <AppIcon name="download" size={11} className="text-[var(--fg-muted)]" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t("导出项目", "Export project")}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          className="flex h-5 w-5 items-center justify-center rounded-[4px] transition-colors hover:bg-[var(--button-bg)]"
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ id: project.id, name: project.name }) }}
+                          type="button"
+                        >
+                          <AppIcon name="delete" size={11} className="text-[var(--fg-muted)]" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t("删除项目", "Delete project")}</TooltipContent>
+                    </Tooltip>
+                  </div>
+                </div>
+              )
+            })}
+        </div>
+      </div>
+    </>,
+    document.body
+  )
+
   return (
     <>
       <div className="titlebar-no-drag flex items-center gap-1" ref={ref} onMouseDown={(event) => event.stopPropagation()}>
@@ -308,7 +459,7 @@ export function WorkspaceHeader() {
           <TooltipContent>{workspaceView === "home" ? t("关闭主页", "Close home") : t("打开主页", "Open home")}</TooltipContent>
         </Tooltip>
 
-        <div className="relative" style={{ width: `${triggerWidth}px`, maxWidth: `${BUTTON_MAX_WIDTH}px` }}>
+        <div ref={triggerRef} className="relative" style={{ width: `${triggerWidth}px`, maxWidth: `${BUTTON_MAX_WIDTH}px` }}>
           <button
             className={cn(
               "flex h-[28px] w-full items-center gap-1.5 rounded-[8px] px-2 text-left transition-colors",
@@ -328,115 +479,9 @@ export function WorkspaceHeader() {
               className={cn("text-[var(--fg-muted)] transition-transform", open && "rotate-180")}
             />
           </button>
-
-          {open && (
-            <div
-              className={cn(
-                "absolute left-0 top-[calc(100%+5px)] z-[120] overflow-hidden rounded-[9px] border shadow-[var(--shadow-lg)]",
-                "border-[var(--button-border)] bg-[var(--surface-elevated)]"
-              )}
-              style={{ width: `${Math.max(triggerWidth, panelWidth)}px`, maxWidth: `${PANEL_MAX_WIDTH}px` }}
-            >
-              <div className="flex items-center gap-1.5 border-b border-[var(--border-subtle)] p-1.5">
-                <div className="relative flex-1">
-                  <AppIcon
-                    name="search"
-                    size={10}
-                    strokeWidth={1.9}
-                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fg-muted)]"
-                  />
-                  <input
-                    className={cn(
-                      "h-7 w-full rounded-[7px] border border-[var(--button-border)] bg-[var(--surface)] pl-7 pr-2.5",
-                      "text-[10px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
-                    )}
-                    placeholder={t("搜索或新建项目...", "Search or create project...")}
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") void handleCreate() }}
-                  />
-                </div>
-                <button
-                  className={cn(
-                    "h-7 rounded-[7px] border px-2.5 text-[10px] font-medium transition-colors",
-                    "border-[var(--button-border)] bg-[var(--surface)] text-[var(--fg)] hover:bg-[var(--surface-secondary)]"
-                  )}
-                  onClick={() => {
-                    void handleCreate()
-                  }}
-                  type="button"
-                >
-                  {t("新建", "New")}
-                </button>
-              </div>
-
-              <div className="max-h-[240px] overflow-y-auto p-1">
-                {projects
-                  .filter((project) => project.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .map((project) => {
-                  const selected = project.id === currentProjectId
-                  return (
-                    <div
-                      key={project.id}
-                      className={cn(
-                        "flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 text-left transition-colors group",
-                        selected
-                          ? "bg-[var(--selected-bg)] text-[var(--fg)]"
-                          : "text-[var(--fg)] hover:bg-[var(--surface-secondary)]"
-                      )}
-                    >
-                      <button
-                        className="flex flex-1 items-center gap-2 min-w-0"
-                        onClick={() => {
-                          void handleSelectProject(project.id)
-                        }}
-                        type="button"
-                      >
-                        <span
-                          className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: project.themeColor || "var(--accent)" }}
-                        />
-                        <div className="min-w-0 flex-1 text-left">
-                          <div className="truncate text-[12px] font-medium">{project.name}</div>
-                        </div>
-                      </button>
-                      {selected && (
-                        <span className="text-[9px] font-medium text-[var(--fg-muted)] flex-shrink-0">{t("当前", "Current")}</span>
-                      )}
-                      <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 flex-shrink-0 transition-opacity">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              className="h-5 w-5 flex items-center justify-center rounded-[4px] hover:bg-[var(--button-bg)] transition-colors"
-                              onClick={(e) => { e.stopPropagation(); void handleExportProject(project.id) }}
-                              type="button"
-                            >
-                              <AppIcon name="download" size={11} className="text-[var(--fg-muted)]" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>{t("导出项目", "Export project")}</TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              className="h-5 w-5 flex items-center justify-center rounded-[4px] hover:bg-[var(--button-bg)] transition-colors"
-                              onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ id: project.id, name: project.name }) }}
-                              type="button"
-                            >
-                              <AppIcon name="delete" size={11} className="text-[var(--fg-muted)]" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>{t("删除项目", "Delete project")}</TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </div>
+      {projectDropdownPortal}
 
       {/* delete project confirm modal */}
       {deleteConfirm && createPortal(

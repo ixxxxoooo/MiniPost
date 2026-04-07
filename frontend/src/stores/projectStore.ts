@@ -3,6 +3,7 @@ import { projectService, folderService, requestItemService, collectionService } 
 import type { model } from "../../wailsjs/go/models"
 import { useTabStore } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
+import { useEnvironmentStore } from "@/stores/environmentStore"
 
 type CollectionNodeType = "folder" | "request"
 
@@ -41,6 +42,7 @@ interface ProjectState {
   duplicateFolder: (folderId: string) => Promise<void>
   exportProjectJSON: () => Promise<string | null>
   importFromFile: (format: string, content: string) => Promise<void>
+  importFromURL: (format: string, sourceURL: string) => Promise<void>
 }
 
 function readLastProjectId(): string | null {
@@ -361,8 +363,44 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       throw new Error("请先选择项目后再导入")
     }
     try {
+      const envStore = useEnvironmentStore.getState()
+      const beforeEnvIds = new Set(
+        envStore.currentProjectId === currentProjectId
+          ? envStore.environments.map((env) => env.id)
+          : []
+      )
       await collectionService.importFromFile(currentProjectId, format, content)
       await get().loadCollections(currentProjectId)
+      await envStore.loadEnvironments(currentProjectId)
+      const importedEnv = useEnvironmentStore.getState().environments.find((env) => !beforeEnvIds.has(env.id))
+      if (importedEnv?.id) {
+        useEnvironmentStore.getState().setActiveEnvironment(importedEnv.id)
+      }
+    } catch (err) {
+      set({ error: String(err) })
+      throw err
+    }
+  },
+
+  importFromURL: async (format, sourceURL) => {
+    const { currentProjectId } = get()
+    if (!currentProjectId) {
+      throw new Error("请先选择项目后再导入")
+    }
+    try {
+      const envStore = useEnvironmentStore.getState()
+      const beforeEnvIds = new Set(
+        envStore.currentProjectId === currentProjectId
+          ? envStore.environments.map((env) => env.id)
+          : []
+      )
+      await collectionService.importFromURL(currentProjectId, format, sourceURL)
+      await get().loadCollections(currentProjectId)
+      await envStore.loadEnvironments(currentProjectId)
+      const importedEnv = useEnvironmentStore.getState().environments.find((env) => !beforeEnvIds.has(env.id))
+      if (importedEnv?.id) {
+        useEnvironmentStore.getState().setActiveEnvironment(importedEnv.id)
+      }
     } catch (err) {
       set({ error: String(err) })
       throw err
