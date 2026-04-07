@@ -973,10 +973,10 @@ export function ResponseBody({ body, bodyBase64, bodyIsBinary, headers, contentT
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    className="h-6 rounded-[8px] border border-transparent px-2 text-[10px] text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors"
+                    className="h-6 w-6 rounded-[8px] border border-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
                     onClick={handleFoldAll}
                   >
-                    {t("全部折叠", "Fold all")}
+                    <AppIcon name="arrowRight" size={12} />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>{t("一键折叠所有 JSON 节点", "Collapse all JSON nodes")}</TooltipContent>
@@ -985,10 +985,10 @@ export function ResponseBody({ body, bodyBase64, bodyIsBinary, headers, contentT
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    className="h-6 rounded-[8px] border border-transparent px-2 text-[10px] text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors"
+                    className="h-6 w-6 rounded-[8px] border border-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
                     onClick={handleUnfoldAll}
                   >
-                    {t("全部展开", "Unfold all")}
+                    <AppIcon name="arrowDown" size={12} />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>{t("一键展开所有 JSON 节点", "Expand all JSON nodes")}</TooltipContent>
