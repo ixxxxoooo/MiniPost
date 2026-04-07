@@ -15,7 +15,7 @@ import { useEnvironmentStore } from "@/stores/environmentStore"
 import { sendHttpRequest } from "@/services/httpService"
 import { useCookieStore } from "@/stores/cookieStore"
 import type { RequestData } from "@/types/request"
-import type { HttpResponse } from "@/types/response"
+import type { HttpResponse, HttpStreamEntry } from "@/types/response"
 import { createKeyValuePair } from "@/types/request"
 import { getSuppressedAutoHeaders, isAutoHeaderDisabledMarkerKey, normalizeHeaderName } from "@/lib/autoHeaders"
 import { stripJsonComments } from "@/components/ui/CodeEditor"
@@ -235,15 +235,16 @@ function useRequestEditorActions() {
   const setTabResponse = useTabStore((s) => s.setTabResponse)
   const setTabResponseError = useTabStore((s) => s.setTabResponseError)
   const resetTabStream = useTabStore((s) => s.resetTabStream)
-  const appendTabStreamEntry = useTabStore((s) => s.appendTabStreamEntry)
+  const appendTabStreamEntries = useTabStore((s) => s.appendTabStreamEntries)
   const setTabStreamActive = useTabStore((s) => s.setTabStreamActive)
+  const setTabSending = useTabStore((s) => s.setTabSending)
   const markTabDirty = useTabStore((s) => s.markTabDirty)
-  const { setIsSending } = useUIStore()
   const { currentProjectId, saveRequestToBackend, folders } = useProjectStore()
   const { activeEnvironmentId } = useEnvironmentStore()
 
   const { addConsoleRequest, updateConsoleResponse, updateConsoleError } = useUIStore()
-  const abortRef = useRef<AbortController | null>(null)
+  const abortRefByTab = useRef<Record<string, AbortController>>({})
+  const sendingSeqByTabRef = useRef<Record<string, number>>({})
   const [saveDraftDialogOpen, setSaveDraftDialogOpen] = useState(false)
   const [saveDraftName, setSaveDraftName] = useState("")
   const [saveDraftFolderId, setSaveDraftFolderId] = useState("")
@@ -252,25 +253,28 @@ function useRequestEditorActions() {
   const folderOptions = useMemo(() => buildFolderTreeOptions(folders), [folders])
 
   const handleCancel = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort()
-      abortRef.current = null
-    }
-    if (activeTab) {
-      setTabStreamActive(activeTab.id, false)
-    }
-    setIsSending(false)
-  }, [activeTab, setIsSending, setTabStreamActive])
+    if (!activeTab) return
+    const tabId = activeTab.id
+    abortRefByTab.current[tabId]?.abort()
+    delete abortRefByTab.current[tabId]
+    sendingSeqByTabRef.current[tabId] = (sendingSeqByTabRef.current[tabId] ?? 0) + 1
+    setTabStreamActive(tabId, false)
+    setTabSending(tabId, false)
+  }, [activeTab, setTabSending, setTabStreamActive])
 
   const handleSend = async (downloadAfter = false) => {
     if (!activeTab || !activeTab.request.url.trim()) return
 
     const tabId = activeTab.id
-    if (abortRef.current) abortRef.current.abort()
-    abortRef.current = new AbortController()
+    abortRefByTab.current[tabId]?.abort()
+    const abortController = new AbortController()
+    abortRefByTab.current[tabId] = abortController
 
-    setIsSending(true)
-    setTabResponse(tabId, null)
+    const sendingSeq = (sendingSeqByTabRef.current[tabId] ?? 0) + 1
+    sendingSeqByTabRef.current[tabId] = sendingSeq
+    const isCurrentTabSend = () => sendingSeqByTabRef.current[tabId] === sendingSeq
+
+    setTabSending(tabId, true)
     setTabResponseError(tabId, null)
     resetTabStream(tabId)
     setTabStreamActive(tabId, false)
@@ -290,7 +294,7 @@ function useRequestEditorActions() {
     const requestProtocol = uiState.httpVersion === "http2" ? "HTTP/2.0" : "HTTP/1.1"
 
     const streamId = crypto.randomUUID()
-    const shouldUseStreaming = requestWantsStreaming(requestForSend)
+    const shouldUseStreaming = requestWantsStreaming(requestForSend) || requestForSend.method === "GET"
     const logId = addConsoleRequest({
       method: activeTab.request.method,
       url: resolvedRequestUrl,
@@ -302,6 +306,55 @@ function useRequestEditorActions() {
     try {
       let streamBaseResponse: HttpResponse | null = null
       let streamStartMs = 0
+      let streamIsSSE = false
+      let lastProgressUpdateMs = 0
+      let pendingEntries: HttpStreamEntry[] = []
+      let flushTimer: number | null = null
+
+      const flushPendingEntries = () => {
+        flushTimer = null
+        if (!isCurrentTabSend() || pendingEntries.length === 0) {
+          pendingEntries = []
+          return
+        }
+        appendTabStreamEntries(tabId, pendingEntries)
+        pendingEntries = []
+      }
+
+      const scheduleFlush = () => {
+        if (flushTimer !== null) return
+        flushTimer = window.setTimeout(flushPendingEntries, 120)
+      }
+
+      const maybeUpdateSSEProgress = (event: {
+        kind: string
+        bytesTotal?: number
+      }) => {
+        if (!streamBaseResponse) return
+        const now = Date.now()
+        const forceUpdate = event.kind === "connection_closed" || event.kind === "error"
+        if (!forceUpdate && now - lastProgressUpdateMs < 180) return
+        lastProgressUpdateMs = now
+
+        const elapsed = streamStartMs > 0 ? Math.max(0, now - streamStartMs) : streamBaseResponse.duration
+        const nextResponse = {
+          ...streamBaseResponse,
+          duration: elapsed,
+          size: event.bytesTotal ?? streamBaseResponse.size,
+        }
+        setTabResponse(tabId, nextResponse)
+        updateConsoleResponse(logId, {
+          status: nextResponse.statusCode,
+          statusText: nextResponse.statusText,
+          duration: nextResponse.duration,
+          size: nextResponse.size,
+          responseHeaders: nextResponse.headers,
+          responseBody: nextResponse.body,
+          responseProtocol: nextResponse.protocol,
+          warnings: nextResponse.warnings ?? [],
+        })
+      }
+
       const result = await sendHttpRequest(
         requestForSend,
         currentProjectId ?? undefined,
@@ -309,34 +362,46 @@ function useRequestEditorActions() {
         shouldUseStreaming ? {
           streamId,
           onStreamEvent: (event) => {
-            setTabStreamActive(tabId, true)
+            if (!isCurrentTabSend()) return
             if (event.kind === "response_start") {
               const startPayload = parseStreamStartPayload(event.data)
-              if (startPayload) {
-                streamStartMs = Date.now()
-                streamBaseResponse = {
-                  statusCode: startPayload.statusCode,
-                  statusText: startPayload.statusText,
-                  headers: startPayload.headers,
-                  body: "",
-                  duration: 0,
-                  size: event.bytesTotal ?? startPayload.headerBytes ?? 0,
-                  contentType: startPayload.contentType,
-                  protocol: startPayload.protocol,
-                  network: startPayload.network,
-                  warnings: [],
-                }
-                setTabResponse(tabId, streamBaseResponse)
+              if (!startPayload) return
+
+              streamIsSSE = startPayload.contentType.toLowerCase().includes("text/event-stream")
+              if (!streamIsSSE) return
+
+              setTabStreamActive(tabId, true)
+              streamStartMs = Date.now()
+              streamBaseResponse = {
+                statusCode: startPayload.statusCode,
+                statusText: startPayload.statusText,
+                headers: startPayload.headers,
+                body: "",
+                duration: 0,
+                size: event.bytesTotal ?? startPayload.headerBytes ?? 0,
+                contentType: startPayload.contentType,
+                protocol: startPayload.protocol,
+                network: startPayload.network,
+                warnings: [],
               }
-            } else if (streamBaseResponse) {
-              const elapsed = streamStartMs > 0 ? Math.max(0, Date.now() - streamStartMs) : streamBaseResponse.duration
-              setTabResponse(tabId, {
-                ...streamBaseResponse,
-                duration: elapsed,
-                size: event.bytesTotal ?? streamBaseResponse.size,
+              setTabResponse(tabId, streamBaseResponse)
+              updateConsoleResponse(logId, {
+                status: startPayload.statusCode,
+                statusText: startPayload.statusText,
+                duration: 0,
+                size: event.bytesTotal ?? startPayload.headerBytes ?? 0,
+                responseHeaders: startPayload.headers,
+                responseBody: "",
+                responseProtocol: startPayload.protocol,
+                warnings: [],
               })
+            } else {
+              if (!streamIsSSE) return
+              setTabStreamActive(tabId, true)
+              maybeUpdateSSEProgress(event)
             }
-            appendTabStreamEntry(tabId, {
+            if (!streamIsSSE) return
+            pendingEntries.push({
               id: `${event.sequence}-${event.timestamp}`,
               kind: event.kind,
               data: event.data,
@@ -345,9 +410,16 @@ function useRequestEditorActions() {
               sequence: event.sequence,
               bytesTotal: event.bytesTotal,
             })
+            scheduleFlush()
           },
         } : undefined
       )
+      if (flushTimer !== null) {
+        window.clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      flushPendingEntries()
+      if (!isCurrentTabSend()) return
       setTabResponse(tabId, result)
       updateConsoleResponse(logId, {
         status: result.statusCode,
@@ -365,15 +437,22 @@ function useRequestEditorActions() {
         await SaveResponseToFile(filename, result.body)
       }
     } catch (err) {
+      if (!isCurrentTabSend()) return
       if ((err as Error)?.name === "AbortError") return
       const msg = err instanceof Error ? err.message : String(err)
       setTabResponse(tabId, null)
       setTabResponseError(tabId, msg)
       updateConsoleError(logId, msg)
     } finally {
-      abortRef.current = null
-      setTabStreamActive(tabId, false)
-      setIsSending(false)
+      // ensure queued stream events are flushed before request settles
+      const currentAbortController = abortRefByTab.current[tabId]
+      if (currentAbortController === abortController) {
+        delete abortRefByTab.current[tabId]
+      }
+      if (sendingSeqByTabRef.current[tabId] === sendingSeq) {
+        setTabStreamActive(tabId, false)
+        setTabSending(tabId, false)
+      }
     }
   }
 

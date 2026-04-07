@@ -52,7 +52,9 @@ export function TabBar() {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const tabListRef = useRef<HTMLDivElement>(null)
-  const envDropdownRef = useRef<HTMLDivElement>(null)
+  const envTriggerRef = useRef<HTMLButtonElement>(null)
+  const envDropdownPanelRef = useRef<HTMLDivElement>(null)
+  const [envDropdownPosition, setEnvDropdownPosition] = useState<{ top: number; left: number } | null>(null)
 
   const closeConfirmTab = useMemo(
     () => (closeConfirmTabId ? tabs.find((tab) => tab.id === closeConfirmTabId) ?? null : null),
@@ -119,15 +121,6 @@ export function TabBar() {
     document.addEventListener("mousedown", handler)
     return () => document.removeEventListener("mousedown", handler)
   }, [showTabList])
-
-  useEffect(() => {
-    if (!showEnvDropdown) return
-    const handler = (e: MouseEvent) => {
-      if (envDropdownRef.current && !envDropdownRef.current.contains(e.target as Node)) setShowEnvDropdown(false)
-    }
-    document.addEventListener("mousedown", handler)
-    return () => document.removeEventListener("mousedown", handler)
-  }, [showEnvDropdown])
 
   const saveTabToBackend = useCallback(async (tab: RequestTab) => {
     if (!currentProjectId) return
@@ -294,127 +287,171 @@ export function TabBar() {
     if (!query) return environments
     return environments.filter((env) => env.name.toLowerCase().includes(query))
   }, [envSearchQuery, environments])
+  const updateEnvDropdownPosition = useCallback(() => {
+    const trigger = envTriggerRef.current
+    if (!trigger || typeof window === "undefined") return
+
+    const rect = trigger.getBoundingClientRect()
+    const margin = 8
+    const left = Math.max(
+      margin,
+      Math.min(rect.right - envDropdownWidth, window.innerWidth - envDropdownWidth - margin)
+    )
+    const top = Math.max(margin, rect.bottom + 4)
+    setEnvDropdownPosition({ top, left })
+  }, [envDropdownWidth])
+
+  useEffect(() => {
+    if (!showEnvDropdown) return
+    updateEnvDropdownPosition()
+
+    const syncPosition = () => updateEnvDropdownPosition()
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node
+      const clickedTrigger = envTriggerRef.current?.contains(target)
+      const clickedPanel = envDropdownPanelRef.current?.contains(target)
+      if (!clickedTrigger && !clickedPanel) setShowEnvDropdown(false)
+    }
+    window.addEventListener("resize", syncPosition)
+    window.addEventListener("scroll", syncPosition, true)
+    document.addEventListener("mousedown", handler)
+    return () => {
+      window.removeEventListener("resize", syncPosition)
+      window.removeEventListener("scroll", syncPosition, true)
+      document.removeEventListener("mousedown", handler)
+    }
+  }, [showEnvDropdown, updateEnvDropdownPosition])
   const tabListWidth = useMemo(() => {
     const tabLabels = tabs.map((tab) => `${tab.request.method || "GET"} ${tab.title || "Untitled"}`)
     const envLabels = openEnvironmentTabs.map((tab) => `Environment ${tab.name}`)
     const longest = [...tabLabels, ...envLabels, t("无环境", "No Environment")].reduce((max, label) => Math.max(max, label.length), 0)
     return Math.max(240, Math.min(460, 86 + longest * DROPDOWN_CHAR_WIDTH))
   }, [openEnvironmentTabs, t, tabs])
+  const envDropdownPortal = showEnvDropdown && envDropdownPosition && createPortal(
+    <div
+      ref={envDropdownPanelRef}
+      className={cn("fixed z-[460] p-1", DROPDOWN_PANEL_CLASS)}
+      style={{
+        left: `${envDropdownPosition.left}px`,
+        top: `${envDropdownPosition.top}px`,
+        width: `${envDropdownWidth}px`,
+      }}
+    >
+      <div className="mb-1 flex items-center gap-1 border-b border-[var(--border-subtle)] pb-1">
+        <div className="relative flex-1">
+          <AppIcon
+            name="search"
+            size={10}
+            className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[var(--fg-muted)]"
+          />
+          <input
+            value={envSearchQuery}
+            onChange={(event) => setEnvSearchQuery(event.target.value)}
+            placeholder={t("搜索环境...", "Search environments...")}
+            className={cn(
+              "h-7 w-full rounded-[7px] border border-[var(--border-color)] bg-[var(--surface)] pl-6 pr-2",
+              "text-[11px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
+            )}
+          />
+        </div>
+        <button
+          className={cn(
+            "h-7 rounded-[7px] border px-2.5 text-[11px] transition-colors",
+            "border-[var(--border-color)] bg-[var(--surface)] text-[var(--fg)] hover:bg-[var(--surface-secondary)]"
+          )}
+          onClick={() => void handleQuickCreateEnvironment()}
+          disabled={creatingEnvironment}
+        >
+          {creatingEnvironment ? t("创建中", "Creating") : t("新建", "New")}
+        </button>
+      </div>
+      <button
+        className={cn(
+          DROPDOWN_ITEM_CLASS,
+          !activeEnvironmentId ? "bg-[var(--selected-bg)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
+        )}
+        onClick={() => { setActiveEnvironment(null); setShowEnvDropdown(false) }}
+      >
+        <AppIcon name="globe" size={11} /> {t("无环境", "No Environment")}
+      </button>
+      <div className="h-px bg-[var(--border-subtle)] my-0.5" />
+      {filteredEnvironments.map((env) => (
+        <div key={env.id} className="group relative">
+          <button
+            className={cn(
+              "w-full whitespace-nowrap px-3 pr-8 py-1.5 rounded-[7px] text-[11px] text-left transition-colors flex items-center gap-2 hover:bg-[var(--sidebar-hover)]",
+              activeEnvironmentId === env.id ? "bg-[var(--selected-bg)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
+            )}
+            onClick={() => { setActiveEnvironment(env.id); setShowEnvDropdown(false) }}
+          >
+            <AppIcon name="globe" size={11} />
+            <span className="truncate">{env.name}</span>
+          </button>
+          <button
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-[4px] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--sidebar-hover)] opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => { e.stopPropagation(); handleEditEnvironment(env.id) }}
+            title={t("编辑环境", "Edit environment")}
+          >
+            <AppIcon name="pencil" size={10} />
+          </button>
+        </div>
+      ))}
+      {filteredEnvironments.length === 0 && (
+        <div className="px-3 py-2 text-[10px] text-[var(--fg-muted)]">
+          {t("未找到匹配环境", "No matching environments")}
+        </div>
+      )}
+    </div>,
+    document.body
+  )
 
   if (!hasAnyTab) {
     return (
-      <div
-        className={cn(
-          "flex items-center h-[var(--size-tab)] border-b flex-shrink-0",
-          "bg-[var(--surface-secondary)] border-[var(--tab-divider)]"
-        )}
-      >
-        <div className="flex items-center gap-1 px-2 flex-shrink-0">
-          <button
-            className="h-[22px] w-[22px] flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)] transition-colors"
-            onClick={handleAddTab}
-            title={t("新建请求", "New request")}
-          >
-            <AppIcon name="add" size={13} strokeWidth={2} />
-          </button>
-        </div>
-        <div className="flex-1" />
-        <div className="flex items-center gap-1 px-2 flex-shrink-0">
-          {/* 环境选择 */}
-          <div className="relative" ref={envDropdownRef}>
+      <>
+        <div
+          className={cn(
+            "relative z-[40] flex items-center h-[var(--size-tab)] border-b flex-shrink-0",
+            "bg-[var(--surface-secondary)] border-[var(--tab-divider)]"
+          )}
+        >
+          <div className="flex items-center gap-1 px-2 flex-shrink-0">
             <button
-              className={cn(
-                "h-[22px] px-2 flex items-center gap-1 rounded-[6px] text-[10px] transition-colors",
-                "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]",
-                activeEnvironmentId && "text-[var(--accent)]"
-              )}
-              onClick={() => {
-                setShowEnvDropdown((prev) => {
-                  const next = !prev
-                  if (next) setEnvSearchQuery("")
-                  return next
-                })
-              }}
-              title={t("切换环境", "Switch environment")}
+              className="h-[22px] w-[22px] flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)] transition-colors"
+              onClick={handleAddTab}
+              title={t("新建请求", "New request")}
             >
-              <AppIcon name="globe" size={11} strokeWidth={1.8} />
-              <span className="max-w-[100px] truncate">{activeEnvName}</span>
-              <AppIcon name="arrowDown" size={8} strokeWidth={2} />
+              <AppIcon name="add" size={13} strokeWidth={2} />
             </button>
-            {showEnvDropdown && (
-              <div
-                className={cn("absolute right-0 top-full mt-1 z-[250] p-1", DROPDOWN_PANEL_CLASS)}
-                style={{ width: `${envDropdownWidth}px` }}
-              >
-                <div className="mb-1 flex items-center gap-1 border-b border-[var(--border-subtle)] pb-1">
-                  <div className="relative flex-1">
-                    <AppIcon
-                      name="search"
-                      size={10}
-                      className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[var(--fg-muted)]"
-                    />
-                    <input
-                      value={envSearchQuery}
-                      onChange={(event) => setEnvSearchQuery(event.target.value)}
-                      placeholder={t("搜索环境...", "Search environments...")}
-                      className={cn(
-                        "h-7 w-full rounded-[7px] border border-[var(--border-color)] bg-[var(--surface)] pl-6 pr-2",
-                        "text-[11px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
-                      )}
-                    />
-                  </div>
-                  <button
-                    className={cn(
-                      "h-7 rounded-[7px] border px-2.5 text-[11px] transition-colors",
-                      "border-[var(--border-color)] bg-[var(--surface)] text-[var(--fg)] hover:bg-[var(--surface-secondary)]"
-                    )}
-                    onClick={() => void handleQuickCreateEnvironment()}
-                    disabled={creatingEnvironment}
-                  >
-                    {creatingEnvironment ? t("创建中", "Creating") : t("新建", "New")}
-                  </button>
-                </div>
-                <button
-                  className={cn(
-                    DROPDOWN_ITEM_CLASS,
-                    !activeEnvironmentId ? "bg-[var(--selected-bg)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
-                  )}
-                  onClick={() => { setActiveEnvironment(null); setShowEnvDropdown(false) }}
-                >
-                  <AppIcon name="globe" size={11} /> {t("无环境", "No Environment")}
-                </button>
-                <div className="h-px bg-[var(--border-subtle)] my-0.5" />
-                {filteredEnvironments.map((env) => (
-                  <div key={env.id} className="group relative">
-                    <button
-                      className={cn(
-                        "w-full whitespace-nowrap px-3 pr-8 py-1.5 rounded-[7px] text-[11px] text-left transition-colors flex items-center gap-2 hover:bg-[var(--sidebar-hover)]",
-                        activeEnvironmentId === env.id ? "bg-[var(--selected-bg)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
-                      )}
-                      onClick={() => { setActiveEnvironment(env.id); setShowEnvDropdown(false) }}
-                    >
-                      <AppIcon name="globe" size={11} />
-                      <span className="truncate">{env.name}</span>
-                    </button>
-                    <button
-                      className="absolute right-2 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-[4px] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--sidebar-hover)] opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => { e.stopPropagation(); handleEditEnvironment(env.id) }}
-                      title={t("编辑环境", "Edit environment")}
-                    >
-                      <AppIcon name="pencil" size={10} />
-                    </button>
-                  </div>
-                ))}
-                {filteredEnvironments.length === 0 && (
-                  <div className="px-3 py-2 text-[10px] text-[var(--fg-muted)]">
-                    {t("未找到匹配环境", "No matching environments")}
-                  </div>
+          </div>
+          <div className="flex-1" />
+          <div className="flex items-center gap-1 px-2 flex-shrink-0">
+            {/* 环境选择 */}
+            <div className="relative">
+              <button
+                ref={envTriggerRef}
+                className={cn(
+                  "h-[22px] px-2 flex items-center gap-1 rounded-[6px] text-[10px] transition-colors",
+                  "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]",
+                  activeEnvironmentId && "text-[var(--accent)]"
                 )}
-              </div>
-            )}
+                onClick={() => {
+                  setShowEnvDropdown((prev) => {
+                    const next = !prev
+                    if (next) setEnvSearchQuery("")
+                    return next
+                  })
+                }}
+                title={t("切换环境", "Switch environment")}
+              >
+                <AppIcon name="globe" size={11} strokeWidth={1.8} />
+                <span className="max-w-[100px] truncate">{activeEnvName}</span>
+                <AppIcon name="arrowDown" size={8} strokeWidth={2} />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+        {envDropdownPortal}
+      </>
     )
   }
 
@@ -424,7 +461,7 @@ export function TabBar() {
   return (
     <div
       className={cn(
-        "flex items-end h-[var(--size-tab)] border-b flex-shrink-0",
+        "relative z-[40] flex items-end h-[var(--size-tab)] border-b flex-shrink-0",
         "bg-[var(--surface-secondary)] border-[var(--tab-divider)]"
       )}
     >
@@ -601,7 +638,7 @@ export function TabBar() {
 
           {showTabList && (
             <div
-              className={cn("absolute right-0 top-full mt-1 z-[250] max-h-[400px] overflow-y-auto p-1", DROPDOWN_PANEL_CLASS)}
+              className={cn("absolute right-0 top-full mt-1 z-[360] max-h-[400px] overflow-y-auto p-1", DROPDOWN_PANEL_CLASS)}
               style={{ width: `${tabListWidth}px` }}
             >
               {openEnvironmentTabs.map((environmentTab) => (
@@ -658,8 +695,9 @@ export function TabBar() {
         <div className="w-px h-3 bg-[var(--tab-divider)] mx-0.5" />
 
         {/* 环境选择 */}
-        <div className="relative" ref={envDropdownRef}>
+        <div className="relative">
           <button
+            ref={envTriggerRef}
             className={cn(
               "h-[22px] px-2 flex items-center gap-1 rounded-[6px] text-[10px] transition-colors",
               "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]",
@@ -678,79 +716,10 @@ export function TabBar() {
             <span className="max-w-[100px] truncate">{activeEnvName}</span>
             <AppIcon name="arrowDown" size={8} strokeWidth={2} />
           </button>
-          {showEnvDropdown && (
-            <div
-              className={cn("absolute right-0 top-full mt-1 z-[250] p-1", DROPDOWN_PANEL_CLASS)}
-              style={{ width: `${envDropdownWidth}px` }}
-            >
-              <div className="mb-1 flex items-center gap-1 border-b border-[var(--border-subtle)] pb-1">
-                <div className="relative flex-1">
-                  <AppIcon
-                    name="search"
-                    size={10}
-                    className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[var(--fg-muted)]"
-                  />
-                  <input
-                    value={envSearchQuery}
-                    onChange={(event) => setEnvSearchQuery(event.target.value)}
-                    placeholder={t("搜索环境...", "Search environments...")}
-                    className={cn(
-                      "h-7 w-full rounded-[7px] border border-[var(--border-color)] bg-[var(--surface)] pl-6 pr-2",
-                      "text-[11px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
-                    )}
-                  />
-                </div>
-                <button
-                  className={cn(
-                    "h-7 rounded-[7px] border px-2.5 text-[11px] transition-colors",
-                    "border-[var(--border-color)] bg-[var(--surface)] text-[var(--fg)] hover:bg-[var(--surface-secondary)]"
-                  )}
-                  onClick={() => void handleQuickCreateEnvironment()}
-                  disabled={creatingEnvironment}
-                >
-                  {creatingEnvironment ? t("创建中", "Creating") : t("新建", "New")}
-                </button>
-              </div>
-              <button
-                className={cn(
-                  DROPDOWN_ITEM_CLASS,
-                  !activeEnvironmentId ? "bg-[var(--selected-bg)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
-                )}
-                onClick={() => { setActiveEnvironment(null); setShowEnvDropdown(false) }}
-              >
-                <AppIcon name="globe" size={11} /> {t("无环境", "No Environment")}
-              </button>
-              <div className="h-px bg-[var(--border-subtle)] my-0.5" />
-              {filteredEnvironments.map((env) => (
-                <div key={env.id} className="group relative">
-                  <button
-                    className={cn(
-                      "w-full whitespace-nowrap px-3 pr-8 py-1.5 rounded-[7px] text-[11px] text-left transition-colors flex items-center gap-2 hover:bg-[var(--sidebar-hover)]",
-                      activeEnvironmentId === env.id ? "bg-[var(--selected-bg)] text-[var(--fg)] font-medium" : "text-[var(--fg)]"
-                    )}
-                    onClick={() => { setActiveEnvironment(env.id); setShowEnvDropdown(false) }}
-                  >
-                    <AppIcon name="globe" size={11} />
-                    <span className="truncate">{env.name}</span>
-                  </button>
-                  <button
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-[4px] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--sidebar-hover)] opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => { e.stopPropagation(); handleEditEnvironment(env.id) }}
-                    title={t("编辑环境", "Edit environment")}
-                  >
-                    <AppIcon name="pencil" size={10} />
-                  </button>
-                </div>
-              ))}
-              {filteredEnvironments.length === 0 && (
-                <div className="px-3 py-2 text-[10px] text-[var(--fg-muted)]">
-                  {t("未找到匹配环境", "No matching environments")}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
+
+      {envDropdownPortal}
 
       {contextMenu && createPortal(
         <div

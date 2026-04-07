@@ -17,7 +17,10 @@ export interface RequestTab {
   responseError: string | null
   streamEntries: HttpStreamEntry[]
   streamActive: boolean
+  isSending: boolean
 }
+
+const MAX_STREAM_ENTRIES = 400
 
 interface ProjectTabState {
   tabs: RequestTab[]
@@ -29,7 +32,7 @@ interface TabState {
   currentProjectId: string | null
 
   setCurrentProject: (projectId: string | null) => void
-  addTab: (tab: Omit<RequestTab, "id" | "streamEntries" | "streamActive">) => string
+  addTab: (tab: Omit<RequestTab, "id" | "streamEntries" | "streamActive" | "isSending">) => string
   openRequestTab: (projectId: string, request: RequestData) => void
   addNewUnsavedTab: (projectId: string) => void
   removeTab: (tabId: string) => void
@@ -40,7 +43,9 @@ interface TabState {
   setTabResponseError: (tabId: string, err: string | null) => void
   resetTabStream: (tabId: string) => void
   appendTabStreamEntry: (tabId: string, entry: HttpStreamEntry) => void
+  appendTabStreamEntries: (tabId: string, entries: HttpStreamEntry[]) => void
   setTabStreamActive: (tabId: string, active: boolean) => void
+  setTabSending: (tabId: string, sending: boolean) => void
   markTabDirty: (tabId: string, dirty: boolean) => void
   closeOtherTabs: (tabId: string) => void
   closeAllTabs: (projectId?: string) => void
@@ -124,6 +129,7 @@ function sanitizeTab(rawTab: unknown, projectId: string): RequestTab | null {
     responseError: typeof tab.responseError === "string" ? tab.responseError : null,
     streamEntries: [],
     streamActive: false,
+    isSending: false,
   }
 }
 
@@ -362,7 +368,7 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   addTab: (tabData) => {
     const id = crypto.randomUUID()
-    const tab: RequestTab = { ...tabData, id, streamEntries: [], streamActive: false }
+    const tab: RequestTab = { ...tabData, id, streamEntries: [], streamActive: false, isSending: false }
     const projectId = tab.projectId
 
     set((state) => updateProjectState(state, projectId, (projectState) => ({
@@ -401,6 +407,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       responseError: null,
       streamEntries: [],
       streamActive: false,
+      isSending: false,
     }
 
     set((state) => updateProjectState(state, projectId, (projectStateForTarget) => ({
@@ -422,6 +429,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       responseError: null,
       streamEntries: [],
       streamActive: false,
+      isSending: false,
     }
 
     set((state) => updateProjectState(state, projectId, (projectState) => ({
@@ -540,11 +548,32 @@ export const useTabStore = create<TabState>((set, get) => ({
 
     set((state) => updateProjectState(state, currentProjectId, (projectState) => ({
       ...projectState,
-      tabs: projectState.tabs.map((tab) =>
-        tab.id === tabId
-          ? { ...tab, streamEntries: [...tab.streamEntries, entry] }
-          : tab,
-      ),
+      tabs: projectState.tabs.map((tab) => {
+        if (tab.id !== tabId) return tab
+        const merged = [...tab.streamEntries, entry]
+        return {
+          ...tab,
+          streamEntries: merged.length > MAX_STREAM_ENTRIES ? merged.slice(-MAX_STREAM_ENTRIES) : merged,
+        }
+      }),
+    })))
+  },
+
+  appendTabStreamEntries: (tabId, entries) => {
+    if (entries.length === 0) return
+    const currentProjectId = get().currentProjectId
+    if (!currentProjectId) return
+
+    set((state) => updateProjectState(state, currentProjectId, (projectState) => ({
+      ...projectState,
+      tabs: projectState.tabs.map((tab) => {
+        if (tab.id !== tabId) return tab
+        const merged = [...tab.streamEntries, ...entries]
+        return {
+          ...tab,
+          streamEntries: merged.length > MAX_STREAM_ENTRIES ? merged.slice(-MAX_STREAM_ENTRIES) : merged,
+        }
+      }),
     })))
   },
 
@@ -556,6 +585,18 @@ export const useTabStore = create<TabState>((set, get) => ({
       ...projectState,
       tabs: projectState.tabs.map((tab) =>
         tab.id === tabId ? { ...tab, streamActive: active } : tab,
+      ),
+    })))
+  },
+
+  setTabSending: (tabId, sending) => {
+    const currentProjectId = get().currentProjectId
+    if (!currentProjectId) return
+
+    set((state) => updateProjectState(state, currentProjectId, (projectState) => ({
+      ...projectState,
+      tabs: projectState.tabs.map((tab) =>
+        tab.id === tabId ? { ...tab, isSending: sending } : tab,
       ),
     })))
   },
