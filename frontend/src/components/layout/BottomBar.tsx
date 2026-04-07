@@ -130,15 +130,20 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
     : tone === "warning"
       ? "bg-[#fbf2e6]/45"
       : "bg-[var(--surface-secondary)]/50"
+  const toggleExpanded = () => {
+    const selectedText = window.getSelection()?.toString() ?? ""
+    if (selectedText.trim().length > 0) return
+    setExpanded(!expanded)
+  }
 
   return (
     <div className="border-b border-[var(--border-color)]/50 last:border-b-0">
       <div
         className={cn(
-          "flex items-center gap-2 px-3 py-1.5 text-[11px] font-mono transition-colors cursor-pointer select-none",
+          "flex items-center gap-2 px-3 py-1.5 text-[11px] font-mono transition-colors cursor-pointer",
           rowToneClass
         )}
-        onClick={() => setExpanded(!expanded)}
+        onClick={toggleExpanded}
       >
         <AppIcon name={expanded ? "arrowDown" : "arrowRight"} size={8} className="text-[var(--fg-muted)] flex-shrink-0" />
         <span className={cn(
@@ -147,7 +152,7 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
         )}>
           {entry.method}
         </span>
-        <span className="text-[var(--fg)] truncate flex-1">{entry.url}</span>
+        <span className="text-[var(--fg)] truncate flex-1 select-text">{entry.url}</span>
         {hasError && <span className="text-[var(--danger)] flex-shrink-0 text-[10px]">Error</span>}
         {hasResponse && !hasError && (
           <>
@@ -169,11 +174,11 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
       </div>
 
       {expanded && (
-        <div className={cn("px-5 py-2 text-[10px] font-mono space-y-2", expandedToneClass)}>
+        <div className={cn("px-5 py-2 text-[10px] font-mono space-y-2 select-text", expandedToneClass)}>
           {hasError ? (
             <>
               <details open>
-                <summary className="mb-1 cursor-pointer select-none text-[10px] text-[var(--fg-muted)] flex items-center justify-between gap-2">
+                <summary className="mb-1 cursor-pointer select-text text-[10px] text-[var(--fg-muted)] flex items-center justify-between gap-2">
                   <span>Network</span>
                   <button
                     className="text-[10px] text-[var(--accent)] hover:underline"
@@ -188,22 +193,22 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
                   </button>
                 </summary>
                 {showRawLog ? (
-                  <pre className="ml-2 whitespace-pre-wrap break-all text-[11px] leading-[1.35] text-[var(--fg-secondary)]">
+                  <pre className="ml-2 whitespace-pre-wrap break-all text-[11px] leading-[1.35] text-[var(--fg-secondary)] select-text">
                     {buildRawLog(entry, t)}
                   </pre>
                 ) : (
-                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)]">
-                    <div className="text-[var(--fg)]">{entry.method} {entry.url}</div>
+                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)] select-text">
+                    <div className="text-[var(--fg)] select-text">{entry.method} {entry.url}</div>
                     <div className="text-[var(--danger)]">Error: {normalizeConsoleError(entry.error || "", t)}</div>
                   </div>
                 )}
               </details>
               {!showRawLog && entry.requestHeaders && Object.keys(entry.requestHeaders).length > 0 && (
                 <details open>
-                  <summary className="text-[var(--fg-muted)] cursor-pointer select-none text-[10px] mb-1">Request Headers</summary>
-                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)]">
+                  <summary className="text-[var(--fg-muted)] cursor-pointer select-text text-[10px] mb-1">Request Headers</summary>
+                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)] select-text">
                     {Object.entries(entry.requestHeaders).map(([k, v]) => (
-                      <div key={k}>
+                      <div key={k} className="select-text">
                         <span className="text-[var(--fg)]">{k}</span>: "{v}"
                       </div>
                     ))}
@@ -214,7 +219,7 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
           ) : (
             <>
               <details open>
-                <summary className="mb-1 cursor-pointer select-none text-[10px] text-[var(--fg-muted)] flex items-center justify-between gap-2">
+                <summary className="mb-1 cursor-pointer select-text text-[10px] text-[var(--fg-muted)] flex items-center justify-between gap-2">
                   <span>Network</span>
                   <button
                     className="text-[10px] text-[var(--accent)] hover:underline"
@@ -229,12 +234,12 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
                   </button>
                 </summary>
                 {showRawLog ? (
-                  <pre className="ml-2 whitespace-pre-wrap break-all text-[11px] leading-[1.35] text-[var(--fg-secondary)]">
+                  <pre className="ml-2 whitespace-pre-wrap break-all text-[11px] leading-[1.35] text-[var(--fg-secondary)] select-text">
                     {buildRawLog(entry, t)}
                   </pre>
                 ) : (
-                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)]">
-                    <div>{entry.method} {entry.url}</div>
+                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)] select-text">
+                    <div className="select-text">{entry.method} {entry.url}</div>
                     {entry.warnings?.length ? (
                       <div className="text-[var(--warning)]">Warning: {entry.warnings[0]}</div>
                     ) : null}
@@ -249,10 +254,10 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
 
               {!showRawLog && entry.requestHeaders && Object.keys(entry.requestHeaders).length > 0 && (
                 <details>
-                  <summary className="text-[var(--fg-muted)] cursor-pointer select-none text-[10px] mb-1">Request Headers</summary>
-                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)]">
+                  <summary className="text-[var(--fg-muted)] cursor-pointer select-text text-[10px] mb-1">Request Headers</summary>
+                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)] select-text">
                     {Object.entries(entry.requestHeaders).map(([k, v]) => (
-                      <div key={k}><span className="text-[var(--fg)]">{k}</span>: {v}</div>
+                      <div key={k} className="select-text"><span className="text-[var(--fg)]">{k}</span>: {v}</div>
                     ))}
                   </div>
                 </details>
@@ -260,10 +265,10 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
 
               {!showRawLog && entry.responseHeaders && Object.keys(entry.responseHeaders).length > 0 && (
                 <details>
-                  <summary className="text-[var(--fg-muted)] cursor-pointer select-none text-[10px] mb-1">Response Headers</summary>
-                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)]">
+                  <summary className="text-[var(--fg-muted)] cursor-pointer select-text text-[10px] mb-1">Response Headers</summary>
+                  <div className="ml-2 space-y-0.5 text-[10px] text-[var(--fg-secondary)] select-text">
                     {Object.entries(entry.responseHeaders).map(([k, v]) => (
-                      <div key={k}><span className="text-[var(--fg)]">{k}</span>: {Array.isArray(v) ? v.join(", ") : v}</div>
+                      <div key={k} className="select-text"><span className="text-[var(--fg)]">{k}</span>: {Array.isArray(v) ? v.join(", ") : v}</div>
                     ))}
                   </div>
                 </details>
@@ -271,8 +276,8 @@ function ConsoleRow({ entry }: { entry: ConsoleEntry }) {
 
               {!showRawLog && entry.responseBody && (
                 <details>
-                  <summary className="text-[var(--fg-muted)] cursor-pointer select-none text-[10px] mb-1">Response Body</summary>
-                  <pre className="ml-2 text-[10px] text-[var(--fg-secondary)] whitespace-pre-wrap break-all max-h-[200px] overflow-auto">
+                  <summary className="text-[var(--fg-muted)] cursor-pointer select-text text-[10px] mb-1">Response Body</summary>
+                  <pre className="ml-2 text-[10px] text-[var(--fg-secondary)] whitespace-pre-wrap break-all max-h-[200px] overflow-auto select-text">
                     {(() => {
                       try { return JSON.stringify(JSON.parse(entry.responseBody), null, 2) } catch { return entry.responseBody }
                     })()}
@@ -304,6 +309,7 @@ export function BottomBar() {
   const { cookiePanelOpen, toggleCookiePanel, cookies } = useCookieStore()
   const errorCount = consoleLogs.filter((l) => l.error).length
   const scrollRef = useRef<HTMLDivElement>(null)
+  const consolePanelRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
   const dragHeightRef = useRef<number | null>(null)
   const dragRafRef = useRef<number | null>(null)
@@ -314,6 +320,32 @@ export function BottomBar() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [consoleLogs.length, consoleOpen])
+
+  useEffect(() => {
+    if (!consoleOpen) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return
+      if (event.key.toLowerCase() !== "a") return
+
+      const panel = consolePanelRef.current
+      if (!panel) return
+
+      const target = event.target as Node | null
+      const selection = window.getSelection()
+      const anchor = selection?.anchorNode ?? null
+      const focus = selection?.focusNode ?? null
+      const insideByTarget = target ? panel.contains(target) : false
+      const insideBySelection = (anchor ? panel.contains(anchor) : false) || (focus ? panel.contains(focus) : false)
+      if (!insideByTarget && !insideBySelection) return
+
+      event.preventDefault()
+      event.stopPropagation()
+    }
+
+    window.addEventListener("keydown", onKeyDown, true)
+    return () => window.removeEventListener("keydown", onKeyDown, true)
+  }, [consoleOpen])
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -361,13 +393,13 @@ export function BottomBar() {
     <div className="flex flex-col flex-shrink-0">
       <CookiePanel />
       {consoleOpen && (
-        <div className={cn("flex flex-col", "border border-[var(--border-color)] bg-[var(--surface)]")} style={{ height: dragPreviewHeight ?? consoleHeight }}>
+        <div ref={consolePanelRef} className={cn("flex flex-col", "border border-[var(--border-color)] bg-[var(--surface)]")} style={{ height: dragPreviewHeight ?? consoleHeight }}>
           {/* 拖拽手柄 */}
           <div
             className="group h-px flex-shrink-0 relative"
           >
             <div
-              className="absolute inset-x-0 -top-2 h-[5px] cursor-row-resize z-10"
+              className="absolute left-0 right-0 top-1/2 h-[6px] -translate-y-1/2 cursor-row-resize z-10"
               onMouseDown={handleDragStart}
             />
             <div className="absolute inset-x-0 top-0 h-px bg-transparent group-hover:bg-[var(--accent)] transition-colors" />
@@ -432,20 +464,20 @@ export function BottomBar() {
       >
         <div className="flex items-center gap-3 text-[11px] text-[var(--fg-muted)]">
           <button
-            className={cn("flex items-center gap-1 transition-colors hover:text-[var(--fg-secondary)]", consoleOpen && "text-[var(--fg)]")}
+            className="flex items-center gap-1 transition-colors hover:text-[var(--fg-secondary)]"
             onClick={toggleConsole}
             type="button"
           >
             <AppIcon name="commandLine" size={11} strokeWidth={1.8} />
             Console
             {errorCount > 0 && (
-              <span className="ml-0.5 px-1 py-0 rounded-full bg-[var(--danger)] text-white text-[9px] font-bold leading-[14px]">
+              <span className="ml-0.5 rounded-full border border-[var(--border-color)] bg-[var(--surface)] px-1 py-0 text-[9px] font-medium leading-[14px] text-[var(--fg-muted)]">
                 {errorCount}
               </span>
             )}
           </button>
           <button
-            className={cn("flex items-center gap-1 transition-colors hover:text-[var(--fg-secondary)]", cookiePanelOpen && "text-[var(--fg)]")}
+            className="flex items-center gap-1 transition-colors hover:text-[var(--fg-secondary)]"
             onClick={toggleCookiePanel}
             type="button"
           >

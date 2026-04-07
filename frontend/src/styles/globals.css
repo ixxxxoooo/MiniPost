@@ -294,6 +294,55 @@ textarea,
   user-select: text;
 }
 
+.monaco-editor .find-widget {
+  overflow: visible !important;
+}
+
+.monaco-editor .find-widget [data-minipost-tooltip] {
+  position: relative;
+}
+
+.monaco-editor .find-widget [data-minipost-tooltip]::before,
+.monaco-editor .find-widget [data-minipost-tooltip]::after {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 60;
+}
+
+.monaco-editor .find-widget [data-minipost-tooltip]::before {
+  content: "";
+  top: calc(100% + 2px);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid color-mix(in srgb, var(--fg) 82%, transparent);
+}
+
+.monaco-editor .find-widget [data-minipost-tooltip]::after {
+  content: attr(data-minipost-tooltip);
+  top: calc(100% + 7px);
+  transform: translateX(-50%) translateY(-1px);
+  white-space: nowrap;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--fg) 82%, transparent);
+  color: var(--surface);
+  font-size: 11px;
+  line-height: 1.1;
+  padding: 5px 7px;
+  box-shadow: var(--shadow-sm);
+}
+
+.monaco-editor .find-widget [data-minipost-tooltip]:hover::before,
+.monaco-editor .find-widget [data-minipost-tooltip]:hover::after,
+.monaco-editor .find-widget [data-minipost-tooltip]:focus-visible::before,
+.monaco-editor .find-widget [data-minipost-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* 滚动条 */
 ::-webkit-scrollbar {
   width: 6px;

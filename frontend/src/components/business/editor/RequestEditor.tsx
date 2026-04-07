@@ -1,4 +1,7 @@
-import { useEffect, useCallback, useRef } from "react"
+import { useEffect, useCallback, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { AppIcon } from "@/components/ui/icon"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { UrlBar } from "./UrlBar"
 import { ParamsEditor } from "./ParamsEditor"
@@ -16,6 +19,9 @@ import type { HttpResponse } from "@/types/response"
 import { createKeyValuePair } from "@/types/request"
 import { getSuppressedAutoHeaders, isAutoHeaderDisabledMarkerKey, normalizeHeaderName } from "@/lib/autoHeaders"
 import { stripJsonComments } from "@/components/ui/CodeEditor"
+import { ensureRequestProtocol, resolveTemplateVariables } from "@/lib/variableResolver"
+import { areParamsEquivalent, syncParamsWithUrlQuery } from "@/lib/urlQuerySync"
+import { useI18n } from "@/hooks/useI18n"
 
 const TOKEN_HEADER_NAME = "MiniPost-Token"
 
@@ -66,6 +72,41 @@ function dedupeRequestHeaders(headers: RequestData["headers"]): RequestData["hea
     result[existingIndex] = header
   })
 
+  return result
+}
+
+function isMeaningfulKeyValue(item: { key?: string; value?: string; description?: string }): boolean {
+  return Boolean((item.key ?? "").trim() || (item.value ?? "").trim() || (item.description ?? "").trim())
+}
+
+type FolderTreeOption = {
+  id: string
+  name: string
+  depth: number
+}
+
+function buildFolderTreeOptions(folders: Array<{ id: string; name: string; parentId?: string; sortOrder: number }>): FolderTreeOption[] {
+  const grouped = new Map<string, Array<{ id: string; name: string; parentId?: string; sortOrder: number }>>()
+  folders.forEach((folder) => {
+    const parentId = folder.parentId || ""
+    const list = grouped.get(parentId) ?? []
+    list.push(folder)
+    grouped.set(parentId, list)
+  })
+  grouped.forEach((list) => {
+    list.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+  })
+
+  const result: FolderTreeOption[] = []
+  const walk = (parentId: string, depth: number) => {
+    const children = grouped.get(parentId) ?? []
+    children.forEach((child) => {
+      result.push({ id: child.id, name: child.name, depth })
+      walk(child.id, depth + 1)
+    })
+  }
+
+  walk("", 0)
   return result
 }
 
@@ -139,7 +180,9 @@ function buildConsoleRequestHeaders(
   }
 
   if (!options.disableCookies) {
-    const cookieHeader = useCookieStore.getState().getCookieHeader(request.url)
+    const activeVariables = useEnvironmentStore.getState().getActiveVariables()
+    const resolvedUrl = resolveTemplateVariables(request.url, activeVariables)
+    const cookieHeader = useCookieStore.getState().getCookieHeader(resolvedUrl || request.url)
     if (cookieHeader && !isSuppressed("cookie") && !hasHeader("Cookie")) {
       headers["Cookie"] = cookieHeader
     }
@@ -187,6 +230,8 @@ function buildRequestWithRuntimeHeaders(
  
 function useRequestEditorActions() {
   const activeTab = useTabStore(getProjectActiveTabFromState)
+  const updateTab = useTabStore((s) => s.updateTab)
+  const updateTabRequest = useTabStore((s) => s.updateTabRequest)
   const setTabResponse = useTabStore((s) => s.setTabResponse)
   const setTabResponseError = useTabStore((s) => s.setTabResponseError)
   const resetTabStream = useTabStore((s) => s.resetTabStream)
@@ -194,11 +239,17 @@ function useRequestEditorActions() {
   const setTabStreamActive = useTabStore((s) => s.setTabStreamActive)
   const markTabDirty = useTabStore((s) => s.markTabDirty)
   const { setIsSending } = useUIStore()
-  const { currentProjectId, saveRequestToBackend } = useProjectStore()
+  const { currentProjectId, saveRequestToBackend, folders } = useProjectStore()
   const { activeEnvironmentId } = useEnvironmentStore()
 
   const { addConsoleRequest, updateConsoleResponse, updateConsoleError } = useUIStore()
   const abortRef = useRef<AbortController | null>(null)
+  const [saveDraftDialogOpen, setSaveDraftDialogOpen] = useState(false)
+  const [saveDraftName, setSaveDraftName] = useState("")
+  const [saveDraftFolderId, setSaveDraftFolderId] = useState("")
+  const [saveDraftSaving, setSaveDraftSaving] = useState(false)
+  const [saveDraftError, setSaveDraftError] = useState("")
+  const folderOptions = useMemo(() => buildFolderTreeOptions(folders), [folders])
 
   const handleCancel = useCallback(() => {
     if (abortRef.current) {
@@ -233,6 +284,8 @@ function useRequestEditorActions() {
       sendNoCacheHeader: uiState.sendNoCacheHeader,
       sendPostmanTokenHeader: uiState.sendPostmanTokenHeader,
     })
+    const activeVariables = useEnvironmentStore.getState().getActiveVariables()
+    const resolvedRequestUrl = ensureRequestProtocol(resolveTemplateVariables(activeTab.request.url, activeVariables) || activeTab.request.url)
     const reqBody = buildConsoleRequestBody(activeTab.request)
     const requestProtocol = uiState.httpVersion === "http2" ? "HTTP/2.0" : "HTTP/1.1"
 
@@ -240,7 +293,7 @@ function useRequestEditorActions() {
     const shouldUseStreaming = requestWantsStreaming(requestForSend)
     const logId = addConsoleRequest({
       method: activeTab.request.method,
-      url: activeTab.request.url,
+      url: resolvedRequestUrl,
       requestHeaders: reqHeaders,
       requestBody: reqBody,
       requestProtocol,
@@ -324,13 +377,18 @@ function useRequestEditorActions() {
     }
   }
 
-  const handleSave = useCallback(async () => {
-    if (!activeTab || !currentProjectId) return
+  const persistTabRequest = useCallback(async (
+    tab: NonNullable<typeof activeTab>,
+    overrides?: { name?: string; folderId?: string }
+  ) => {
+    if (!currentProjectId) return
 
-    const req = activeTab.request
+    const requestName = overrides?.name ?? tab.request.name
+    const requestFolderId = overrides?.folderId ?? tab.request.folderId ?? ""
+    const req = tab.request
     const requestItem = {
       id: req.id,
-      name: req.name,
+      name: requestName,
       method: req.method,
       url: req.url,
       params: req.params.filter((p: { key: string }) => p.key).map((p: { key: string; value: string }) => ({ key: p.key, value: p.value })),
@@ -358,7 +416,7 @@ function useRequestEditorActions() {
         bearer: req.auth.bearer ?? { token: "" },
         apiKey: req.auth.apiKey ?? { key: "", value: "", addTo: "header" },
       },
-      folderId: req.folderId ?? "",
+      folderId: requestFolderId,
       projectId: currentProjectId,
       createdAt: req.createdAt,
       updatedAt: new Date().toISOString(),
@@ -366,8 +424,60 @@ function useRequestEditorActions() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await saveRequestToBackend(requestItem as any)
+    return { requestName, requestFolderId }
+  }, [currentProjectId, saveRequestToBackend])
+
+  const handleSave = useCallback(async () => {
+    if (!activeTab || !currentProjectId) return
+
+    if (!activeTab.requestId) {
+      setSaveDraftName((activeTab.request.name || activeTab.title || "Untitled").trim())
+      setSaveDraftFolderId(activeTab.request.folderId ?? "")
+      setSaveDraftError("")
+      setSaveDraftDialogOpen(true)
+      return
+    }
+
+    await persistTabRequest(activeTab)
     markTabDirty(activeTab.id, false)
-  }, [activeTab, currentProjectId, saveRequestToBackend, markTabDirty])
+  }, [activeTab, currentProjectId, markTabDirty, persistTabRequest])
+
+  const handleConfirmDraftSave = useCallback(async () => {
+    if (!activeTab || !currentProjectId || saveDraftSaving) return
+
+    const name = saveDraftName.trim() || activeTab.request.name || activeTab.title || "Untitled"
+    const folderId = saveDraftFolderId
+    setSaveDraftSaving(true)
+    setSaveDraftError("")
+
+    try {
+      await persistTabRequest(activeTab, { name, folderId })
+      updateTab(activeTab.id, { title: name, requestId: activeTab.request.id })
+      updateTabRequest(activeTab.id, { name, folderId, projectId: currentProjectId })
+      markTabDirty(activeTab.id, false)
+      setSaveDraftDialogOpen(false)
+    } catch (err) {
+      setSaveDraftError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaveDraftSaving(false)
+    }
+  }, [
+    activeTab,
+    currentProjectId,
+    markTabDirty,
+    persistTabRequest,
+    saveDraftFolderId,
+    saveDraftName,
+    saveDraftSaving,
+    updateTab,
+    updateTabRequest,
+  ])
+
+  const handleCancelDraftSave = useCallback(() => {
+    if (saveDraftSaving) return
+    setSaveDraftDialogOpen(false)
+    setSaveDraftError("")
+  }, [saveDraftSaving])
 
   useEffect(() => {
     const listener = () => handleSave()
@@ -386,23 +496,147 @@ function useRequestEditorActions() {
     handleSend,
     handleCancel,
     handleSave,
+    saveDraftDialogOpen,
+    saveDraftName,
+    saveDraftFolderId,
+    saveDraftSaving,
+    saveDraftError,
+    folderOptions,
+    setSaveDraftName,
+    setSaveDraftFolderId,
+    handleConfirmDraftSave,
+    handleCancelDraftSave,
   }
 }
 
 export function RequestEditorToolbar() {
-  const { activeTab, handleSend, handleCancel, handleSave } = useRequestEditorActions()
+  const {
+    activeTab,
+    handleSend,
+    handleCancel,
+    handleSave,
+    saveDraftDialogOpen,
+    saveDraftName,
+    saveDraftFolderId,
+    saveDraftSaving,
+    saveDraftError,
+    folderOptions,
+    setSaveDraftName,
+    setSaveDraftFolderId,
+    handleConfirmDraftSave,
+    handleCancelDraftSave,
+  } = useRequestEditorActions()
+  const { t } = useI18n()
 
   if (!activeTab) return null
 
-  return <UrlBar onSend={handleSend} onCancel={handleCancel} onSave={handleSave} />
+  const ROOT_FOLDER_VALUE = "__root__"
+  const selectedFolderDisplay = saveDraftFolderId
+    ? folderOptions.find((option) => option.id === saveDraftFolderId)?.name
+    : t("根目录", "Root")
+
+  return (
+    <>
+      <UrlBar onSend={handleSend} onCancel={handleCancel} onSave={handleSave} />
+      {saveDraftDialogOpen && createPortal(
+        <div className="fixed inset-0 z-[320] flex items-center justify-center" onClick={() => { if (!saveDraftSaving) handleCancelDraftSave() }}>
+          <div className="absolute inset-0 bg-black/35 backdrop-blur-[1px]" />
+          <div
+            className="relative z-[321] w-[460px] rounded-[12px] border border-[var(--border-color)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-3">
+              <div>
+                <div className="text-[16px] font-semibold text-[var(--fg)]">{t("保存请求", "Save Request")}</div>
+                <div className="mt-0.5 text-[12px] text-[var(--fg-secondary)]">{t("请选择名称和保存位置", "Choose request name and save location")}</div>
+              </div>
+              <button
+                type="button"
+                className="h-6 w-6 inline-flex items-center justify-center rounded-[6px] text-[var(--fg-muted)] hover:bg-[var(--button-bg)] hover:text-[var(--fg)]"
+                onClick={handleCancelDraftSave}
+                disabled={saveDraftSaving}
+              >
+                <AppIcon name="clear" size={12} />
+              </button>
+            </div>
+            <div className="space-y-3 px-4 py-3.5">
+              <div className="space-y-1">
+                <label className="text-[12px] text-[var(--fg-secondary)]">{t("名称", "Name")}</label>
+                <input
+                  value={saveDraftName}
+                  onChange={(event) => setSaveDraftName(event.target.value)}
+                  className="h-8 w-full rounded-[7px] border border-[var(--border-color)] bg-[var(--surface)] px-2.5 text-[12px] text-[var(--fg)] outline-none focus:border-[var(--accent)]"
+                  placeholder={t("请输入请求名称", "Enter request name")}
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[12px] text-[var(--fg-secondary)]">{t("位置", "Location")}</label>
+                <Select
+                  value={saveDraftFolderId || ROOT_FOLDER_VALUE}
+                  onValueChange={(value) => setSaveDraftFolderId(value === ROOT_FOLDER_VALUE ? "" : value)}
+                >
+                  <SelectTrigger className="h-8 text-[12px]">
+                    <SelectValue>{selectedFolderDisplay}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="z-[360]">
+                    <SelectItem value={ROOT_FOLDER_VALUE}>{t("根目录", "Root")}</SelectItem>
+                    {folderOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {`${"\u3000".repeat(option.depth)}${option.name}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {saveDraftError && (
+                <div className="rounded-[7px] border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-2.5 py-2 text-[11px] text-[var(--danger)]">
+                  {saveDraftError}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-[var(--border-subtle)] px-4 py-3">
+              <button
+                type="button"
+                className="h-[32px] px-3 rounded-[8px] border border-[var(--button-border)] text-[12px] text-[var(--fg)] hover:bg-[var(--button-bg)]"
+                onClick={handleCancelDraftSave}
+                disabled={saveDraftSaving}
+              >
+                {t("取消", "Cancel")}
+              </button>
+              <button
+                type="button"
+                className="h-[32px] px-3 rounded-[8px] bg-[var(--accent)] text-white text-[12px] font-medium hover:opacity-95 disabled:opacity-60"
+                onClick={() => void handleConfirmDraftSave()}
+                disabled={saveDraftSaving}
+              >
+                {saveDraftSaving ? t("保存中...", "Saving...") : t("保存", "Save")}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  )
 }
 
 export function RequestEditorBody() {
   const activeTab = useTabStore(getProjectActiveTabFromState)
+  const updateTabRequest = useTabStore((s) => s.updateTabRequest)
+
+  useEffect(() => {
+    if (!activeTab) return
+    const nextParams = syncParamsWithUrlQuery(activeTab.request.url, activeTab.request.params)
+    if (areParamsEquivalent(activeTab.request.params, nextParams)) return
+    updateTabRequest(activeTab.id, { params: nextParams })
+  }, [activeTab, updateTabRequest])
 
   if (!activeTab) return null
 
   const { request } = activeTab
+  const paramsCount = request.params.filter(isMeaningfulKeyValue).length
+  const headersCount = request.headers.filter((item) => isMeaningfulKeyValue(item) && !isAutoHeaderDisabledMarkerKey(item.key ?? "")).length
 
   return (
     <div className="flex h-full flex-col bg-[var(--surface)] overflow-hidden">
@@ -410,14 +644,14 @@ export function RequestEditorBody() {
         <TabsList className="w-full justify-start px-[var(--size-padding-sm)] py-1">
           <TabsTrigger value="params">
             Params
-            {request.params.length > 0 && (
-              <span className="ml-1 text-2xs text-[var(--fg-muted)]">({request.params.length})</span>
+            {paramsCount > 0 && (
+              <span className="ml-1 text-2xs text-[var(--fg-muted)]">({paramsCount})</span>
             )}
           </TabsTrigger>
           <TabsTrigger value="headers">
             Headers
-            {request.headers.length > 0 && (
-              <span className="ml-1 text-2xs text-[var(--fg-muted)]">({request.headers.length})</span>
+            {headersCount > 0 && (
+              <span className="ml-1 text-2xs text-[var(--fg-muted)]">({headersCount})</span>
             )}
           </TabsTrigger>
           <TabsTrigger value="body">Body</TabsTrigger>

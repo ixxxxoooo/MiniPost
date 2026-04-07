@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
+import { useEnvironmentStore } from "@/stores/environmentStore"
 import { AppIcon } from "@/components/ui/icon"
 import { ResponseBody } from "./ResponseBody"
 import { ResponseStream } from "./ResponseStream"
@@ -10,6 +11,7 @@ import { ResponseCookies } from "./ResponseCookies"
 import { cn } from "@/lib/utils"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { useI18n } from "@/hooks/useI18n"
+import { ensureRequestProtocol, resolveTemplateVariables } from "@/lib/variableResolver"
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -237,6 +239,8 @@ export function ResponseViewer() {
   const { t, isZh } = useI18n()
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const { isSending, resolved } = useUIStore()
+  const environments = useEnvironmentStore((s) => s.environments)
+  const activeEnvironmentId = useEnvironmentStore((s) => s.activeEnvironmentId)
   const [activeTabValue, setActiveTabValue] = useState("body")
   const [liveNow, setLiveNow] = useState(() => Date.now())
 
@@ -250,6 +254,20 @@ export function ResponseViewer() {
   const parsedError = responseError ? parseRequestError(responseError, isZh) : null
   const errorPresentation = parsedError ? getRequestErrorPresentation(parsedError, isZh) : null
   const canSendFromEmptyState = Boolean(activeTab?.request.url?.trim())
+  const rawRequestUrl = activeTab?.request.url ?? ""
+  const activeVariables = useMemo(() => {
+    if (!activeEnvironmentId) return []
+    const env = environments.find((item) => item.id === activeEnvironmentId)
+    if (!env) return []
+    return (env.variables ?? [])
+      .filter((variable) => variable.enabled && variable.key)
+      .map((variable) => ({ key: variable.key, value: variable.value }))
+  }, [activeEnvironmentId, environments])
+  const resolvedRequestUrl = useMemo(() => {
+    if (!rawRequestUrl.trim()) return ""
+    const withVariables = resolveTemplateVariables(rawRequestUrl, activeVariables)
+    return ensureRequestProtocol(withVariables || rawRequestUrl)
+  }, [activeVariables, rawRequestUrl])
 
   const timingRows = useMemo<TimingRow[]>(() => {
     if (!response) return []
@@ -684,23 +702,26 @@ export function ResponseViewer() {
                 <div className="h-full overflow-auto">
                   <div className="mx-auto flex h-full w-full max-w-[980px] items-center justify-center px-3">
                     <div className="w-full max-w-[860px] py-2">
-                      <div className="flex items-start gap-2.5">
-                        <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-[999px] bg-[var(--danger)]/12">
-                          <AppIcon name="info" size={11} className="text-[var(--danger)]" />
-                        </div>
-                        <div className="min-w-0 flex-1 space-y-2">
+                      <div className="rounded-[12px] border border-[var(--danger)]/25 bg-[var(--surface-elevated)] px-4 py-3 shadow-[var(--shadow-sm)]">
+                        <div className="mb-2 flex items-center gap-2.5">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-[999px] bg-[var(--danger)]/12">
+                            <AppIcon name="info" size={11} className="text-[var(--danger)]" />
+                          </div>
                           <div className="text-[14px] font-semibold text-[var(--fg)] leading-5">
                             {t("无法发送请求", "Could not send request")}
                           </div>
-                          <div className="flex items-center gap-2 text-[12px] font-mono">
+                        </div>
+
+                        <div className="space-y-2.5">
+                          <div className="flex items-start gap-2 text-[12px] font-mono">
                             <span className={cn("font-semibold uppercase", METHOD_COLORS[(activeTab?.request.method as HttpMethod)] || "text-[var(--fg-muted)]")}>
                               {activeTab?.request.method || "GET"}
                             </span>
-                            <span className="text-[var(--fg)] break-all">{activeTab?.request.url || ""}</span>
+                            <span className="text-[var(--fg)] break-all">{resolvedRequestUrl || rawRequestUrl}</span>
                           </div>
-
-                          <div className={cn("inline-flex max-w-full items-center rounded-[8px] px-2.5 py-1.5 text-[12px] break-all", errorPresentation?.badgeToneClass || "bg-[#fbeceb] text-[#b44840]")}>
-                            {t("错误", "Error")}: {errorPresentation?.badgeText?.replace(/^Error:\s*/i, "") || responseError}
+                          <div className={cn("max-w-full rounded-[9px] border px-2.5 py-2 text-[12px] leading-5 break-all", errorPresentation?.badgeToneClass || "bg-[#fbeceb] text-[#b44840]", "border-current/20")}>
+                            <span className="font-medium">{t("错误", "Error")}:</span>
+                            <span className="ml-1">{errorPresentation?.badgeText?.replace(/^Error:\s*/i, "") || responseError}</span>
                           </div>
 
                           <div className="text-[12px] leading-6 text-[var(--fg-secondary)]">

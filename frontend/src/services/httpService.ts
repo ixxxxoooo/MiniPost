@@ -4,7 +4,9 @@ import type { RequestData } from "@/types/request"
 import { stripJsonComments } from "@/components/ui/CodeEditor"
 import { useCookieStore } from "@/stores/cookieStore"
 import { useUIStore } from "@/stores/uiStore"
+import { useEnvironmentStore } from "@/stores/environmentStore"
 import { getSuppressedAutoHeaders, normalizeHeaderName } from "@/lib/autoHeaders"
+import { ensureRequestProtocol, resolveTemplateVariables } from "@/lib/variableResolver"
 
 const TOKEN_HEADER_NAME = "MiniPost-Token"
 
@@ -91,6 +93,54 @@ function buildPayload(request: RequestData): SendRequestPayload {
   }
 }
 
+function resolvePayloadVariables(payload: SendRequestPayload, variables: Array<{ key: string; value: string }>): SendRequestPayload {
+  if (!variables.length) return payload
+
+  return {
+    ...payload,
+    url: resolveTemplateVariables(payload.url, variables),
+    params: payload.params.map((item) => ({
+      key: resolveTemplateVariables(item.key, variables),
+      value: resolveTemplateVariables(item.value, variables),
+    })),
+    headers: payload.headers.map((item) => ({
+      key: resolveTemplateVariables(item.key, variables),
+      value: resolveTemplateVariables(item.value, variables),
+    })),
+    body: {
+      ...payload.body,
+      raw: resolveTemplateVariables(payload.body.raw, variables),
+      json: resolveTemplateVariables(payload.body.json, variables),
+      formUrlEncoded: payload.body.formUrlEncoded.map((item) => ({
+        key: resolveTemplateVariables(item.key, variables),
+        value: resolveTemplateVariables(item.value, variables),
+      })),
+      formData: payload.body.formData.map((item) => ({
+        ...item,
+        key: resolveTemplateVariables(item.key, variables),
+        value: resolveTemplateVariables(item.value, variables),
+        filePath: resolveTemplateVariables(item.filePath ?? "", variables),
+        fileName: resolveTemplateVariables(item.fileName ?? "", variables),
+      })),
+    },
+    auth: {
+      ...payload.auth,
+      basic: {
+        username: resolveTemplateVariables(payload.auth.basic.username, variables),
+        password: resolveTemplateVariables(payload.auth.basic.password, variables),
+      },
+      bearer: {
+        token: resolveTemplateVariables(payload.auth.bearer.token, variables),
+      },
+      apiKey: {
+        ...payload.auth.apiKey,
+        key: resolveTemplateVariables(payload.auth.apiKey.key, variables),
+        value: resolveTemplateVariables(payload.auth.apiKey.value, variables),
+      },
+    },
+  }
+}
+
 function mergeCookieHeader(manual: string, fromJar: string): string {
   const map = new Map<string, string>()
   const append = (source: string, overwrite: boolean) => {
@@ -151,14 +201,26 @@ export async function sendHttpRequest(
   envId?: string,
   streamOptions?: SendRequestStreamOptions
 ): Promise<HttpResponse> {
-  const payload = buildPayload(request)
+  const envState = useEnvironmentStore.getState()
+  let activeVariables = envState.getActiveVariables()
+  if (envId) {
+    const matched = envState.environments.find((env) => env.id === envId)
+    if (matched) {
+      activeVariables = (matched.variables ?? [])
+        .filter((variable) => variable.enabled && variable.key)
+        .map((variable) => ({ key: variable.key, value: variable.value }))
+    }
+  }
+  const payload = resolvePayloadVariables(buildPayload(request), activeVariables)
+  payload.url = ensureRequestProtocol(payload.url)
   const uiSettings = useUIStore.getState()
   const cookieStore = useCookieStore.getState()
   const suppressedAutoHeaders = getSuppressedAutoHeaders(request.headers)
   const isSuppressed = (name: string) => suppressedAutoHeaders.has(normalizeHeaderName(name))
   const isTokenSuppressed = isSuppressed("minipost-token") || isSuppressed("postman-token")
+  const resolvedRequestUrl = payload.url || ensureRequestProtocol(request.url)
   if (!uiSettings.disableCookies) {
-    const cookieHeader = cookieStore.getCookieHeader(request.url)
+    const cookieHeader = cookieStore.getCookieHeader(resolvedRequestUrl)
     if (cookieHeader && !isSuppressed("cookie")) {
       const existing = payload.headers.find((h) => h.key.toLowerCase() === "cookie")
       if (!existing) {
@@ -232,7 +294,7 @@ export async function sendHttpRequest(
   }
 
   if (!uiSettings.disableCookies) {
-    cookieStore.absorbResponseCookies(request.url, normalizedResult.headers)
+    cookieStore.absorbResponseCookies(resolvedRequestUrl, normalizedResult.headers)
   }
   return normalizedResult
 }

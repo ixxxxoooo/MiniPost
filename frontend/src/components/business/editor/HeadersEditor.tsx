@@ -3,8 +3,10 @@ import { KeyValueEditor } from "./KeyValueEditor"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
 import { useCookieStore } from "@/stores/cookieStore"
+import { useEnvironmentStore } from "@/stores/environmentStore"
 import { createKeyValuePair } from "@/types/request"
 import { useI18n } from "@/hooks/useI18n"
+import { resolveTemplateVariables } from "@/lib/variableResolver"
 import {
   buildAutoHeaderDisabledMarkerKey,
   getSuppressedAutoHeaders,
@@ -111,8 +113,14 @@ export function HeadersEditor() {
   const disableCookies = useUIStore((s) => s.disableCookies)
   const sendNoCacheHeader = useUIStore((s) => s.sendNoCacheHeader)
   const sendPostmanTokenHeader = useUIStore((s) => s.sendPostmanTokenHeader)
+  const environments = useEnvironmentStore((s) => s.environments)
+  const activeEnvironmentId = useEnvironmentStore((s) => s.activeEnvironmentId)
   const cookies = useCookieStore((s) => s.cookies)
   const getCookieHeader = useCookieStore((s) => s.getCookieHeader)
+  const activeVariables = useMemo(() => {
+    const env = environments.find((item) => item.id === activeEnvironmentId)
+    return (env?.variables ?? []).filter((v) => v.enabled && v.key).map((v) => ({ key: v.key, value: v.value }))
+  }, [activeEnvironmentId, environments])
 
   if (!activeTab) return null
 
@@ -260,14 +268,15 @@ export function HeadersEditor() {
     }
 
     if (!disableCookies && !hasHeader("cookie")) {
-      const cookieHeader = getCookieHeader(activeTab.request.url)
+      const resolvedUrl = resolveTemplateVariables(activeTab.request.url, activeVariables)
+      const cookieHeader = getCookieHeader(resolvedUrl || activeTab.request.url)
       if (cookieHeader) {
         pushAutoHeader("Cookie", cookieHeader, t("由 Cookie Jar 自动注入", "Auto-injected by Cookie Jar"))
       }
     }
 
     return items
-  }, [activeTab, disableCookies, editableHeaders, getCookieHeader, isZh, cookies, sendNoCacheHeader, sendPostmanTokenHeader, t])
+  }, [activeTab, activeVariables, disableCookies, editableHeaders, getCookieHeader, isZh, cookies, sendNoCacheHeader, sendPostmanTokenHeader, t])
 
   return (
     <KeyValueEditor

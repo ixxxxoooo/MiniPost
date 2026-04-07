@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 import MonacoEditor, { loader, useMonaco } from "@monaco-editor/react"
 import * as Monaco from "monaco-editor"
 import type { editor as MonacoEditorType } from "monaco-editor"
@@ -132,6 +132,35 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const monaco = useMonaco()
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null)
+  const tooltipObserverRef = useRef<MutationObserver | null>(null)
+
+  const stabilizeFindWidgetTooltips = useCallback((editor: MonacoEditorType.IStandaloneCodeEditor) => {
+    const container = editor.getContainerDomNode()
+    if (!container) return
+
+    const syncTooltipAttrs = () => {
+      const tooltipTargets = container.querySelectorAll<HTMLElement>(".find-widget [title]")
+      tooltipTargets.forEach((node) => {
+        const title = node.getAttribute("title")
+        if (!title) return
+        node.setAttribute("data-minipost-tooltip", title)
+        node.removeAttribute("title")
+      })
+    }
+
+    syncTooltipAttrs()
+    tooltipObserverRef.current?.disconnect()
+    const observer = new MutationObserver(() => {
+      syncTooltipAttrs()
+    })
+    observer.observe(container, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["title"],
+    })
+    tooltipObserverRef.current = observer
+  }, [])
 
   useEffect(() => {
     if (!monaco) return
@@ -265,6 +294,11 @@ export function CodeEditor({
     void editor.getAction("actions.find")?.run()
   }, [searchSignal])
 
+  useEffect(() => () => {
+    tooltipObserverRef.current?.disconnect()
+    tooltipObserverRef.current = null
+  }, [])
+
   return (
     <div
       className={cn(
@@ -281,6 +315,7 @@ export function CodeEditor({
         options={options}
         onMount={(editor) => {
           editorRef.current = editor
+          stabilizeFindWidgetTooltips(editor)
         }}
         onChange={(nextValue) => onChange?.(nextValue ?? "")}
       />

@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
+import { useEnvironmentStore } from "@/stores/environmentStore"
 import { useI18n } from "@/hooks/useI18n"
 import { cn } from "@/lib/utils"
 
@@ -15,12 +16,48 @@ interface UrlBarProps {
   onSave: () => void
 }
 
+type VariableCompletionContext = {
+  replaceStart: number
+  caret: number
+  query: string
+}
+
+function getVariableCompletionContext(url: string, caret: number): VariableCompletionContext | null {
+  if (caret < 0) return null
+  const before = url.slice(0, caret)
+  const match = /(?:^|[^A-Za-z0-9_}])(\{\{?)([A-Za-z0-9_.-]*)$/.exec(before)
+  if (!match) return null
+
+  const prefix = match[1]
+  const query = match[2] ?? ""
+  const replaceStart = caret - prefix.length - query.length
+  if (replaceStart < 0) return null
+
+  return {
+    replaceStart,
+    caret,
+    query,
+  }
+}
+
+function tokenizeUrl(url: string): Array<{ type: "text" | "variable"; value: string }> {
+  const parts = url.split(/(\{\{[^{}]+\}\})/g).filter(Boolean)
+  return parts.map((part) => {
+    if (part.startsWith("{{") && part.endsWith("}}")) {
+      return { type: "variable" as const, value: part.slice(2, -2).trim() }
+    }
+    return { type: "text" as const, value: part }
+  })
+}
+
 export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
   const { t } = useI18n()
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
   const updateTab = useTabStore((s) => s.updateTab)
   const { isSending } = useUIStore()
+  const environments = useEnvironmentStore((s) => s.environments)
+  const activeEnvironmentId = useEnvironmentStore((s) => s.activeEnvironmentId)
   const projects = useProjectStore((s) => s.projects)
   const currentProjectId = useProjectStore((s) => s.currentProjectId)
   const folders = useProjectStore((s) => s.folders)
@@ -28,8 +65,16 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
   const [showSendMenu, setShowSendMenu] = useState(false)
   const [isEditingName, setIsEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState("")
+  const [urlCaret, setUrlCaret] = useState(0)
+  const [urlScrollLeft, setUrlScrollLeft] = useState(0)
+  const [urlFocused, setUrlFocused] = useState(false)
+  const [variableActiveIndex, setVariableActiveIndex] = useState(0)
+  const [nameInputWidth, setNameInputWidth] = useState(96)
   const sendMenuRef = useRef<HTMLDivElement>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
+  const nameContainerRef = useRef<HTMLDivElement>(null)
+  const nameMeasureRef = useRef<HTMLSpanElement>(null)
+  const urlInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!showSendMenu) return
@@ -70,17 +115,99 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
   }, [currentProjectId, projects])
 
   const breadcrumbSegments = useMemo(() => [...(projectName ? [projectName] : []), ...folderPath], [folderPath, projectName])
+  const variableKeys = useMemo(() => {
+    const seen = new Set<string>()
+    const ordered: string[] = []
+    const append = (rawKey: string) => {
+      const key = rawKey.trim()
+      if (!key || seen.has(key)) return
+      seen.add(key)
+      ordered.push(key)
+    }
+
+    const activeEnv = environments.find((env) => env.id === activeEnvironmentId)
+    ;(activeEnv?.variables ?? []).forEach((variable) => {
+      if (variable.enabled) append(variable.key)
+    })
+
+    environments.forEach((env) => {
+      ;(env.variables ?? []).forEach((variable) => {
+        if (variable.enabled) append(variable.key)
+      })
+    })
+
+    return ordered
+  }, [activeEnvironmentId, environments])
+
+  const urlTokens = useMemo(() => tokenizeUrl(request.url), [request.url])
+  const completionContext = useMemo(
+    () => (urlFocused ? getVariableCompletionContext(request.url, urlCaret) : null),
+    [request.url, urlCaret, urlFocused]
+  )
+  const variableSuggestions = useMemo(() => {
+    if (!completionContext) return []
+    const query = completionContext.query.trim().toLowerCase()
+    if (!query) return variableKeys.slice(0, 8)
+
+    const startsWithMatches = variableKeys.filter((key) => key.toLowerCase().startsWith(query))
+    const containsMatches = variableKeys.filter((key) => !key.toLowerCase().startsWith(query) && key.toLowerCase().includes(query))
+    return [...startsWithMatches, ...containsMatches].slice(0, 8)
+  }, [completionContext, variableKeys])
+  const showVariableSuggestion = variableSuggestions.length > 0 && Boolean(completionContext)
 
   useEffect(() => {
     setIsEditingName(false)
     setNameDraft(requestName)
-  }, [activeTab.id, requestName])
+    setUrlCaret(request.url.length)
+    setUrlScrollLeft(0)
+    setVariableActiveIndex(0)
+  }, [activeTab.id, request.url.length, requestName])
 
   useEffect(() => {
     if (!isEditingName) return
     nameInputRef.current?.focus()
     nameInputRef.current?.select()
   }, [isEditingName])
+
+  const recalcNameInputWidth = useCallback(() => {
+    const container = nameContainerRef.current
+    const measure = nameMeasureRef.current
+    if (!container || !measure) return
+
+    const availableWidth = Math.floor(container.clientWidth)
+    if (availableWidth <= 0) return
+
+    const sampleText = (isEditingName ? nameDraft : requestName).trim() || "Untitled"
+    measure.textContent = sampleText
+    const textWidth = Math.ceil(measure.getBoundingClientRect().width)
+
+    const minWidth = isEditingName ? 96 : 28
+    const paddingAndCursor = 18
+    const desiredWidth = textWidth + paddingAndCursor
+    const nextWidth = Math.min(availableWidth, Math.max(minWidth, desiredWidth))
+    setNameInputWidth(nextWidth)
+  }, [isEditingName, nameDraft, requestName])
+
+  useEffect(() => {
+    recalcNameInputWidth()
+
+    const container = nameContainerRef.current
+    if (!container || typeof ResizeObserver === "undefined") return
+
+    const observer = new ResizeObserver(() => {
+      recalcNameInputWidth()
+    })
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [recalcNameInputWidth])
+
+  useEffect(() => {
+    if (!showVariableSuggestion) {
+      setVariableActiveIndex(0)
+      return
+    }
+    setVariableActiveIndex((prev) => Math.min(prev, variableSuggestions.length - 1))
+  }, [showVariableSuggestion, variableSuggestions.length])
 
   const commitRename = useCallback(async () => {
     const nextName = nameDraft.trim()
@@ -107,6 +234,29 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
     }
   }, [activeTab.id, activeTab.request, activeTab.requestId, nameDraft, renameRequest, requestName, updateTab])
 
+  const applyVariableSuggestion = useCallback((variableKey: string) => {
+    if (!completionContext) return
+
+    const current = request.url
+    const before = current.slice(0, completionContext.replaceStart)
+    const afterRaw = current.slice(completionContext.caret)
+    const skipClosing = afterRaw.startsWith("}}") ? 2 : afterRaw.startsWith("}") ? 1 : 0
+    const after = afterRaw.slice(skipClosing)
+    const inserted = `{{${variableKey}}}`
+    const nextUrl = `${before}${inserted}${after}`
+    const nextCaret = before.length + inserted.length
+
+    updateTabRequest(activeTab.id, { url: nextUrl })
+    setUrlCaret(nextCaret)
+
+    requestAnimationFrame(() => {
+      const input = urlInputRef.current
+      if (!input) return
+      input.focus()
+      input.setSelectionRange(nextCaret, nextCaret)
+    })
+  }, [activeTab.id, completionContext, request.url, updateTabRequest])
+
   return (
     <div className="flex flex-col flex-shrink-0 bg-[var(--surface)]">
       <div className="px-[var(--size-padding)] pt-1">
@@ -131,43 +281,51 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
             </div>
           ))}
 
-          {isEditingName ? (
-            <input
-              ref={nameInputRef}
-              value={nameDraft}
-              onChange={(event) => setNameDraft(event.target.value)}
-              onBlur={() => void commitRename()}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void commitRename()
-                if (event.key === "Escape") {
-                  setNameDraft(requestName)
-                  setIsEditingName(false)
-                }
-              }}
-              className={cn(
-                "h-6 rounded-[6px] bg-transparent px-1.5 text-[12px] font-semibold text-[var(--fg)]",
-                "outline-none ring-1 ring-[var(--accent)]/40"
-              )}
-              style={{ width: `${Math.max(6, Math.min(56, nameDraft.trim().length || 8))}ch` }}
+          <div ref={nameContainerRef} className="relative min-w-0 flex-1">
+            <span
+              ref={nameMeasureRef}
+              aria-hidden="true"
+              className="pointer-events-none absolute -left-[9999px] top-0 whitespace-pre px-1.5 text-[12px] font-semibold text-transparent"
             />
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => setIsEditingName(true)}
-                  className={cn(
-                    "inline-flex h-6 max-w-[560px] items-center rounded-[6px] px-1.5",
-                    "text-left text-[12px] font-semibold text-[var(--fg)]",
-                    "hover:bg-[var(--selected-bg)] transition-colors"
-                  )}
-                >
-                  <span className="block truncate">{requestName}</span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{t("单击编辑请求名称", "Click to edit request name")}</TooltipContent>
-            </Tooltip>
-          )}
+            {isEditingName ? (
+              <input
+                ref={nameInputRef}
+                value={nameDraft}
+                onChange={(event) => setNameDraft(event.target.value)}
+                onBlur={() => void commitRename()}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void commitRename()
+                  if (event.key === "Escape") {
+                    setNameDraft(requestName)
+                    setIsEditingName(false)
+                  }
+                }}
+                className={cn(
+                  "block h-6 min-w-0 max-w-full rounded-[6px] bg-transparent px-1.5 text-[12px] font-semibold text-[var(--fg)]",
+                  "outline-none ring-1 ring-[var(--accent)]/40"
+                )}
+                style={{ width: `${nameInputWidth}px` }}
+              />
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingName(true)}
+                    className={cn(
+                      "inline-flex h-6 min-w-0 max-w-full items-center rounded-[6px] px-1.5",
+                      "text-left text-[12px] font-semibold text-[var(--fg)]",
+                      "hover:bg-[var(--selected-bg)] transition-colors"
+                    )}
+                    style={{ width: `${nameInputWidth}px` }}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{requestName}</span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{t("单击编辑请求名称", "Click to edit request name")}</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         </div>
       </div>
 
@@ -177,7 +335,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
           "bg-[var(--surface)]"
         )}
       >
-        <div className="flex flex-1 items-center overflow-hidden rounded-[10px] border border-[var(--button-border)] bg-[var(--surface)] focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]/20">
+        <div className="flex flex-1 items-center rounded-[10px] border border-[var(--button-border)] bg-[var(--surface)] focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]/20">
           <Select value={request.method} onValueChange={(value) => updateTabRequest(activeTab.id, { method: value as HttpMethod })}>
             <SelectTrigger
               className={cn(
@@ -205,19 +363,115 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
             </SelectContent>
           </Select>
 
-          <input
-            value={request.url}
-            onChange={(e) => updateTabRequest(activeTab.id, { url: e.target.value })}
-            placeholder={t("输入请求 URL...", "Enter request URL...")}
-            className={cn(
-              "h-[30px] min-w-0 flex-1 bg-transparent px-3",
-              "border-0 text-[var(--fg)] font-mono text-[length:var(--size-font-xs)]",
-              "placeholder:text-[var(--fg-muted)] focus:outline-none focus:ring-0"
+          <div className="relative h-[30px] min-w-0 flex-1">
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-0 z-[1] flex items-center px-3",
+                "font-mono text-[length:var(--size-font-xs)] text-[var(--fg)]"
+              )}
+            >
+              {request.url ? (
+                <div className="whitespace-pre" style={{ transform: `translateX(${-urlScrollLeft}px)` }}>
+                  {urlTokens.map((token, index) => {
+                    if (token.type === "variable") {
+                      return (
+                        <span
+                          key={`${token.type}-${index}-${token.value}`}
+                          className={cn(
+                            "mx-[1px] inline-flex h-4 items-center rounded-[999px] px-1.5 align-middle",
+                            "border border-[var(--accent)]/30 bg-[var(--accent)]/12",
+                            "text-[10px] font-semibold text-[var(--accent)]"
+                          )}
+                        >
+                          {`{{${token.value}}}`}
+                        </span>
+                      )
+                    }
+                    return <span key={`${token.type}-${index}-${token.value}`}>{token.value}</span>
+                  })}
+                </div>
+              ) : null}
+            </div>
+
+            <input
+              ref={urlInputRef}
+              value={request.url}
+              onChange={(e) => {
+                updateTabRequest(activeTab.id, { url: e.target.value })
+                setUrlCaret(e.target.selectionStart ?? e.target.value.length)
+              }}
+              onFocus={(e) => {
+                setUrlFocused(true)
+                setUrlCaret(e.target.selectionStart ?? e.target.value.length)
+              }}
+              onBlur={() => {
+                setUrlFocused(false)
+              }}
+              onClick={(e) => setUrlCaret(e.currentTarget.selectionStart ?? e.currentTarget.value.length)}
+              onKeyUp={(e) => {
+                const target = e.currentTarget
+                setUrlCaret(target.selectionStart ?? target.value.length)
+              }}
+              onSelect={(e) => {
+                const target = e.currentTarget
+                setUrlCaret(target.selectionStart ?? target.value.length)
+              }}
+              onScroll={(e) => setUrlScrollLeft(e.currentTarget.scrollLeft)}
+              placeholder={t("输入请求 URL...", "Enter request URL...")}
+              className={cn(
+                "relative z-[2] h-[30px] w-full min-w-0 bg-transparent px-3",
+                "border-0 font-mono text-[length:var(--size-font-xs)] caret-[var(--fg)]",
+                request.url ? "text-transparent" : "text-[var(--fg)]",
+                "placeholder:text-[var(--fg-muted)] focus:outline-none focus:ring-0"
+              )}
+              onKeyDown={(e) => {
+                if (showVariableSuggestion && e.key === "ArrowDown") {
+                  e.preventDefault()
+                  setVariableActiveIndex((prev) => (prev + 1) % variableSuggestions.length)
+                  return
+                }
+                if (showVariableSuggestion && e.key === "ArrowUp") {
+                  e.preventDefault()
+                  setVariableActiveIndex((prev) => (prev - 1 + variableSuggestions.length) % variableSuggestions.length)
+                  return
+                }
+                if (showVariableSuggestion && (e.key === "Enter" || e.key === "Tab") && !e.metaKey && !e.ctrlKey) {
+                  e.preventDefault()
+                  applyVariableSuggestion(variableSuggestions[variableActiveIndex] ?? variableSuggestions[0])
+                  return
+                }
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) onSend()
+              }}
+            />
+
+            {showVariableSuggestion && (
+              <div
+                className={cn(
+                  "absolute left-2 right-2 top-[calc(100%+4px)] z-[30] overflow-hidden rounded-[8px] border",
+                  "border-[var(--border-color)] bg-[var(--surface-elevated)] shadow-[var(--shadow-lg)]"
+                )}
+              >
+                {variableSuggestions.map((key, index) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={cn(
+                      "flex h-7 w-full items-center px-2 text-left text-[11px] font-mono",
+                      index === variableActiveIndex
+                        ? "bg-[var(--selected-bg)] text-[var(--fg)]"
+                        : "text-[var(--fg-secondary)] hover:bg-[var(--sidebar-hover)]"
+                    )}
+                    onMouseDown={(event) => {
+                      event.preventDefault()
+                      applyVariableSuggestion(key)
+                    }}
+                  >
+                    {`{{${key}}}`}
+                  </button>
+                ))}
+              </div>
             )}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) onSend()
-            }}
-          />
+          </div>
         </div>
 
         <Tooltip>

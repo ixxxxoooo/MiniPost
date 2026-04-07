@@ -3,6 +3,8 @@ import { createPortal } from "react-dom"
 import { AppIcon } from "@/components/ui/icon"
 import { useCookieStore, type CookieItem } from "@/stores/cookieStore"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
+import { useEnvironmentStore } from "@/stores/environmentStore"
+import { resolveTemplateVariables } from "@/lib/variableResolver"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/hooks/useI18n"
 
@@ -26,7 +28,11 @@ function inferHostFromUrl(url: string): string {
   try {
     return new URL(url).hostname
   } catch {
-    return ""
+    try {
+      return new URL(`http://${url}`).hostname
+    } catch {
+      return ""
+    }
   }
 }
 
@@ -147,6 +153,8 @@ function CookieRow({
 export function CookiePanel() {
   const { t } = useI18n()
   const activeTab = useTabStore(getProjectActiveTabFromState)
+  const environments = useEnvironmentStore((s) => s.environments)
+  const activeEnvironmentId = useEnvironmentStore((s) => s.activeEnvironmentId)
   const {
     cookies,
     cookiePanelOpen,
@@ -156,12 +164,23 @@ export function CookiePanel() {
     removeCookie,
     clearCookies,
     clearDomainCookies,
+    importCookieHeader,
   } = useCookieStore()
   const [selectedDomain, setSelectedDomain] = useState("")
   const [search, setSearch] = useState("")
   const [domainInput, setDomainInput] = useState("")
+  const [importHint, setImportHint] = useState("")
 
-  const activeHost = useMemo(() => inferHostFromUrl(activeTab?.request.url ?? ""), [activeTab?.request.url])
+  const activeVariables = useMemo(() => {
+    const env = environments.find((item) => item.id === activeEnvironmentId)
+    return (env?.variables ?? []).filter((v) => v.enabled && v.key).map((v) => ({ key: v.key, value: v.value }))
+  }, [activeEnvironmentId, environments])
+
+  const resolvedActiveUrl = useMemo(
+    () => resolveTemplateVariables(activeTab?.request.url ?? "", activeVariables),
+    [activeTab?.request.url, activeVariables]
+  )
+  const activeHost = useMemo(() => inferHostFromUrl(resolvedActiveUrl), [resolvedActiveUrl])
   const domainGroups = useMemo(() => {
     const map = new Map<string, CookieItem[]>()
     cookies.forEach((cookie) => {
@@ -189,6 +208,7 @@ export function CookiePanel() {
   useEffect(() => {
     if (!cookiePanelOpen) return
     setDomainInput(activeHost || "")
+    setImportHint("")
   }, [activeHost, cookiePanelOpen])
 
   useEffect(() => {
@@ -245,6 +265,26 @@ export function CookiePanel() {
         expires: "",
         enabled: true,
       })
+    }
+  }
+
+  const handlePasteCookieHeader = async () => {
+    const domain = currentDomain || activeHost || normalizeDomain(domainInput)
+    if (!domain) {
+      setImportHint(t("请先输入或选择域名", "Please choose or enter a domain first"))
+      return
+    }
+
+    try {
+      const text = await navigator.clipboard.readText()
+      const imported = importCookieHeader(text, domain, "/")
+      if (imported > 0) {
+        setImportHint(t(`已识别并导入 ${imported} 个 Cookie`, `Imported ${imported} cookies`))
+      } else {
+        setImportHint(t("未识别到可导入的 Cookie（请复制形如 a=1; b=2）", "No valid cookies found (expected format: a=1; b=2)"))
+      }
+    } catch {
+      setImportHint(t("读取剪贴板失败，请检查系统剪贴板权限", "Failed to read clipboard. Please check clipboard permissions"))
     }
   }
 
@@ -324,6 +364,15 @@ export function CookiePanel() {
               <button
                 type="button"
                 className="flex h-6 items-center gap-1 rounded-[6px] border border-[var(--button-border)] bg-[var(--surface)] px-2 text-[11px] text-[var(--fg)] transition-colors hover:bg-[var(--button-bg)]"
+                onClick={() => void handlePasteCookieHeader()}
+                title={t("从剪贴板识别并导入", "Import from clipboard")}
+              >
+                <AppIcon name="copy" size={11} />
+                {t("粘贴识别", "Paste & Detect")}
+              </button>
+              <button
+                type="button"
+                className="flex h-6 items-center gap-1 rounded-[6px] border border-[var(--button-border)] bg-[var(--surface)] px-2 text-[11px] text-[var(--fg)] transition-colors hover:bg-[var(--button-bg)]"
                 onClick={handleAddCookie}
               >
                 <AppIcon name="add" size={11} />
@@ -354,6 +403,11 @@ export function CookiePanel() {
               </button>
             </div>
           </div>
+          {importHint && (
+            <div className="border-b border-[var(--border-subtle)] px-3.5 py-1 text-[11px] text-[var(--fg-muted)]">
+              {importHint}
+            </div>
+          )}
 
           <div className="min-h-0 flex-1 overflow-auto">
             {filteredCookies.length === 0 ? (
