@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"minipost/internal/model"
 	appErrors "minipost/internal/pkg/errors"
@@ -365,6 +366,14 @@ func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(mod
 	bodyDone := time.Now()
 
 	respContentType := resp.Header.Get("Content-Type")
+	respContentDisposition := resp.Header.Get("Content-Disposition")
+	bodyIsBinary := shouldTreatResponseAsBinary(respContentType, respContentDisposition, bodyBytes)
+	bodyText := string(bodyBytes)
+	bodyBase64 := ""
+	if bodyIsBinary {
+		bodyBase64 = base64.StdEncoding.EncodeToString(bodyBytes)
+		bodyText = ""
+	}
 	warnings := []string{}
 	if !options.sslVerify {
 		if warning := detectTLSWarning(reqURL, resp.TLS); warning != "" {
@@ -390,18 +399,20 @@ func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(mod
 	}
 
 	return &model.HttpResponse{
-		StatusCode:  resp.StatusCode,
-		StatusText:  http.StatusText(resp.StatusCode),
-		Headers:     resp.Header,
-		Body:        string(bodyBytes),
-		Duration:    timings.Total,
-		Size:        sizeDetails.ResponseTotal,
-		ContentType: respContentType,
-		Protocol:    resp.Proto,
-		Warnings:    warnings,
-		Network:     network,
-		Timings:     timings,
-		SizeDetails: sizeDetails,
+		StatusCode:   resp.StatusCode,
+		StatusText:   http.StatusText(resp.StatusCode),
+		Headers:      resp.Header,
+		Body:         bodyText,
+		BodyBase64:   bodyBase64,
+		BodyIsBinary: bodyIsBinary,
+		Duration:     timings.Total,
+		Size:         sizeDetails.ResponseTotal,
+		ContentType:  respContentType,
+		Protocol:     resp.Proto,
+		Warnings:     warnings,
+		Network:      network,
+		Timings:      timings,
+		SizeDetails:  sizeDetails,
 	}, nil
 }
 
@@ -773,6 +784,56 @@ func (s *HttpService) readSSEStreamBody(body io.Reader, maxResponseBytes int64, 
 
 func isSSEContentType(contentType string) bool {
 	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
+}
+
+func shouldTreatResponseAsBinary(contentType string, contentDisposition string, body []byte) bool {
+	if strings.Contains(strings.ToLower(contentDisposition), "attachment") {
+		return true
+	}
+
+	mime := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	if mime == "" && len(body) > 0 {
+		mime = strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(body), ";")[0]))
+	}
+
+	if mime == "" {
+		return !utf8.Valid(body)
+	}
+	if isLikelyTextContentType(mime) {
+		return false
+	}
+	if strings.HasPrefix(mime, "image/") || strings.HasPrefix(mime, "audio/") || strings.HasPrefix(mime, "video/") || strings.HasPrefix(mime, "font/") {
+		return true
+	}
+	if strings.HasPrefix(mime, "application/") || strings.HasPrefix(mime, "multipart/") {
+		return true
+	}
+	return !utf8.Valid(body)
+}
+
+func isLikelyTextContentType(mime string) bool {
+	if strings.HasPrefix(mime, "text/") {
+		return true
+	}
+	textHints := []string{
+		"json",
+		"xml",
+		"html",
+		"yaml",
+		"yml",
+		"javascript",
+		"ecmascript",
+		"x-www-form-urlencoded",
+		"graphql",
+		"csv",
+		"svg",
+	}
+	for _, hint := range textHints {
+		if strings.Contains(mime, hint) {
+			return true
+		}
+	}
+	return false
 }
 
 func newMaxBodySizeExceededError(maxResponseBytes int64) error {

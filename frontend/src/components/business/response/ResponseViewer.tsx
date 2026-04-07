@@ -777,7 +777,15 @@ export function ResponseViewer() {
               ) : hasStreamEntries || streamActive ? (
                 <ResponseStream entries={streamEntries} isDark={isDark} />
               ) : response ? (
-                <ResponseBody body={response.body} contentType={response.contentType} isDark={isDark} />
+                <ResponseBody
+                  body={response.body}
+                  bodyBase64={response.bodyBase64}
+                  bodyIsBinary={response.bodyIsBinary}
+                  headers={safeHeaders}
+                  contentType={response.contentType}
+                  requestUrl={resolvedRequestUrl || rawRequestUrl}
+                  isDark={isDark}
+                />
               ) : (
                 <div className="flex h-full items-center justify-center text-2xs text-[var(--fg-muted)]">
                   {t("暂无响应内容", "No response content")}

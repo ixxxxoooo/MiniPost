@@ -6,10 +6,20 @@ import { AppIcon } from "@/components/ui/icon"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useUIStore } from "@/stores/uiStore"
 import { useI18n } from "@/hooks/useI18n"
+import {
+  buildSaveResponsePayload,
+  decodeResponseBodyToText,
+  shouldPreferDownload,
+  suggestResponseFilename,
+} from "@/lib/responseDownload"
 
 interface ResponseBodyProps {
   body: string
+  bodyBase64?: string
+  bodyIsBinary?: boolean
+  headers: Record<string, string[]>
   contentType: string
+  requestUrl?: string
   isDark: boolean
 }
 
@@ -703,15 +713,28 @@ function WrapGlyph() {
   )
 }
 
-export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
+export function ResponseBody({ body, bodyBase64, bodyIsBinary, headers, contentType, requestUrl, isDark }: ResponseBodyProps) {
   const { t, isZh } = useI18n()
   const rootRef = useRef<HTMLDivElement>(null)
   const responseFormatDetection = useUIStore((s) => s.responseFormatDetection)
+  const rawBodyText = useMemo(
+    () => decodeResponseBodyToText({ body, bodyBase64, bodyIsBinary }),
+    [body, bodyBase64, bodyIsBinary]
+  )
+  const preferDownload = useMemo(
+    () => shouldPreferDownload({ headers, contentType, bodyIsBinary }),
+    [headers, contentType, bodyIsBinary]
+  )
+  const suggestedFilename = useMemo(
+    () => suggestResponseFilename({ headers, contentType, requestUrl }),
+    [headers, contentType, requestUrl]
+  )
   const defaultMode = useMemo(
-    () => detectDefaultMode(contentType, body, responseFormatDetection),
-    [contentType, body, responseFormatDetection]
+    () => detectDefaultMode(contentType, rawBodyText, responseFormatDetection),
+    [contentType, rawBodyText, responseFormatDetection]
   )
   const [mode, setMode] = useState<DisplayMode>(defaultMode)
+  const [downloadMode, setDownloadMode] = useState(preferDownload)
   const [preview, setPreview] = useState(false)
   const [copied, setCopied] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
@@ -726,44 +749,57 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
     setPreview(false)
     setFilterOpen(false)
     setFilterExpr("")
-  }, [defaultMode, body, contentType])
+    setDownloadMode(preferDownload)
+  }, [defaultMode, rawBodyText, contentType, preferDownload])
+
+  useEffect(() => {
+    if (!downloadMode) return
+    setPreview(false)
+    setFilterOpen(false)
+  }, [downloadMode])
 
   const editorLanguage = useMemo(() => toEditorLanguage(mode), [mode])
-  const previewAvailable = useMemo(() => canPreview(mode, contentType, body), [mode, contentType, body])
+  const previewAvailable = useMemo(() => canPreview(mode, contentType, rawBodyText), [mode, contentType, rawBodyText])
 
   const formattedBody = useMemo(() => {
-    if (!body) return ""
-    if (mode === "json") return tryFormatJson(body)
-    if (mode === "xml" || mode === "html") return tryFormatXml(body)
-    if (mode === "javascript") return tryFormatJs(body)
-    if (mode === "hex") return toHex(body)
-    if (mode === "base64") return toBase64(body)
-    return body
-  }, [body, mode])
+    if (!rawBodyText) return ""
+    if (mode === "json") return tryFormatJson(rawBodyText)
+    if (mode === "xml" || mode === "html") return tryFormatXml(rawBodyText)
+    if (mode === "javascript") return tryFormatJs(rawBodyText)
+    if (mode === "hex") return toHex(rawBodyText)
+    if (mode === "base64") return toBase64(rawBodyText)
+    return rawBodyText
+  }, [rawBodyText, mode])
 
   const filteredBodyState = useMemo(() => {
     if (!filterOpen || !filterExpr.trim()) return { text: formattedBody, error: null as string | null }
-    if (mode === "json") return tryApplyJsonFilter(body, filterExpr, t)
+    if (mode === "json") return tryApplyJsonFilter(rawBodyText, filterExpr, t)
     return tryApplyTextFilter(formattedBody, filterExpr, t)
-  }, [body, filterExpr, filterOpen, formattedBody, mode, t])
+  }, [rawBodyText, filterExpr, filterOpen, formattedBody, mode, t])
 
   const displayBody = filteredBodyState.text
 
-  const previewDoc = useMemo(() => buildPreviewDocument(mode, body), [mode, body])
+  const previewDoc = useMemo(() => buildPreviewDocument(mode, rawBodyText), [mode, rawBodyText])
   const jsonPreviewValue = useMemo(() => {
     if (mode !== "json") return null
     try {
-      return JSON.parse(body)
+      return JSON.parse(rawBodyText)
     } catch {
       return null
     }
-  }, [body, mode])
+  }, [rawBodyText, mode])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(displayBody)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1200)
   }
+
+  const handleDownload = useCallback(async () => {
+    const { SaveResponseToFile } = await import("../../../../wailsjs/go/main/App")
+    const payload = buildSaveResponsePayload({ body, bodyBase64, bodyIsBinary })
+    await SaveResponseToFile(suggestedFilename, payload)
+  }, [body, bodyBase64, bodyIsBinary, suggestedFilename])
 
   const handleSearch = useCallback(() => {
     if (preview) setPreview(false)
@@ -824,36 +860,65 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
       onMouseDownCapture={() => rootRef.current?.focus({ preventScroll: true })}
     >
       <div className="flex items-center justify-between h-[34px] px-3 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <FormatDropdown
-            value={mode}
-            onChange={setMode}
-            previewActive={preview}
-            onSwitchToCodeView={() => setPreview(false)}
-            isZh={isZh}
-          />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  "h-6 px-1.5 rounded-[8px] border border-transparent bg-transparent text-[10px] flex items-center gap-1 transition-colors",
-                  preview && previewAvailable
-                    ? "bg-[var(--selected-bg)] text-[var(--accent)]"
-                    : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)]",
-                  !previewAvailable && "opacity-40 pointer-events-none"
-                )}
-                onClick={() => setPreview(true)}
-              >
-                <AppIcon name="arrowRight" size={10} />
-                {t("预览", "Preview")}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>{t("预览", "Preview")}</TooltipContent>
-          </Tooltip>
+        <div className="flex items-center gap-2 min-w-0">
+          {downloadMode ? (
+            <div className="inline-flex min-w-0 items-center gap-1 rounded-[8px] bg-[var(--selected-bg)] px-2 py-1 text-[10px] text-[var(--fg-secondary)]">
+              <AppIcon name="download" size={10} />
+              <span className="truncate">{suggestedFilename}</span>
+            </div>
+          ) : (
+            <>
+              <FormatDropdown
+                value={mode}
+                onChange={setMode}
+                previewActive={preview}
+                onSwitchToCodeView={() => setPreview(false)}
+                isZh={isZh}
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "h-6 px-1.5 rounded-[8px] border border-transparent bg-transparent text-[10px] flex items-center gap-1 transition-colors",
+                      preview && previewAvailable
+                        ? "bg-[var(--selected-bg)] text-[var(--accent)]"
+                        : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)]",
+                      !previewAvailable && "opacity-40 pointer-events-none"
+                    )}
+                    onClick={() => setPreview(true)}
+                  >
+                    <AppIcon name="arrowRight" size={10} />
+                    {t("预览", "Preview")}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{t("预览", "Preview")}</TooltipContent>
+              </Tooltip>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5">
+          {downloadMode ? (
+            <>
+              <button
+                type="button"
+                className="h-6 rounded-[8px] px-2 text-[10px] bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)] transition-colors inline-flex items-center gap-1"
+                onClick={() => void handleDownload()}
+              >
+                <AppIcon name="download" size={11} />
+                {t("下载文件", "Download file")}
+              </button>
+              <button
+                type="button"
+                className="h-6 rounded-[8px] px-2 text-[10px] text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors"
+                onClick={() => setDownloadMode(false)}
+              >
+                {t("文本查看", "View as text")}
+              </button>
+            </>
+          ) : (
+            <>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -943,10 +1008,29 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
             </TooltipTrigger>
             <TooltipContent>{copied ? t("已复制", "Copied") : t("复制响应体", "Copy response body")}</TooltipContent>
           </Tooltip>
+            {preferDownload && (
+              <>
+                <span className="mx-0.5 h-3.5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="h-6 px-1.5 rounded-[8px] border border-transparent bg-transparent text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors flex items-center justify-center"
+                      onClick={() => setDownloadMode(true)}
+                    >
+                      <AppIcon name="download" size={12} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t("下载文件", "Download file")}</TooltipContent>
+                </Tooltip>
+              </>
+            )}
+            </>
+          )}
         </div>
       </div>
 
-      {filterOpen && (
+      {filterOpen && !downloadMode && (
         <div className="px-3 pb-2">
           <div className="flex items-center gap-1.5">
             <input
@@ -974,7 +1058,38 @@ export function ResponseBody({ body, contentType, isDark }: ResponseBodyProps) {
       )}
 
       <div className="flex-1 min-h-0">
-        {preview && previewAvailable ? (
+        {downloadMode ? (
+          <div className="flex h-full items-center justify-center px-4">
+            <div className="w-full max-w-[520px] rounded-[12px] border border-[var(--border-color)] bg-[var(--surface-elevated)] p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <div className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[var(--selected-bg)] text-[var(--accent)]">
+                  <AppIcon name="download" size={14} />
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-[13px] font-semibold text-[var(--fg)]">{suggestedFilename}</div>
+                  <div className="truncate text-[11px] text-[var(--fg-muted)]">{contentType || t("二进制响应", "Binary response")}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="h-8 rounded-[8px] bg-[var(--accent)] px-3 text-[12px] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)] transition-colors inline-flex items-center gap-1.5"
+                  onClick={() => void handleDownload()}
+                >
+                  <AppIcon name="download" size={12} />
+                  {t("下载文件", "Download file")}
+                </button>
+                <button
+                  type="button"
+                  className="h-8 rounded-[8px] px-3 text-[12px] text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--button-bg)] transition-colors"
+                  onClick={() => setDownloadMode(false)}
+                >
+                  {t("文本查看", "View as text")}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : preview && previewAvailable ? (
           mode === "json" && jsonPreviewValue !== null ? (
             <JsonStructuredPreview value={jsonPreviewValue} rootLabel={t("根节点", "Root")} valueLabel={t("值", "value")} />
           ) : (

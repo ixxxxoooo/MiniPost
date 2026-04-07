@@ -283,6 +283,8 @@ export async function sendHttpRequest(
     statusText: result.statusText,
     headers: result.headers,
     body: result.body,
+    bodyBase64: (result as unknown as { bodyBase64?: string }).bodyBase64,
+    bodyIsBinary: (result as unknown as { bodyIsBinary?: boolean }).bodyIsBinary,
     duration: result.duration,
     size: result.size,
     contentType: result.contentType,

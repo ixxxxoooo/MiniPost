@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { BODY_TYPES, type BodyType } from "@/lib/constants"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
@@ -31,10 +31,26 @@ export function BodyEditor() {
   const { body } = activeTab.request
   const tabId = activeTab.id
   const isCodeBody = body.type === "json" || body.type === "raw"
+  const autoFormattedByTabRef = useRef<Record<string, boolean>>({})
 
   const setBodyType = (type: BodyType) => {
     updateTabRequest(tabId, { body: { ...body, type } })
   }
+
+  useEffect(() => {
+    if (body.type !== "json") {
+      autoFormattedByTabRef.current[tabId] = false
+      return
+    }
+    if (autoFormattedByTabRef.current[tabId]) return
+    autoFormattedByTabRef.current[tabId] = true
+
+    const current = body.json ?? ""
+    if (!current.trim()) return
+    const formatted = formatJsonWithComments(current)
+    if (formatted === current) return
+    updateTabRequest(tabId, { body: { ...body, json: formatted } })
+  }, [body.type, body.json, tabId, updateTabRequest, body])
 
   const handleFormatJson = () => {
     const content = body.json ?? ""
