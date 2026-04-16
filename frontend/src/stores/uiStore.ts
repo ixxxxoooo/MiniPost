@@ -51,6 +51,7 @@ interface UIState {
   sendPostmanTokenHeader: boolean
   responseFormatDetection: ResponseFormatDetection
   alwaysDiscardUnsavedOnClose: boolean
+  alwaysSaveUnsavedOnClose: boolean
   autoBackupEnabled: boolean
   autoBackupIntervalMinutes: number
   editingEnvironmentId: string | null
@@ -79,6 +80,7 @@ interface UIState {
   setSendPostmanTokenHeader: (v: boolean) => void
   setResponseFormatDetection: (v: ResponseFormatDetection) => void
   setAlwaysDiscardUnsavedOnClose: (v: boolean) => void
+  setAlwaysSaveUnsavedOnClose: (v: boolean) => void
   setAutoBackupEnabled: (v: boolean) => void
   setAutoBackupIntervalMinutes: (v: number) => void
   setEditingEnvironmentId: (id: string | null) => void
@@ -127,6 +129,7 @@ type PersistedRequestSettings = {
   sendPostmanTokenHeader: boolean
   responseFormatDetection: ResponseFormatDetection
   alwaysDiscardUnsavedOnClose: boolean
+  alwaysSaveUnsavedOnClose: boolean
 }
 
 type PersistedBackupSettings = {
@@ -147,6 +150,7 @@ function defaultRequestSettings(): PersistedRequestSettings {
     sendPostmanTokenHeader: false,
     responseFormatDetection: "auto",
     alwaysDiscardUnsavedOnClose: false,
+    alwaysSaveUnsavedOnClose: false,
   }
 }
 
@@ -163,6 +167,7 @@ type PersistedRequestSettingsSource = Pick<
   | "sendPostmanTokenHeader"
   | "responseFormatDetection"
   | "alwaysDiscardUnsavedOnClose"
+  | "alwaysSaveUnsavedOnClose"
 >
 
 function toPersistedRequestSettings(state: PersistedRequestSettingsSource): PersistedRequestSettings {
@@ -178,6 +183,7 @@ function toPersistedRequestSettings(state: PersistedRequestSettingsSource): Pers
     sendPostmanTokenHeader: state.sendPostmanTokenHeader,
     responseFormatDetection: state.responseFormatDetection,
     alwaysDiscardUnsavedOnClose: state.alwaysDiscardUnsavedOnClose,
+    alwaysSaveUnsavedOnClose: state.alwaysSaveUnsavedOnClose,
   }
 }
 
@@ -207,6 +213,8 @@ function readRequestSettings(): PersistedRequestSettings {
       ? parsed.responseFormatDetection
       : defaults.responseFormatDetection
 
+    const alwaysSaveUnsavedOnClose = parsed.alwaysSaveUnsavedOnClose ?? defaults.alwaysSaveUnsavedOnClose
+
     return {
       followRedirects: parsed.followRedirects ?? defaults.followRedirects,
       httpVersion,
@@ -218,7 +226,10 @@ function readRequestSettings(): PersistedRequestSettings {
       sendNoCacheHeader: parsed.sendNoCacheHeader ?? defaults.sendNoCacheHeader,
       sendPostmanTokenHeader: parsed.sendPostmanTokenHeader ?? defaults.sendPostmanTokenHeader,
       responseFormatDetection,
-      alwaysDiscardUnsavedOnClose: parsed.alwaysDiscardUnsavedOnClose ?? defaults.alwaysDiscardUnsavedOnClose,
+      alwaysDiscardUnsavedOnClose: alwaysSaveUnsavedOnClose
+        ? false
+        : parsed.alwaysDiscardUnsavedOnClose ?? defaults.alwaysDiscardUnsavedOnClose,
+      alwaysSaveUnsavedOnClose,
     }
   } catch {
     return defaults
@@ -505,9 +516,28 @@ export const useUIStore = create<UIState>((set) => ({
     return { responseFormatDetection }
   }),
   setAlwaysDiscardUnsavedOnClose: (alwaysDiscardUnsavedOnClose) => set((state) => {
-    const next = { ...state, alwaysDiscardUnsavedOnClose }
+    const next = {
+      ...state,
+      alwaysDiscardUnsavedOnClose,
+      alwaysSaveUnsavedOnClose: alwaysDiscardUnsavedOnClose ? false : state.alwaysSaveUnsavedOnClose,
+    }
     persistRequestSettings(toPersistedRequestSettings(next))
-    return { alwaysDiscardUnsavedOnClose }
+    return {
+      alwaysDiscardUnsavedOnClose: next.alwaysDiscardUnsavedOnClose,
+      alwaysSaveUnsavedOnClose: next.alwaysSaveUnsavedOnClose,
+    }
+  }),
+  setAlwaysSaveUnsavedOnClose: (alwaysSaveUnsavedOnClose) => set((state) => {
+    const next = {
+      ...state,
+      alwaysSaveUnsavedOnClose,
+      alwaysDiscardUnsavedOnClose: alwaysSaveUnsavedOnClose ? false : state.alwaysDiscardUnsavedOnClose,
+    }
+    persistRequestSettings(toPersistedRequestSettings(next))
+    return {
+      alwaysDiscardUnsavedOnClose: next.alwaysDiscardUnsavedOnClose,
+      alwaysSaveUnsavedOnClose: next.alwaysSaveUnsavedOnClose,
+    }
   }),
   setAutoBackupEnabled: (autoBackupEnabled) => set((state) => {
     const next = { ...state, autoBackupEnabled }

@@ -12,6 +12,7 @@ import {
   shouldPreferDownload,
   suggestResponseFilename,
 } from "@/lib/responseDownload"
+import { writeClipboardText } from "@/lib/clipboard"
 
 interface ResponseBodyProps {
   body: string
@@ -790,7 +791,8 @@ export function ResponseBody({ body, bodyBase64, bodyIsBinary, headers, contentT
   }, [rawBodyText, mode])
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(displayBody)
+    const copied = await writeClipboardText(displayBody)
+    if (!copied) return
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1200)
   }

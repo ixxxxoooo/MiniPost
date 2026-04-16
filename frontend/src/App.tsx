@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react"
+import { SelectionContextMenu } from "@/components/ui/SelectionContextMenu"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts"
@@ -344,10 +345,11 @@ function App() {
   useKeyboardShortcuts(shortcuts)
 
   return (
-    <TooltipProvider delayDuration={200} skipDelayDuration={12}>
+    <TooltipProvider delayDuration={650} skipDelayDuration={500}>
       <div className="window-frame fixed inset-0 bg-transparent">
         <div className="window-shell h-full w-full bg-[var(--surface)]">
           <AppLayout />
+          <SelectionContextMenu />
         </div>
       </div>
     </TooltipProvider>

@@ -113,6 +113,8 @@ export function SettingsPanel() {
     setResponseFormatDetection,
     alwaysDiscardUnsavedOnClose,
     setAlwaysDiscardUnsavedOnClose,
+    alwaysSaveUnsavedOnClose,
+    setAlwaysSaveUnsavedOnClose,
     autoBackupEnabled,
     setAutoBackupEnabled,
     autoBackupIntervalMinutes,
@@ -397,6 +399,25 @@ export function SettingsPanel() {
                           </button>
                         </div>
                       }
+                    />
+                    <SettingsRow
+                      title={
+                        <span className="inline-flex items-center gap-1.5">
+                          {t("关闭标签时默认保存未保存修改", "Save unsaved changes by default when closing tabs")}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex h-4 w-4 items-center justify-center rounded-[4px] text-[var(--fg-muted)] hover:bg-[var(--button-bg)]">
+                                <AppIcon name="info" size={12} />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="start" className="max-w-[320px] text-[12px] leading-5">
+                              {t("开启后，关闭标签页会自动保存再关闭。开启它会自动关闭“默认丢弃未保存修改”。", "When enabled, closing a tab saves before closing. It turns off default discard automatically.")}
+                            </TooltipContent>
+                          </Tooltip>
+                        </span>
+                      }
+                      description={t("对应关闭 Tab 弹窗中的“默认保存未保存修改”选项。", "Matches the \"save unsaved changes by default\" option in tab-close dialog.")}
+                      control={<ToggleSwitch checked={alwaysSaveUnsavedOnClose} onToggle={() => setAlwaysSaveUnsavedOnClose(!alwaysSaveUnsavedOnClose)} />}
                     />
                     <SettingsRow
                       title={
