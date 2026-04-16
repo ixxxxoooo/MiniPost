@@ -25,6 +25,39 @@ import { buildSaveResponsePayload, suggestResponseFilename } from "@/lib/respons
 import { useI18n } from "@/hooks/useI18n"
 
 const TOKEN_HEADER_NAME = "MiniPost-Token"
+const REQUEST_EDITOR_TAB_VALUES = ["params", "headers", "body", "auth"] as const
+const REQUEST_EDITOR_TAB_STORAGE_KEY = "minipost:request-editor-tabs"
+
+type RequestEditorTabValue = typeof REQUEST_EDITOR_TAB_VALUES[number]
+
+function isRequestEditorTabValue(value: unknown): value is RequestEditorTabValue {
+  return typeof value === "string" && REQUEST_EDITOR_TAB_VALUES.includes(value as RequestEditorTabValue)
+}
+
+function readPersistedRequestEditorTabs(): Record<string, RequestEditorTabValue> {
+  if (typeof window === "undefined") return {}
+  try {
+    const raw = window.localStorage.getItem(REQUEST_EDITOR_TAB_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const result: Record<string, RequestEditorTabValue> = {}
+    Object.entries(parsed).forEach(([key, value]) => {
+      if (isRequestEditorTabValue(value)) result[key] = value
+    })
+    return result
+  } catch {
+    return {}
+  }
+}
+
+function persistRequestEditorTabs(value: Record<string, RequestEditorTabValue>) {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(REQUEST_EDITOR_TAB_STORAGE_KEY, JSON.stringify(value))
+  } catch {
+    // UI preference persistence should never block editing.
+  }
+}
 
 type StreamStartPayload = {
   statusCode: number
@@ -718,23 +751,71 @@ export function RequestEditorToolbar() {
 export function RequestEditorBody() {
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
+  const [editorTabByRequestKey, setEditorTabByRequestKey] = useState<Record<string, RequestEditorTabValue>>(readPersistedRequestEditorTabs)
+  const querySyncSnapshotRef = useRef<{
+    tabId: string
+    url: string
+    params: RequestData["params"]
+  } | null>(null)
 
   useEffect(() => {
-    if (!activeTab) return
+    if (!activeTab) {
+      querySyncSnapshotRef.current = null
+      return
+    }
+
+    const previous = querySyncSnapshotRef.current
+    const tabChanged = previous?.tabId !== activeTab.id
+    const urlChanged = tabChanged || previous?.url !== activeTab.request.url
+    const paramsChanged = Boolean(
+      previous
+      && !tabChanged
+      && !areParamsEquivalent(previous.params, activeTab.request.params)
+    )
+
+    querySyncSnapshotRef.current = {
+      tabId: activeTab.id,
+      url: activeTab.request.url,
+      params: activeTab.request.params,
+    }
+
+    if (!urlChanged || paramsChanged) return
+
     const nextParams = syncParamsWithUrlQuery(activeTab.request.url, activeTab.request.params)
     if (areParamsEquivalent(activeTab.request.params, nextParams)) return
+    querySyncSnapshotRef.current = {
+      tabId: activeTab.id,
+      url: activeTab.request.url,
+      params: nextParams,
+    }
     updateTabRequest(activeTab.id, { params: nextParams })
-  }, [activeTab, updateTabRequest])
+  }, [activeTab?.id, activeTab?.request.params, activeTab?.request.url, updateTabRequest])
 
   if (!activeTab) return null
 
   const { request } = activeTab
   const paramsCount = request.params.filter(isMeaningfulKeyValue).length
   const headersCount = request.headers.filter((item) => isMeaningfulKeyValue(item) && !isAutoHeaderDisabledMarkerKey(item.key ?? "")).length
+  const requestEditorTabKey = `${activeTab.projectId || request.projectId || "project"}:${activeTab.requestId || request.id}`
+  const activeEditorTab = editorTabByRequestKey[requestEditorTabKey] ?? "params"
 
   return (
     <div className="flex h-full flex-col bg-[var(--surface)] overflow-hidden">
-      <Tabs defaultValue="params" className="flex-1 flex flex-col overflow-hidden">
+      <Tabs
+        value={activeEditorTab}
+        onValueChange={(value) => {
+          if (!isRequestEditorTabValue(value)) return
+          setEditorTabByRequestKey((previous) => {
+            const next = {
+              ...previous,
+              [requestEditorTabKey]: value,
+            }
+            persistRequestEditorTabs(next)
+            return next
+          })
+        }}
+        className="flex-1 flex flex-col overflow-hidden"
+      >
         <TabsList className="w-full justify-start px-[var(--size-padding-sm)] py-1">
           <TabsTrigger value="params">
             Params

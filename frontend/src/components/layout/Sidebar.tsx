@@ -4,6 +4,7 @@ import { AppIcon } from "@/components/ui/icon"
 import { useI18n } from "@/hooks/useI18n"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { writeClipboardText } from "@/lib/clipboard"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { buildDraftRequestFromCurl } from "@/lib/curlImportDraft"
 import { useProjectStore } from "@/stores/projectStore"
@@ -553,7 +554,7 @@ export function Sidebar() {
 
   const handleCopyCurl = (request: model.RequestItem) => {
     const curl = buildCurlCommand(request)
-    navigator.clipboard.writeText(curl)
+    void writeClipboardText(curl)
     setDropdownMenu(null)
   }
 

@@ -37,7 +37,9 @@ export function TabBar() {
   const setEditingEnvironmentId = useUIStore((s) => s.setEditingEnvironmentId)
   const closeEnvironmentTab = useUIStore((s) => s.closeEnvironmentTab)
   const alwaysDiscardUnsavedOnClose = useUIStore((s) => s.alwaysDiscardUnsavedOnClose)
+  const alwaysSaveUnsavedOnClose = useUIStore((s) => s.alwaysSaveUnsavedOnClose)
   const setAlwaysDiscardUnsavedOnClose = useUIStore((s) => s.setAlwaysDiscardUnsavedOnClose)
+  const setAlwaysSaveUnsavedOnClose = useUIStore((s) => s.setAlwaysSaveUnsavedOnClose)
 
   const { environments, activeEnvironmentId, setActiveEnvironment, loadEnvironments, createEnvironment } = useEnvironmentStore()
 
@@ -167,33 +169,70 @@ export function TabBar() {
     await saveRequestToBackend(requestItem as any)
   }, [currentProjectId, saveRequestToBackend])
 
-  const requestTabClose = useCallback((tabId: string) => {
+  const saveDirtyTabsBeforeClosing = useCallback(async (targetTabs: RequestTab[]) => {
+    const dirtyTabs = targetTabs.filter((tab) => tab.dirty)
+    if (dirtyTabs.length === 0) return true
+
+    try {
+      await Promise.all(dirtyTabs.map(async (tab) => {
+        await saveTabToBackend(tab)
+        useTabStore.getState().markTabDirty(tab.id, false)
+      }))
+      return true
+    } catch {
+      window.alert(t("保存失败，请重试。", "Save failed. Please try again."))
+      return false
+    }
+  }, [saveTabToBackend, t])
+
+  const requestTabClose = useCallback(async (tabId: string) => {
     const tab = tabs.find((candidate) => candidate.id === tabId)
     if (!tab || !tab.closable) return
-    if (!tab.dirty || alwaysDiscardUnsavedOnClose) {
+    if (!tab.dirty) {
       removeTab(tabId)
       return
     }
+    if (alwaysDiscardUnsavedOnClose) {
+      removeTab(tabId)
+      return
+    }
+    if (alwaysSaveUnsavedOnClose) {
+      const saved = await saveDirtyTabsBeforeClosing([tab])
+      if (saved) removeTab(tabId)
+      return
+    }
     setCloseConfirmTabId(tabId)
-  }, [alwaysDiscardUnsavedOnClose, removeTab, tabs])
+  }, [alwaysDiscardUnsavedOnClose, alwaysSaveUnsavedOnClose, removeTab, saveDirtyTabsBeforeClosing, tabs])
 
-  const handleCloseOtherTabs = useCallback((tabId: string) => {
+  const handleCloseOtherTabs = useCallback(async (tabId: string) => {
     const targetToClose = tabs.filter((tab) => tab.id !== tabId && tab.closable)
+    if (alwaysSaveUnsavedOnClose) {
+      const saved = await saveDirtyTabsBeforeClosing(targetToClose)
+      if (!saved) return
+      closeOtherTabs(tabId)
+      return
+    }
     if (!alwaysDiscardUnsavedOnClose && targetToClose.some((tab) => tab.dirty)) {
       const confirmed = window.confirm(t("即将关闭其他标签页，其中包含未保存修改。确定继续并丢弃这些修改吗？", "You're about to close other tabs with unsaved changes. Continue and discard them?"))
       if (!confirmed) return
     }
     closeOtherTabs(tabId)
-  }, [alwaysDiscardUnsavedOnClose, closeOtherTabs, t, tabs])
+  }, [alwaysDiscardUnsavedOnClose, alwaysSaveUnsavedOnClose, closeOtherTabs, saveDirtyTabsBeforeClosing, t, tabs])
 
-  const handleCloseAllTabs = useCallback(() => {
+  const handleCloseAllTabs = useCallback(async () => {
     const targetToClose = tabs.filter((tab) => tab.closable)
+    if (alwaysSaveUnsavedOnClose) {
+      const saved = await saveDirtyTabsBeforeClosing(targetToClose)
+      if (!saved) return
+      closeAllTabs(currentProjectId || undefined)
+      return
+    }
     if (!alwaysDiscardUnsavedOnClose && targetToClose.some((tab) => tab.dirty)) {
       const confirmed = window.confirm(t("即将关闭全部标签页，其中包含未保存修改。确定继续并丢弃这些修改吗？", "You're about to close all tabs with unsaved changes. Continue and discard them?"))
       if (!confirmed) return
     }
     closeAllTabs(currentProjectId || undefined)
-  }, [alwaysDiscardUnsavedOnClose, closeAllTabs, currentProjectId, t, tabs])
+  }, [alwaysDiscardUnsavedOnClose, alwaysSaveUnsavedOnClose, closeAllTabs, currentProjectId, saveDirtyTabsBeforeClosing, t, tabs])
 
   const handleConfirmCloseWithoutSave = useCallback(() => {
     if (!closeConfirmTabId) return
@@ -491,7 +530,7 @@ export function TabBar() {
           const isActive = !editingEnvironmentId && tab.id === activeTabId
           const tabUrl = tab.request.url?.trim() || t("未设置请求地址", "Request URL not set")
           return (
-            <Tooltip key={tab.id} delayDuration={260}>
+            <Tooltip key={tab.id}>
               <TooltipTrigger asChild>
                 <div
                   data-tab-id={tab.id}
@@ -779,7 +818,26 @@ export function TabBar() {
                 {t("请求", "Request")} <span className="font-medium">“{closeConfirmTab.title}”</span> {t("有未保存的修改。", "has unsaved changes.")}
               </p>
               <p className="mt-1 text-[12px] text-[var(--fg-secondary)]">{t("关闭后这些修改将会丢失，是否先保存？", "Closing will discard these changes. Save first?")}</p>
-              <label className="mt-3 inline-flex items-center gap-2 text-[12px] text-[var(--fg)] cursor-pointer select-none">
+              <label className="mt-3 flex items-center gap-2 text-[12px] text-[var(--fg)] cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={alwaysSaveUnsavedOnClose}
+                  onChange={(event) => setAlwaysSaveUnsavedOnClose(event.target.checked)}
+                  className="h-4 w-4 rounded-[4px] border border-[var(--border-color)] accent-[var(--accent)]"
+                />
+                <span>{t("关闭 Tab 时默认保存未保存修改", "Save unsaved changes by default when closing tabs")}</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-[4px] text-[var(--fg-muted)] hover:bg-[var(--button-bg)]">
+                      <AppIcon name="info" size={12} className="text-[var(--fg-muted)]" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="start" className="max-w-[320px] text-[12px] leading-5">
+                    {t("勾选后，关闭标签页将自动保存再关闭。开启它会自动关闭“默认丢弃”。", "When checked, closing tabs will save before closing. Enabling this turns off default discard.")}
+                  </TooltipContent>
+                </Tooltip>
+              </label>
+              <label className="mt-2 flex items-center gap-2 text-[12px] text-[var(--fg)] cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={alwaysDiscardUnsavedOnClose}

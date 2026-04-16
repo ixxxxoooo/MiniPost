@@ -4,6 +4,7 @@ import { AppIcon } from "@/components/ui/icon"
 import type { HttpStreamEntry } from "@/types/response"
 import { CodeEditor, type EditorLanguage } from "@/components/ui/CodeEditor"
 import { useI18n } from "@/hooks/useI18n"
+import { writeClipboardText } from "@/lib/clipboard"
 
 type EntryViewMode = "text" | "json"
 
@@ -193,7 +194,7 @@ export function ResponseStream({ entries, isDark }: ResponseStreamProps) {
                     type="button"
                     className="no-press-feedback inline-flex h-6 w-6 items-center justify-center rounded-[6px] border border-[var(--border-color)] text-[var(--fg-secondary)] transition-colors hover:text-[var(--fg)]"
                     title={t("复制", "Copy")}
-                    onClick={() => void navigator.clipboard.writeText(detailText)}
+                    onClick={() => void writeClipboardText(detailText)}
                   >
                     <AppIcon name="copy" size={11} />
                   </button>

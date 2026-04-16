@@ -140,8 +140,58 @@ export function CodeEditor({
   enableSendShortcut = false,
 }: CodeEditorProps) {
   const monaco = useMonaco()
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null)
+  const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const tooltipObserverRef = useRef<MutationObserver | null>(null)
+  const valueRef = useRef(value)
+
+  useEffect(() => {
+    valueRef.current = value
+    const editor = editorRef.current
+    if (!editor) return
+
+    const currentValue = editor.getValue()
+    if (currentValue === value) return
+
+    const position = editor.getPosition()
+    const selections = editor.getSelections()
+    const scrollTop = editor.getScrollTop()
+    const scrollLeft = editor.getScrollLeft()
+
+    editor.setValue(value)
+    if (selections) editor.setSelections(selections)
+    if (position) editor.setPosition(position)
+    editor.setScrollTop(scrollTop)
+    editor.setScrollLeft(scrollLeft)
+  }, [value])
+
+  const layoutEditor = useCallback((editor = editorRef.current) => {
+    const container = containerRef.current
+    if (!editor || !container) return
+
+    const rect = container.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return
+
+    editor.layout({
+      width: Math.floor(rect.width),
+      height: Math.floor(rect.height),
+    })
+  }, [])
+
+  const watchEditorContainerSize = useCallback((editor: MonacoEditorType.IStandaloneCodeEditor) => {
+    resizeObserverRef.current?.disconnect()
+    resizeObserverRef.current = null
+
+    const container = containerRef.current
+    if (container && typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(() => layoutEditor(editor))
+      observer.observe(container)
+      resizeObserverRef.current = observer
+    }
+
+    requestAnimationFrame(() => layoutEditor(editor))
+  }, [layoutEditor])
 
   const stabilizeFindWidgetTooltips = useCallback((editor: MonacoEditorType.IStandaloneCodeEditor) => {
     const container = editor.getContainerDomNode()
@@ -271,7 +321,7 @@ export function CodeEditor({
     minimap: { enabled: false },
     scrollBeyondLastLine: false,
     smoothScrolling: true,
-    automaticLayout: true,
+    automaticLayout: false,
     contextmenu: true,
     renderValidationDecorations: "off",
     fontSize: 12,
@@ -330,12 +380,15 @@ export function CodeEditor({
   }, [unfoldAllSignal])
 
   useEffect(() => () => {
+    resizeObserverRef.current?.disconnect()
+    resizeObserverRef.current = null
     tooltipObserverRef.current?.disconnect()
     tooltipObserverRef.current = null
   }, [])
 
   return (
     <div
+      ref={containerRef}
       className={cn(
         "relative overflow-hidden min-h-0",
         fillParent ? "h-full" : "min-h-[220px] border border-[var(--border-color)] rounded-[var(--radius-input)]",
@@ -345,18 +398,23 @@ export function CodeEditor({
       <MonacoEditor
         height="100%"
         language={toMonacoLanguage(language)}
-        value={value}
+        defaultValue={value}
         theme={theme}
         options={options}
         onMount={(editor, monacoInstance) => {
           editorRef.current = editor
+          watchEditorContainerSize(editor)
           stabilizeFindWidgetTooltips(editor)
           if (!enableSendShortcut || readOnly) return
           editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.Enter, () => {
             window.dispatchEvent(new CustomEvent("minipost:send"))
           })
         }}
-        onChange={(nextValue) => onChange?.(nextValue ?? "")}
+        onChange={(nextValue) => {
+          const normalizedValue = nextValue ?? ""
+          valueRef.current = normalizedValue
+          onChange?.(normalizedValue)
+        }}
       />
     </div>
   )
