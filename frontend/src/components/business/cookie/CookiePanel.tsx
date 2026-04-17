@@ -4,6 +4,7 @@ import { AppIcon } from "@/components/ui/icon"
 import { useCookieStore, type CookieItem } from "@/stores/cookieStore"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useEnvironmentStore } from "@/stores/environmentStore"
+import { readClipboardText } from "@/lib/clipboard"
 import { resolveTemplateVariables } from "@/lib/variableResolver"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/hooks/useI18n"
@@ -276,7 +277,11 @@ export function CookiePanel() {
     }
 
     try {
-      const text = await navigator.clipboard.readText()
+      const text = await readClipboardText()
+      if (!text?.trim()) {
+        setImportHint(t("剪贴板为空或不可读取", "Clipboard is empty or unavailable"))
+        return
+      }
       const imported = importCookieHeader(text, domain, "/")
       if (imported > 0) {
         setImportHint(t(`已识别并导入 ${imported} 个 Cookie`, `Imported ${imported} cookies`))

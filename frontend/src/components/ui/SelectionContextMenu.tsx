@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { AppIcon } from "@/components/ui/icon"
 import { useI18n } from "@/hooks/useI18n"
+import { getSelectionFromRegisteredEditors } from "@/lib/editorSelectionBridge"
 import { cn } from "@/lib/utils"
 import { writeClipboardText } from "@/lib/clipboard"
 
@@ -25,13 +26,11 @@ function getClosestElement(target: EventTarget | null): Element | null {
   return null
 }
 
-function isEditorSurface(element: Element | null): boolean {
-  return !!element?.closest(".cm-editor, .monaco-editor")
-}
-
 function getSelectedTextFromTarget(target: EventTarget | null, requireTargetWithinSelection: boolean): string {
+  const fromRegisteredEditor = getSelectionFromRegisteredEditors(target)
+  if (fromRegisteredEditor) return fromRegisteredEditor
+
   const element = getClosestElement(target)
-  if (isEditorSurface(element)) return ""
 
   const textControl = element ? element.closest("input, textarea") : null
   if (isTextControl(textControl)) {
@@ -43,6 +42,12 @@ function getSelectedTextFromTarget(target: EventTarget | null, requireTargetWith
   const selection = window.getSelection()
   if (!selection || selection.isCollapsed) return ""
   if (requireTargetWithinSelection && target instanceof Node && !selection.containsNode(target, true)) return ""
+  return selection.toString()
+}
+
+function getSelectedTextFallback(): string {
+  const selection = window.getSelection()
+  if (!selection || selection.isCollapsed) return ""
   return selection.toString()
 }
 
@@ -58,6 +63,7 @@ function clampMenuPosition(x: number, y: number) {
 export function SelectionContextMenu() {
   const { t } = useI18n()
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const lastSelectedTextRef = useRef<{ text: string; timestamp: number }>({ text: "", timestamp: 0 })
   const hotkeyLabel = useMemo(() => {
     if (typeof navigator === "undefined") return "Ctrl+C"
     return navigator.platform.toLowerCase().includes("mac") ? "⌘C" : "Ctrl+C"
@@ -65,18 +71,22 @@ export function SelectionContextMenu() {
 
   useEffect(() => {
     const closeMenu = () => setMenu(null)
+    const rememberSelectionFromTarget = (target: EventTarget | null) => {
+      const text = getSelectedTextFromTarget(target, false) || getSelectedTextFallback()
+      if (!text.trim()) return
+      lastSelectedTextRef.current = { text, timestamp: Date.now() }
+    }
+    const handleRememberSelection = (event: Event) => rememberSelectionFromTarget(event.target)
 
     const handleContextMenu = (event: MouseEvent) => {
-      if (event.defaultPrevented) {
-        closeMenu()
-        return
-      }
-
       if (getClosestElement(event.target)?.closest("[data-selection-context-menu]")) {
         return
       }
 
-      const text = getSelectedTextFromTarget(event.target, true)
+      const recent = Date.now() - lastSelectedTextRef.current.timestamp < 1800
+        ? lastSelectedTextRef.current.text
+        : ""
+      const text = getSelectedTextFromTarget(event.target, true) || getSelectedTextFallback() || recent
       if (!text.trim()) {
         closeMenu()
         return
@@ -92,6 +102,8 @@ export function SelectionContextMenu() {
       if (!isCopy) return
 
       const text = getSelectedTextFromTarget(event.target, false)
+        || getSelectedTextFallback()
+        || lastSelectedTextRef.current.text
       if (!text.trim()) return
 
       event.preventDefault()
@@ -101,10 +113,16 @@ export function SelectionContextMenu() {
 
     const handleSelectionChange = () => {
       const selection = window.getSelection()
-      if (!selection || selection.isCollapsed) closeMenu()
+      if (!selection || selection.isCollapsed) {
+        closeMenu()
+        return
+      }
+      rememberSelectionFromTarget(document.activeElement)
     }
 
-    window.addEventListener("contextmenu", handleContextMenu)
+    window.addEventListener("contextmenu", handleContextMenu, true)
+    window.addEventListener("mouseup", handleRememberSelection, true)
+    window.addEventListener("keyup", handleRememberSelection, true)
     window.addEventListener("keydown", handleKeyDown, true)
     window.addEventListener("resize", closeMenu)
     window.addEventListener("blur", closeMenu)
@@ -112,7 +130,9 @@ export function SelectionContextMenu() {
     document.addEventListener("selectionchange", handleSelectionChange)
 
     return () => {
-      window.removeEventListener("contextmenu", handleContextMenu)
+      window.removeEventListener("contextmenu", handleContextMenu, true)
+      window.removeEventListener("mouseup", handleRememberSelection, true)
+      window.removeEventListener("keyup", handleRememberSelection, true)
       window.removeEventListener("keydown", handleKeyDown, true)
       window.removeEventListener("resize", closeMenu)
       window.removeEventListener("blur", closeMenu)

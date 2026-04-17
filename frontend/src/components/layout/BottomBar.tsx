@@ -465,7 +465,7 @@ export function BottomBar() {
       >
         <div className="flex items-center gap-3 text-[11px] text-[var(--fg-muted)]">
           <button
-            className="flex items-center gap-1 transition-colors hover:text-[var(--fg-secondary)]"
+            className="flex items-center gap-1 text-[var(--fg-secondary)] transition-colors hover:text-[var(--fg)]"
             onClick={toggleConsole}
             type="button"
           >
@@ -478,7 +478,7 @@ export function BottomBar() {
             )}
           </button>
           <button
-            className="flex items-center gap-1 transition-colors hover:text-[var(--fg-secondary)]"
+            className="flex items-center gap-1 text-[var(--fg-secondary)] transition-colors hover:text-[var(--fg)]"
             onClick={toggleCookiePanel}
             type="button"
           >
