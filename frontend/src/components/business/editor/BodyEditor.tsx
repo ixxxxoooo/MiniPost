@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { BODY_TYPES, type BodyType } from "@/lib/constants"
 import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
 import { KeyValueEditor } from "./KeyValueEditor"
 import { FormDataEditor } from "./FormDataEditor"
-import { CodeEditor, formatJsonWithComments } from "@/components/ui/CodeEditor"
+import { CodeEditor } from "@/components/ui/CodeEditor"
 import { AppIcon } from "@/components/ui/icon"
 import { useI18n } from "@/hooks/useI18n"
 import { cn } from "@/lib/utils"
@@ -32,6 +32,14 @@ export function BodyEditor() {
   const tabId = activeTab.id
   const isCodeBody = body.type === "json" || body.type === "raw"
   const autoFormattedByTabRef = useRef<Record<string, boolean>>({})
+  const [jsonFormatSignalByTab, setJsonFormatSignalByTab] = useState<Record<string, number>>({})
+
+  const triggerJsonFormat = useCallback(() => {
+    setJsonFormatSignalByTab((prev) => ({
+      ...prev,
+      [tabId]: (prev[tabId] ?? 0) + 1,
+    }))
+  }, [tabId])
 
   const setBodyType = (type: BodyType) => {
     updateTabRequest(tabId, { body: { ...body, type } })
@@ -47,15 +55,11 @@ export function BodyEditor() {
 
     const current = body.json ?? ""
     if (!current.trim()) return
-    const formatted = formatJsonWithComments(current)
-    if (formatted === current) return
-    updateTabRequest(tabId, { body: { ...body, json: formatted } })
-  }, [body.type, body.json, tabId, updateTabRequest, body])
+    triggerJsonFormat()
+  }, [body.type, body.json, tabId, triggerJsonFormat])
 
   const handleFormatJson = () => {
-    const content = body.json ?? ""
-    const formatted = formatJsonWithComments(content)
-    updateTabRequest(tabId, { body: { ...body, json: formatted } })
+    triggerJsonFormat()
   }
 
   const handleFormatRaw = () => {
@@ -128,6 +132,7 @@ export function BodyEditor() {
                 placeholder='{"key": "value"}'
                 isDark={isDark}
                 fillParent
+                formatSignal={jsonFormatSignalByTab[tabId]}
                 enableSendShortcut
               />
             </div>

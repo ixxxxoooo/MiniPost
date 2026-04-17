@@ -47,6 +47,8 @@ interface CodeEditorProps {
   foldAllSignal?: number
   /** 每次值变更时触发全部展开 */
   unfoldAllSignal?: number
+  /** 每次值变更时触发文档格式化 */
+  formatSignal?: number
   /** 是否启用 ⌘/Ctrl+Enter 发送快捷键 */
   enableSendShortcut?: boolean
 }
@@ -100,16 +102,6 @@ export function stripJsonComments(text: string): string {
   return result
 }
 
-export function formatJsonWithComments(text: string): string {
-  const stripped = stripJsonComments(text)
-  try {
-    const parsed = JSON.parse(stripped)
-    return JSON.stringify(parsed, null, 2)
-  } catch {
-    return text
-  }
-}
-
 function toMonacoLanguage(language: EditorLanguage): string {
   switch (language) {
     case "json":
@@ -137,6 +129,7 @@ export function CodeEditor({
   lineWrap = true,
   foldAllSignal,
   unfoldAllSignal,
+  formatSignal,
   enableSendShortcut = false,
 }: CodeEditorProps) {
   const monaco = useMonaco()
@@ -223,6 +216,14 @@ export function CodeEditor({
 
   useEffect(() => {
     if (!monaco) return
+
+    const jsonDefaults = (monaco.languages as unknown as {
+      json?: { jsonDefaults?: { setDiagnosticsOptions: (options: { validate: boolean; allowComments: boolean }) => void } }
+    }).json?.jsonDefaults
+    jsonDefaults?.setDiagnosticsOptions({
+      validate: true,
+      allowComments: true,
+    })
 
     monaco.editor.defineTheme("minipost-light-default", {
       base: "vs",
@@ -378,6 +379,19 @@ export function CodeEditor({
     }
     editor.trigger("minipost", "editor.unfoldAll", null)
   }, [unfoldAllSignal])
+
+  useEffect(() => {
+    if (formatSignal === undefined) return
+    const editor = editorRef.current
+    if (!editor) return
+    editor.focus()
+    const action = editor.getAction("editor.action.formatDocument")
+    if (action) {
+      void action.run()
+      return
+    }
+    editor.trigger("minipost", "editor.action.formatDocument", null)
+  }, [formatSignal])
 
   useEffect(() => () => {
     resizeObserverRef.current?.disconnect()
