@@ -7,6 +7,7 @@ import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker"
 import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker"
 import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker"
 import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker"
+import { registerMonacoSelectionProvider } from "@/lib/editorSelectionBridge"
 import { cn } from "@/lib/utils"
 
 // 在 Vite/Wails 环境下显式配置 Monaco loader 与 worker，避免运行时 Promise 拒绝和编辑器空白。
@@ -135,6 +136,7 @@ export function CodeEditor({
   const monaco = useMonaco()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null)
+  const unregisterSelectionProviderRef = useRef<(() => void) | null>(null)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const tooltipObserverRef = useRef<MutationObserver | null>(null)
   const valueRef = useRef(value)
@@ -394,6 +396,8 @@ export function CodeEditor({
   }, [formatSignal])
 
   useEffect(() => () => {
+    unregisterSelectionProviderRef.current?.()
+    unregisterSelectionProviderRef.current = null
     resizeObserverRef.current?.disconnect()
     resizeObserverRef.current = null
     tooltipObserverRef.current?.disconnect()
@@ -417,6 +421,8 @@ export function CodeEditor({
         options={options}
         onMount={(editor, monacoInstance) => {
           editorRef.current = editor
+          unregisterSelectionProviderRef.current?.()
+          unregisterSelectionProviderRef.current = registerMonacoSelectionProvider(editor)
           watchEditorContainerSize(editor)
           stabilizeFindWidgetTooltips(editor)
           if (!enableSendShortcut || readOnly) return

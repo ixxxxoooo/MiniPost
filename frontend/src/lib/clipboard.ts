@@ -1,4 +1,4 @@
-import { ClipboardSetText } from "../../wailsjs/runtime/runtime"
+import { ClipboardGetText, ClipboardSetText } from "../../wailsjs/runtime/runtime"
 
 export async function writeClipboardText(text: string): Promise<boolean> {
   try {
@@ -18,4 +18,24 @@ export async function writeClipboardText(text: string): Promise<boolean> {
   }
 
   return false
+}
+
+export async function readClipboardText(): Promise<string | null> {
+  try {
+    const text = await ClipboardGetText()
+    if (typeof text === "string") return text
+  } catch {
+    // Fall back to the browser clipboard API when the Wails bridge is unavailable.
+  }
+
+  if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
+    try {
+      const text = await navigator.clipboard.readText()
+      return typeof text === "string" ? text : null
+    } catch {
+      return null
+    }
+  }
+
+  return null
 }
