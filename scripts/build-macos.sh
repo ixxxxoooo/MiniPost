@@ -4,11 +4,15 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+source "$ROOT_DIR/scripts/build-common.sh"
+
 APP_NAME="${APP_NAME:-MiniPost}"
-VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || date +%Y.%m.%d.%H%M)}"
+VERSION="${VERSION:-$(default_build_version)}"
 OUT_DIR="${OUT_DIR:-$ROOT_DIR/dist/macos}"
 MACOS_PLATFORM="${MACOS_PLATFORM:-$( [[ "$(uname -m)" == "arm64" ]] && echo darwin/arm64 || echo darwin/amd64 )}"
 WAILS_BUILD_FLAGS="${WAILS_BUILD_FLAGS:-}"
+MACOS_ARCH="${MACOS_PLATFORM##*/}"
+ARTIFACT_PREFIX="${MACOS_ARTIFACT_PREFIX:-${ARTIFACT_PREFIX:-$(build_artifact_prefix "$APP_NAME" "$VERSION" "macos" "$MACOS_ARCH")}}"
 
 # Optional signing/notarization settings (recommended for distribution)
 MACOS_SIGN_IDENTITY="${MACOS_SIGN_IDENTITY:-}"
@@ -21,7 +25,8 @@ need_cmd wails
 need_cmd hdiutil
 need_cmd ditto
 
-mkdir -p "$OUT_DIR"
+log "Cleaning previous macOS artifacts: $OUT_DIR"
+clean_output_dir "$OUT_DIR" "$ROOT_DIR"
 
 log "Building macOS app with Wails (platform: $MACOS_PLATFORM)"
 wails build -clean -platform "$MACOS_PLATFORM" ${WAILS_BUILD_FLAGS}
@@ -33,7 +38,7 @@ if [[ ! -d "$APP_PATH" ]]; then
   exit 1
 fi
 
-RELEASE_APP="$OUT_DIR/${APP_NAME}.app"
+RELEASE_APP="$OUT_DIR/${ARTIFACT_PREFIX}.app"
 rm -rf "$RELEASE_APP"
 log "Copying app to release directory: $RELEASE_APP"
 ditto "$APP_PATH" "$RELEASE_APP"
@@ -47,7 +52,7 @@ else
   log "No MACOS_SIGN_IDENTITY set. Skip signing (OK for local/internal testing)."
 fi
 
-DMG_PATH="$OUT_DIR/${APP_NAME}-${VERSION}.dmg"
+DMG_PATH="$OUT_DIR/${ARTIFACT_PREFIX}.dmg"
 DMG_STAGING_DIR="$(mktemp -d)"
 trap 'rm -rf "$DMG_STAGING_DIR"' EXIT
 
@@ -91,7 +96,7 @@ chmod +x "$AUTH_SCRIPT"
 
 log "Creating DMG: $DMG_PATH"
 rm -f "$DMG_PATH"
-hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_STAGING_DIR" -ov -format UDZO "$DMG_PATH" >/dev/null
+hdiutil create -volname "$APP_NAME $VERSION" -srcfolder "$DMG_STAGING_DIR" -ov -format UDZO "$DMG_PATH" >/dev/null
 
 if [[ -n "$MACOS_SIGN_IDENTITY" ]]; then
   log "Signing DMG"

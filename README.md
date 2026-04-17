@@ -25,6 +25,8 @@ wails dev
 - `build/bin/`：Wails 原始构建输出
 - `dist/macos/`：macOS 发布产物（`.app` + `.dmg`）
 - `dist/windows/`：Windows 发布产物（`.exe` / 安装包）
+- 每次构建会先清空对应平台的 `dist` 输出目录，避免旧产物混入本次发布。
+- 发布产物统一命名为 `MiniPost-<version>-<platform>-<arch>` 前缀，便于区分版本、系统和架构。
 
 ## 4. 构建（统一一条命令）
 
@@ -42,8 +44,8 @@ chmod +x scripts/*.sh
 
 默认输出：
 
-- `dist/macos/MiniPost.app`
-- `dist/macos/MiniPost-<version>.dmg`
+- `dist/macos/MiniPost-<version>-macos-<arch>.app`
+- `dist/macos/MiniPost-<version>-macos-<arch>.dmg`
 - DMG 内含 `Authorize MiniPost.command`（用户可双击完成授权）
 
 可选参数（环境变量）：
@@ -53,6 +55,7 @@ chmod +x scripts/*.sh
 - `MACOS_PLATFORM`：`darwin/arm64` 或 `darwin/amd64`
 - `WAILS_BUILD_FLAGS`：附加 Wails 构建参数
 - `OUT_DIR`：输出目录（默认 `dist/macos`）
+- `MACOS_ARTIFACT_PREFIX` / `ARTIFACT_PREFIX`：自定义发布产物文件名前缀
 
 ### 4.2 构建 Windows
 
@@ -62,15 +65,18 @@ chmod +x scripts/*.sh
 
 默认输出：
 
-- `dist/windows/*.exe`
-- `dist/windows/*.msi`（如果有）
+- `dist/windows/MiniPost-<version>-windows-<arch>-portable.exe`
+- `dist/windows/MiniPost-<version>-windows-<arch>-setup.exe`
+- `dist/windows/MiniPost-<version>-windows-<arch>-setup.msi`（如果有）
 
 可选参数（环境变量）：
 
+- `VERSION`：版本号（默认自动取 `git describe`）
 - `WINDOWS_PLATFORM`：默认 `windows/amd64`
 - `WEBVIEW2_STRATEGY`：默认 `download`
 - `WAILS_BUILD_FLAGS`：附加 Wails 构建参数
 - `OUT_DIR`：输出目录（默认 `dist/windows`）
+- `WINDOWS_ARTIFACT_PREFIX` / `ARTIFACT_PREFIX`：自定义发布产物文件名前缀
 
 说明：
 
@@ -125,13 +131,13 @@ xcrun notarytool store-credentials "AC_NOTARY_PROFILE" \
 对于未公证或内网传输导致的隔离标记，可直接执行：
 
 ```bash
-xattr -dr com.apple.quarantine "dist/macos/MiniPost.app"
+xattr -dr com.apple.quarantine "dist/macos/MiniPost-<version>-macos-<arch>.app"
 ```
 
 或使用脚本：
 
 ```bash
-./scripts/macos-authorize.sh dist/macos/MiniPost.app
+./scripts/macos-authorize.sh "dist/macos/MiniPost-<version>-macos-<arch>.app"
 ```
 
 对于 DMG 内分发用户：
