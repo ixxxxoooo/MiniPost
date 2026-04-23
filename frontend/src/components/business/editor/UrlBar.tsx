@@ -84,17 +84,18 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
     document.addEventListener("mousedown", handler)
     return () => document.removeEventListener("mousedown", handler)
   }, [showSendMenu])
-
-  if (!activeTab) return null
-
-  const { request } = activeTab
-  const isSending = activeTab.isSending
-  const requestName = request.name?.trim() || activeTab.title || "Untitled"
+  const request = activeTab?.request ?? null
+  const requestUrl = request?.url ?? ""
+  const requestFolderId = request?.folderId
+  const requestMethod = request?.method ?? "GET"
+  const isSending = activeTab?.isSending ?? false
+  const requestName = request?.name?.trim() || activeTab?.title || "Untitled"
 
   const folderPath = useMemo(() => {
+    if (!requestFolderId) return []
     const folderMap = new Map(folders.map((folder) => [folder.id, folder]))
     const segments: string[] = []
-    let currentFolderId = request.folderId
+    let currentFolderId: string | undefined = requestFolderId
     const visited = new Set<string>()
 
     while (currentFolderId && !visited.has(currentFolderId)) {
@@ -106,7 +107,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
     }
 
     return segments
-  }, [folders, request.folderId])
+  }, [folders, requestFolderId])
 
   const projectName = useMemo(() => {
     if (!currentProjectId) return "Project"
@@ -138,10 +139,10 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
     return ordered
   }, [activeEnvironmentId, environments])
 
-  const urlTokens = useMemo(() => tokenizeUrl(request.url), [request.url])
+  const urlTokens = useMemo(() => tokenizeUrl(requestUrl), [requestUrl])
   const completionContext = useMemo(
-    () => (urlFocused ? getVariableCompletionContext(request.url, urlCaret) : null),
-    [request.url, urlCaret, urlFocused]
+    () => (urlFocused ? getVariableCompletionContext(requestUrl, urlCaret) : null),
+    [requestUrl, urlCaret, urlFocused]
   )
   const variableSuggestions = useMemo(() => {
     if (!completionContext) return []
@@ -157,10 +158,10 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
   useEffect(() => {
     setIsEditingName(false)
     setNameDraft(requestName)
-    setUrlCaret(request.url.length)
+    setUrlCaret(requestUrl.length)
     setUrlScrollLeft(0)
     setVariableActiveIndex(0)
-  }, [activeTab.id, request.url.length, requestName])
+  }, [activeTab?.id, requestName, requestUrl.length])
 
   useEffect(() => {
     if (!isEditingName) return
@@ -209,6 +210,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
   }, [showVariableSuggestion, variableSuggestions.length])
 
   const commitRename = useCallback(async () => {
+    if (!activeTab || !request) return
     const nextName = nameDraft.trim()
     setIsEditingName(false)
 
@@ -231,10 +233,10 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
     if (activeTab.requestId) {
       await renameRequest(activeTab.requestId, nextName)
     }
-  }, [activeTab.id, activeTab.request, activeTab.requestId, nameDraft, renameRequest, requestName, updateTab])
+  }, [activeTab, nameDraft, renameRequest, request, requestName, updateTab])
 
   const applyVariableSuggestion = useCallback((variableKey: string) => {
-    if (!completionContext) return
+    if (!activeTab || !request || !completionContext) return
 
     const current = request.url
     const before = current.slice(0, completionContext.replaceStart)
@@ -254,7 +256,9 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
       input.focus()
       input.setSelectionRange(nextCaret, nextCaret)
     })
-  }, [activeTab.id, completionContext, request.url, updateTabRequest])
+  }, [activeTab, completionContext, request, updateTabRequest])
+
+  if (!activeTab || !request) return null
 
   return (
     <div className="flex flex-col flex-shrink-0 bg-[var(--surface)]">
@@ -335,13 +339,13 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
         )}
       >
         <div className="flex min-w-0 flex-1 items-center rounded-[10px] border border-[var(--button-border)] bg-[var(--surface)] focus-within:border-[var(--accent)]">
-          <Select value={request.method} onValueChange={(value) => updateTabRequest(activeTab.id, { method: value as HttpMethod })}>
+          <Select value={requestMethod} onValueChange={(value) => updateTabRequest(activeTab.id, { method: value as HttpMethod })}>
             <SelectTrigger
               className={cn(
                 "h-[30px] w-[96px] rounded-none border-0 border-r border-[var(--button-border)] bg-transparent px-3",
                 "text-[11px] font-mono font-semibold shadow-none focus:ring-0",
                 "justify-between",
-                METHOD_COLORS[request.method as HttpMethod]
+                METHOD_COLORS[requestMethod as HttpMethod]
               )}
             >
               <SelectValue placeholder={t("方法", "Method")} />
@@ -369,7 +373,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
                 "font-mono text-[length:var(--size-font-xs)] text-[var(--fg)]"
               )}
             >
-              {request.url ? (
+              {requestUrl ? (
                 <div className="whitespace-pre" style={{ transform: `translateX(${-urlScrollLeft}px)` }}>
                   {urlTokens.map((token, index) => {
                     if (token.type === "variable") {
@@ -394,7 +398,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
 
             <input
               ref={urlInputRef}
-              value={request.url}
+              value={requestUrl}
               onChange={(e) => {
                 updateTabRequest(activeTab.id, { url: e.target.value })
                 setUrlCaret(e.target.selectionStart ?? e.target.value.length)
@@ -420,7 +424,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
               className={cn(
                 "relative z-[2] h-[30px] w-full min-w-0 bg-transparent px-3",
                 "border-0 font-mono text-[length:var(--size-font-xs)] caret-[var(--fg)]",
-                request.url ? "text-transparent" : "text-[var(--fg)]",
+                requestUrl ? "text-transparent" : "text-[var(--fg)]",
                 "placeholder:text-[var(--fg-muted)] focus:outline-none focus:ring-0"
               )}
               onKeyDown={(e) => {
@@ -509,7 +513,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
             <>
               <button
                 onClick={() => onSend()}
-                disabled={!request.url.trim()}
+                disabled={!requestUrl.trim()}
                 className={cn(
                   "no-press-feedback h-[30px] flex-1 flex items-center justify-center gap-1.5 rounded-l-[8px]",
                   "bg-[var(--accent)] text-[var(--accent-fg)] text-[13px] font-medium",

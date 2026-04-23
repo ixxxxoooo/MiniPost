@@ -64,22 +64,21 @@ export function FormDataEditor() {
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
   const [fileHistory, setFileHistory] = useState<FileHistoryItem[]>(() => readFileUploadHistory())
-
-  if (!activeTab) return null
-
-  const { body } = activeTab.request
-  const tabId = activeTab.id
+  const tabId = activeTab?.id ?? ""
+  const body = activeTab?.request.body ?? { type: "none" as const }
   const items: FormDataItem[] = body.formData ?? []
 
   const setItems = (formData: FormDataItem[]) => {
+    if (!activeTab) return
     updateTabRequest(tabId, { body: { ...body, formData } })
   }
 
   useEffect(() => {
+    if (!activeTab) return
     if (items.length === 0) {
       setItems([createFormDataItem()])
     }
-  }, [items.length])
+  }, [activeTab, items.length])
 
   const handleUpdate = (id: string, field: keyof FormDataItem, value: string | boolean) => {
     setItems(items.map((item) => (item.id === id ? { ...item, [field]: value } : item)))
@@ -132,6 +131,8 @@ export function FormDataEditor() {
     ))
     rememberFileHistory(file.path, file.name)
   }
+
+  if (!activeTab) return null
 
   return (
     <div className="px-[var(--size-padding-sm)]">
