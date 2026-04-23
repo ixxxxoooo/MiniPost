@@ -25,11 +25,8 @@ export function BodyEditor() {
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
   const { resolved } = useUIStore()
   const isDark = resolved === "dark"
-
-  if (!activeTab) return null
-
-  const { body } = activeTab.request
-  const tabId = activeTab.id
+  const tabId = activeTab?.id ?? ""
+  const body = activeTab?.request.body ?? { type: "none" as const }
   const isCodeBody = body.type === "json" || body.type === "raw"
   const autoFormattedByTabRef = useRef<Record<string, boolean>>({})
   const [jsonFormatSignalByTab, setJsonFormatSignalByTab] = useState<Record<string, number>>({})
@@ -42,10 +39,12 @@ export function BodyEditor() {
   }, [tabId])
 
   const setBodyType = (type: BodyType) => {
+    if (!activeTab) return
     updateTabRequest(tabId, { body: { ...body, type } })
   }
 
   useEffect(() => {
+    if (!activeTab) return
     if (body.type !== "json") {
       autoFormattedByTabRef.current[tabId] = false
       return
@@ -63,6 +62,7 @@ export function BodyEditor() {
   }
 
   const handleFormatRaw = () => {
+    if (!activeTab) return
     const content = body.raw ?? ""
     try {
       const parsed = JSON.parse(content)
@@ -71,6 +71,8 @@ export function BodyEditor() {
       // 非 JSON 格式则不处理
     }
   }
+
+  if (!activeTab) return null
 
   return (
     <div className="flex flex-col h-full min-h-0">
