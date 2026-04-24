@@ -38,16 +38,11 @@ if [[ ! -d "$APP_PATH" ]]; then
   exit 1
 fi
 
-RELEASE_APP="$OUT_DIR/${ARTIFACT_PREFIX}.app"
-rm -rf "$RELEASE_APP"
-log "Copying app to release directory: $RELEASE_APP"
-ditto "$APP_PATH" "$RELEASE_APP"
-
 if [[ -n "$MACOS_SIGN_IDENTITY" ]]; then
   need_cmd codesign
-  log "Signing app: $RELEASE_APP"
-  codesign --force --deep --options runtime --timestamp --sign "$MACOS_SIGN_IDENTITY" "$RELEASE_APP"
-  codesign --verify --deep --strict --verbose=2 "$RELEASE_APP"
+  log "Signing app bundle for DMG packaging: $APP_PATH"
+  codesign --force --deep --options runtime --timestamp --sign "$MACOS_SIGN_IDENTITY" "$APP_PATH"
+  codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 else
   log "No MACOS_SIGN_IDENTITY set. Skip signing (OK for local/internal testing)."
 fi
@@ -57,7 +52,7 @@ DMG_STAGING_DIR="$(mktemp -d)"
 trap 'rm -rf "$DMG_STAGING_DIR"' EXIT
 
 log "Preparing DMG staging directory"
-ditto "$RELEASE_APP" "$DMG_STAGING_DIR/${APP_NAME}.app"
+ditto "$APP_PATH" "$DMG_STAGING_DIR/${APP_NAME}.app"
 ln -s /Applications "$DMG_STAGING_DIR/Applications"
 
 # Add a double-clickable authorization helper in DMG.
@@ -110,16 +105,16 @@ if [[ -n "$MACOS_NOTARY_PROFILE" ]]; then
   xcrun notarytool submit "$DMG_PATH" --keychain-profile "$MACOS_NOTARY_PROFILE" --wait
   log "Stapling notarization ticket"
   xcrun stapler staple "$DMG_PATH"
-  # App bundle is shipped inside DMG; stapling app is still useful for direct app distribution.
-  xcrun stapler staple "$RELEASE_APP" || true
 else
   log "No MACOS_NOTARY_PROFILE set. Skip notarization."
 fi
 
+log "Removing intermediate app bundle: $APP_PATH"
+rm -rf "$APP_PATH"
+
 log "Build complete"
-echo "App: $RELEASE_APP"
 echo "DMG: $DMG_PATH"
 
 echo
 log "Local authorization command (for internal distribution)"
-echo "xattr -dr com.apple.quarantine \"$RELEASE_APP\""
+echo "xattr -dr com.apple.quarantine \"$DMG_PATH\""
