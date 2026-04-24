@@ -127,6 +127,29 @@ func TestSendRequest_CurlStatus301Command(t *testing.T) {
 	}
 }
 
+func TestSendRequest_CurlCommandKeepsExplicitOptions(t *testing.T) {
+	arena := newCurlArenaServer()
+	defer arena.Close()
+
+	svc := NewHttpService()
+	resp, err := svc.SendRequest(model.SendRequestInput{
+		Method: "GET",
+		URL:    "curl " + arena.URL + "/status/301",
+		Body:   model.RequestBody{Type: "none"},
+		Auth:   model.AuthConfig{Type: "none"},
+		Options: &model.RequestOptions{
+			FollowRedirects: false,
+			SSLVerify:       true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("SendRequest returned error: %v", err)
+	}
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("expected cURL-normalized request to keep redirect option, got %d", resp.StatusCode)
+	}
+}
+
 func TestSendRequest_InvalidCurlCommand(t *testing.T) {
 	svc := NewHttpService()
 	_, err := svc.SendRequest(model.SendRequestInput{
@@ -178,11 +201,29 @@ func TestSendRequest_DisableFollowRedirectsByOption(t *testing.T) {
 	resp, err := svc.SendRequest(model.SendRequestInput{
 		Method: "GET",
 		URL:    arena.URL + "/status/301",
-		Headers: []model.KeyValue{
-			{Key: "X-MiniPost-Option-Follow-Redirects", Value: "0"},
+		Body:   model.RequestBody{Type: "none"},
+		Auth:   model.AuthConfig{Type: "none"},
+		Options: &model.RequestOptions{
+			FollowRedirects: true,
+			SSLVerify:       true,
 		},
-		Body: model.RequestBody{Type: "none"},
-		Auth: model.AuthConfig{Type: "none"},
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200 when redirect enabled, got %d", resp.StatusCode)
+	}
+
+	resp, err = svc.SendRequest(model.SendRequestInput{
+		Method: "GET",
+		URL:    arena.URL + "/status/301",
+		Body:   model.RequestBody{Type: "none"},
+		Auth:   model.AuthConfig{Type: "none"},
+		Options: &model.RequestOptions{
+			FollowRedirects: false,
+			SSLVerify:       true,
+		},
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -203,8 +244,10 @@ func TestSendRequest_MaxResponseSizeOption(t *testing.T) {
 	_, err := svc.SendRequest(model.SendRequestInput{
 		Method: "GET",
 		URL:    arena.URL,
-		Headers: []model.KeyValue{
-			{Key: "X-MiniPost-Option-Max-Response-Size-MB", Value: "0"},
+		Options: &model.RequestOptions{
+			FollowRedirects:   true,
+			MaxResponseSizeMB: 0,
+			SSLVerify:         true,
 		},
 		Body: model.RequestBody{Type: "none"},
 		Auth: model.AuthConfig{Type: "none"},
@@ -216,8 +259,10 @@ func TestSendRequest_MaxResponseSizeOption(t *testing.T) {
 	_, err = svc.SendRequest(model.SendRequestInput{
 		Method: "GET",
 		URL:    arena.URL,
-		Headers: []model.KeyValue{
-			{Key: "X-MiniPost-Option-Max-Response-Size-MB", Value: "1"},
+		Options: &model.RequestOptions{
+			FollowRedirects:   true,
+			MaxResponseSizeMB: 1,
+			SSLVerify:         true,
 		},
 		Body: model.RequestBody{Type: "none"},
 		Auth: model.AuthConfig{Type: "none"},
@@ -236,14 +281,44 @@ func TestSendRequest_MaxResponseSizeOption(t *testing.T) {
 	_, err = svc.SendRequest(model.SendRequestInput{
 		Method: "GET",
 		URL:    largeArena.URL,
-		Headers: []model.KeyValue{
-			{Key: "X-MiniPost-Option-Max-Response-Size-MB", Value: "1"},
+		Options: &model.RequestOptions{
+			FollowRedirects:   true,
+			MaxResponseSizeMB: 1,
+			SSLVerify:         true,
 		},
 		Body: model.RequestBody{Type: "none"},
 		Auth: model.AuthConfig{Type: "none"},
 	})
 	if err == nil {
 		t.Fatal("expected max response size exceeded error")
+	}
+}
+
+func TestSendRequest_DoesNotConsumeInternalOptionHeaderNames(t *testing.T) {
+	arena := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, r.Header.Get("X-MiniPost-Option-Follow-Redirects"))
+	}))
+	defer arena.Close()
+
+	svc := NewHttpService()
+	resp, err := svc.SendRequest(model.SendRequestInput{
+		Method: "GET",
+		URL:    arena.URL,
+		Headers: []model.KeyValue{
+			{Key: "X-MiniPost-Option-Follow-Redirects", Value: "user-header"},
+		},
+		Body: model.RequestBody{Type: "none"},
+		Auth: model.AuthConfig{Type: "none"},
+		Options: &model.RequestOptions{
+			FollowRedirects: true,
+			SSLVerify:       true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if resp.Body != "user-header" {
+		t.Fatalf("expected internal-looking header to be sent unchanged, got %q", resp.Body)
 	}
 }
 

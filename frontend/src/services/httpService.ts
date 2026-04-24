@@ -28,6 +28,16 @@ export interface SendRequestPayload {
     bearer: { token: string }
     apiKey: { key: string; value: string; addTo: string }
   }
+  options?: {
+    followRedirects: boolean
+    timeoutMs: number
+    maxResponseSizeMB: number
+    sslVerify: boolean
+    httpVersion: string
+    disableDefaultUserAgent: boolean
+    disableDefaultAccept: boolean
+    disableAutoContentType: boolean
+  }
 }
 
 export interface SendRequestStreamOptions {
@@ -238,16 +248,16 @@ export async function sendHttpRequest(
     payload.headers.push({ key: TOKEN_HEADER_NAME, value: crypto.randomUUID() })
   }
 
-  payload.headers.push(
-    { key: "X-MiniPost-Option-Follow-Redirects", value: uiSettings.followRedirects ? "1" : "0" },
-    { key: "X-MiniPost-Option-Timeout-Ms", value: String(Math.max(0, Math.round(uiSettings.requestTimeoutMs))) },
-    { key: "X-MiniPost-Option-Max-Response-Size-MB", value: String(Math.max(0, Math.round(uiSettings.maxResponseSizeMB))) },
-    { key: "X-MiniPost-Option-SSL-Verify", value: uiSettings.sslCertificateVerification ? "1" : "0" },
-    { key: "X-MiniPost-Option-HTTP-Version", value: uiSettings.httpVersion },
-    { key: "X-MiniPost-Option-Disable-Default-User-Agent", value: isSuppressed("user-agent") ? "1" : "0" },
-    { key: "X-MiniPost-Option-Disable-Default-Accept", value: isSuppressed("accept") ? "1" : "0" },
-    { key: "X-MiniPost-Option-Disable-Auto-Content-Type", value: isSuppressed("content-type") ? "1" : "0" },
-  )
+  payload.options = {
+    followRedirects: uiSettings.followRedirects,
+    timeoutMs: Math.max(0, Math.round(uiSettings.requestTimeoutMs)),
+    maxResponseSizeMB: Math.max(0, Math.round(uiSettings.maxResponseSizeMB)),
+    sslVerify: uiSettings.sslCertificateVerification,
+    httpVersion: uiSettings.httpVersion,
+    disableDefaultUserAgent: isSuppressed("user-agent"),
+    disableDefaultAccept: isSuppressed("accept"),
+    disableAutoContentType: isSuppressed("content-type"),
+  }
 
   const shouldStream = Boolean(streamOptions?.streamId && streamOptions.onStreamEvent)
   let stopStreamListener: (() => void) | null = null
