@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import MonacoEditor, { loader, useMonaco } from "@monaco-editor/react"
-import * as Monaco from "monaco-editor"
+import * as Monaco from "monaco-editor/esm/vs/editor/editor.api.js"
 import type { editor as MonacoEditorType } from "monaco-editor"
+import "monaco-editor/esm/vs/language/json/monaco.contribution"
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker"
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker"
-import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker"
-import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker"
-import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker"
 import { registerMonacoSelectionProvider } from "@/lib/editorSelectionBridge"
 import { cn } from "@/lib/utils"
 
@@ -18,9 +16,6 @@ if (typeof self !== "undefined") {
   self.MonacoEnvironment = {
     getWorker(_: unknown, label: string) {
       if (label === "json") return new jsonWorker()
-      if (label === "css" || label === "scss" || label === "less") return new cssWorker()
-      if (label === "html" || label === "handlebars" || label === "razor" || label === "xml") return new htmlWorker()
-      if (label === "typescript" || label === "javascript") return new tsWorker()
       return new editorWorker()
     },
   }

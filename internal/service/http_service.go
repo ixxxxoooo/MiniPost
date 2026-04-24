@@ -18,7 +18,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -201,8 +200,7 @@ func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(mod
 		return nil, err
 	}
 	input = normalizedInput
-	options, headers := s.extractRequestOptions(input.Headers)
-	input.Headers = headers
+	options := s.extractRequestOptions(input.Options)
 
 	reqURL, err := s.buildURL(input.URL, input.Params)
 	if err != nil {
@@ -587,10 +585,11 @@ func (s *HttpService) normalizeInput(input model.SendRequestInput) (model.SendRe
 	if err != nil {
 		return input, appErrors.Wrap("INVALID_CURL", "cURL 命令解析失败", err)
 	}
+	parsed.Options = input.Options
 	return *parsed, nil
 }
 
-func (s *HttpService) extractRequestOptions(headers []model.KeyValue) (requestOptions, []model.KeyValue) {
+func (s *HttpService) extractRequestOptions(inputOptions *model.RequestOptions) requestOptions {
 	options := requestOptions{
 		followRedirects:         true,
 		timeout:                 s.client.Timeout,
@@ -602,57 +601,33 @@ func (s *HttpService) extractRequestOptions(headers []model.KeyValue) (requestOp
 		disableAutoContentType:  false,
 	}
 
-	cleaned := make([]model.KeyValue, 0, len(headers))
-	for _, header := range headers {
-		key := strings.ToLower(strings.TrimSpace(header.Key))
-		value := strings.TrimSpace(header.Value)
-
-		switch key {
-		case "x-minipost-option-follow-redirects":
-			options.followRedirects = parseBoolOption(value, options.followRedirects)
-			continue
-		case "x-minipost-option-timeout-ms":
-			if parsed, err := strconv.Atoi(value); err == nil {
-				if parsed <= 0 {
-					options.timeout = 0
-				} else {
-					options.timeout = time.Duration(parsed) * time.Millisecond
-				}
-			}
-			continue
-		case "x-minipost-option-max-response-size-mb":
-			if parsed, err := strconv.Atoi(value); err == nil {
-				if parsed <= 0 {
-					options.maxResponseBytes = 0
-				} else {
-					options.maxResponseBytes = int64(parsed) * 1024 * 1024
-				}
-			}
-			continue
-		case "x-minipost-option-ssl-verify":
-			options.sslVerify = parseBoolOption(value, options.sslVerify)
-			continue
-		case "x-minipost-option-http-version":
-			switch strings.ToLower(value) {
-			case "auto", "http1", "http2":
-				options.httpVersion = strings.ToLower(value)
-			}
-			continue
-		case "x-minipost-option-disable-default-user-agent":
-			options.disableDefaultUserAgent = parseBoolOption(value, options.disableDefaultUserAgent)
-			continue
-		case "x-minipost-option-disable-default-accept":
-			options.disableDefaultAccept = parseBoolOption(value, options.disableDefaultAccept)
-			continue
-		case "x-minipost-option-disable-auto-content-type":
-			options.disableAutoContentType = parseBoolOption(value, options.disableAutoContentType)
-			continue
-		default:
-			cleaned = append(cleaned, header)
-		}
+	if inputOptions == nil {
+		return options
 	}
 
-	return options, cleaned
+	options.followRedirects = inputOptions.FollowRedirects
+	if inputOptions.TimeoutMS <= 0 {
+		options.timeout = 0
+	} else {
+		options.timeout = time.Duration(inputOptions.TimeoutMS) * time.Millisecond
+	}
+	if inputOptions.MaxResponseSizeMB <= 0 {
+		options.maxResponseBytes = 0
+	} else {
+		options.maxResponseBytes = int64(inputOptions.MaxResponseSizeMB) * 1024 * 1024
+	}
+	options.sslVerify = inputOptions.SSLVerify
+	switch strings.ToLower(strings.TrimSpace(inputOptions.HTTPVersion)) {
+	case "http1", "http2":
+		options.httpVersion = strings.ToLower(strings.TrimSpace(inputOptions.HTTPVersion))
+	default:
+		options.httpVersion = "auto"
+	}
+	options.disableDefaultUserAgent = inputOptions.DisableDefaultUserAgent
+	options.disableDefaultAccept = inputOptions.DisableDefaultAccept
+	options.disableAutoContentType = inputOptions.DisableAutoContentType
+
+	return options
 }
 
 func (s *HttpService) buildClient(options requestOptions) *http.Client {
@@ -839,17 +814,6 @@ func isLikelyTextContentType(mime string) bool {
 func newMaxBodySizeExceededError(maxResponseBytes int64) error {
 	limitMB := maxResponseBytes / (1024 * 1024)
 	return appErrors.New("MAX_RESPONSE_SIZE_EXCEEDED", fmt.Sprintf("响应体超过最大大小限制（%d MB）", limitMB))
-}
-
-func parseBoolOption(raw string, defaultValue bool) bool {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "1", "true", "yes", "on":
-		return true
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return defaultValue
-	}
 }
 
 func classifyRequestSendError(err error, requestURL string) (code string, message string, detail string) {

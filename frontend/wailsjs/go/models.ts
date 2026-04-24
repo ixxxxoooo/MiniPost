@@ -531,6 +531,32 @@ export namespace model {
 	}
 	
 	
+	export class RequestOptions {
+	    followRedirects: boolean;
+	    timeoutMs: number;
+	    maxResponseSizeMB: number;
+	    sslVerify: boolean;
+	    httpVersion: string;
+	    disableDefaultUserAgent: boolean;
+	    disableDefaultAccept: boolean;
+	    disableAutoContentType: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new RequestOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.followRedirects = source["followRedirects"];
+	        this.timeoutMs = source["timeoutMs"];
+	        this.maxResponseSizeMB = source["maxResponseSizeMB"];
+	        this.sslVerify = source["sslVerify"];
+	        this.httpVersion = source["httpVersion"];
+	        this.disableDefaultUserAgent = source["disableDefaultUserAgent"];
+	        this.disableDefaultAccept = source["disableDefaultAccept"];
+	        this.disableAutoContentType = source["disableAutoContentType"];
+	    }
+	}
 	export class SendRequestInput {
 	    method: string;
 	    url: string;
@@ -538,6 +564,7 @@ export namespace model {
 	    headers: KeyValue[];
 	    body: RequestBody;
 	    auth: AuthConfig;
+	    options?: RequestOptions;
 	
 	    static createFrom(source: any = {}) {
 	        return new SendRequestInput(source);
@@ -551,6 +578,7 @@ export namespace model {
 	        this.headers = this.convertValues(source["headers"], KeyValue);
 	        this.body = this.convertValues(source["body"], RequestBody);
 	        this.auth = this.convertValues(source["auth"], AuthConfig);
+	        this.options = this.convertValues(source["options"], RequestOptions);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -24,6 +24,7 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "Missing command: $1" >&2
 need_cmd wails
 need_cmd hdiutil
 need_cmd ditto
+require_patched_go_toolchain
 
 log "Cleaning previous macOS artifacts: $OUT_DIR"
 clean_output_dir "$OUT_DIR" "$ROOT_DIR"

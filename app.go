@@ -166,6 +166,7 @@ func normalizeCurlInput(input model.SendRequestInput) (model.SendRequestInput, e
 	if err != nil {
 		return input, appErrors.Wrap("INVALID_CURL", "cURL 命令解析失败", err)
 	}
+	parsed.Options = input.Options
 	return *parsed, nil
 }
 

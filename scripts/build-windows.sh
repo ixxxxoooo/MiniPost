@@ -25,6 +25,7 @@ log() { printf '\n[%s] %s\n' "$(date '+%H:%M:%S')" "$*"; }
 need_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "Missing command: $1" >&2; exit 1; }; }
 
 need_cmd wails
+require_patched_go_toolchain
 
 setup_cross_compiler_if_needed() {
   local host
