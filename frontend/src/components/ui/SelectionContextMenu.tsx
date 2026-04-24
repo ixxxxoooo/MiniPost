@@ -20,6 +20,17 @@ function isTextControl(element: Element | null): element is HTMLInputElement | H
   return element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
 }
 
+function shouldUseNativeCopy(target: EventTarget | null): boolean {
+  const element = getClosestElement(target)
+  if (!element) return false
+
+  if (element.closest(".monaco-editor")) return true
+  if (element.closest("input, textarea")) return true
+  if (element.closest("[contenteditable='true']")) return true
+
+  return false
+}
+
 function getClosestElement(target: EventTarget | null): Element | null {
   if (target instanceof Element) return target
   if (target instanceof Node) return target.parentElement
@@ -100,6 +111,12 @@ export function SelectionContextMenu() {
     const handleKeyDown = (event: KeyboardEvent) => {
       const isCopy = (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "c"
       if (!isCopy) return
+
+      if (shouldUseNativeCopy(event.target)) {
+        rememberSelectionFromTarget(event.target)
+        closeMenu()
+        return
+      }
 
       const text = getSelectedTextFromTarget(event.target, false)
         || getSelectedTextFallback()

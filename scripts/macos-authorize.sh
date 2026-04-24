@@ -8,7 +8,7 @@ fi
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 <app-or-dmg-path>"
-  echo "Example: $0 dist/macos/MiniPost.app"
+  echo "Example: $0 dist/macos/MiniPost-1.0.0-macos-arm64.dmg"
   exit 1
 fi
 
