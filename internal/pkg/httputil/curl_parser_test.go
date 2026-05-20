@@ -115,3 +115,47 @@ func TestParseCurlCommand_CookieFlagEquals(t *testing.T) {
 		t.Fatalf("expected cookie header from --cookie=..., got %q", cookieValue)
 	}
 }
+
+func TestParseCurlCommand_ChromeDataRawAnsiCQuotedJSON(t *testing.T) {
+	cmd := `curl 'https://bluewhale-lwj-cc.suanshubang.cc/bw-go/sql_query/check_sql?logID=log_5753193900998400' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'content-type: application/json;charset=UTF-8' \
+  -b 'ZYBIPSCAS=IPS_token; ZYBIPSUN=user; BL_SS=session' \
+  -H 'origin: https://bluewhale-lwj-cc.suanshubang.cc' \
+  --data-raw $'{"sql":"select\\n    *\\nfrom\\n    dataware.dwd_change_course\\nwhere\\n    dt = \'20230607\'\\nlimit\\n    100","script_type":2,"queue_id":384}'`
+
+	input, err := ParseCurlCommand(cmd)
+	if err != nil {
+		t.Fatalf("ParseCurlCommand returned error: %v", err)
+	}
+	if input.Method != "POST" {
+		t.Fatalf("expected POST, got %s", input.Method)
+	}
+	if input.URL != "https://bluewhale-lwj-cc.suanshubang.cc/bw-go/sql_query/check_sql?logID=log_5753193900998400" {
+		t.Fatalf("expected URL to be parsed, got %s", input.URL)
+	}
+	if input.Body.Type != "json" {
+		t.Fatalf("expected json body type, got %s", input.Body.Type)
+	}
+	expectedBody := `{"sql":"select\n    *\nfrom\n    dataware.dwd_change_course\nwhere\n    dt = '20230607'\nlimit\n    100","script_type":2,"queue_id":384}`
+	if input.Body.JSON != expectedBody {
+		t.Fatalf("unexpected body:\nwant %q\ngot  %q", expectedBody, input.Body.JSON)
+	}
+
+	var cookieValue string
+	var contentType string
+	for _, header := range input.Headers {
+		switch header.Key {
+		case "Cookie":
+			cookieValue = header.Value
+		case "content-type":
+			contentType = header.Value
+		}
+	}
+	if cookieValue != "ZYBIPSCAS=IPS_token; ZYBIPSUN=user; BL_SS=session" {
+		t.Fatalf("expected cookie header to be parsed, got %q", cookieValue)
+	}
+	if contentType != "application/json;charset=UTF-8" {
+		t.Fatalf("expected content-type header to be parsed, got %q", contentType)
+	}
+}

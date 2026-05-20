@@ -158,7 +158,9 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 	return input, nil
 }
 
-// tokenize 简单分词，处理引号内的空格
+// tokenize performs a small shell-like split for cURL commands copied from browsers.
+// It supports single quotes, double quotes, line continuations and Bash ANSI-C
+// quoted strings such as $'{"key":"value with \'quotes\'"}'.
 func tokenize(input string) []string {
 	var tokens []string
 	var current strings.Builder
@@ -168,6 +170,10 @@ func tokenize(input string) []string {
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
 		switch {
+		case ch == '$' && !inSingleQuote && !inDoubleQuote && i+1 < len(input) && input[i+1] == '\'':
+			value, next := readAnsiCQuotedString(input, i+2)
+			current.WriteString(value)
+			i = next
 		case ch == '\'' && !inDoubleQuote:
 			inSingleQuote = !inSingleQuote
 		case ch == '"' && !inSingleQuote:
@@ -198,4 +204,53 @@ func tokenize(input string) []string {
 	}
 
 	return tokens
+}
+
+func readAnsiCQuotedString(input string, start int) (string, int) {
+	var current strings.Builder
+	i := start
+	for ; i < len(input); i++ {
+		ch := input[i]
+		if ch == '\'' {
+			return current.String(), i
+		}
+		if ch == '\\' && i+1 < len(input) {
+			i++
+			current.WriteString(decodeAnsiCEscape(input[i]))
+			continue
+		}
+		current.WriteByte(ch)
+	}
+	return current.String(), i
+}
+
+func decodeAnsiCEscape(ch byte) string {
+	switch ch {
+	case 'a':
+		return "\a"
+	case 'b':
+		return "\b"
+	case 'e', 'E':
+		return "\x1b"
+	case 'f':
+		return "\f"
+	case 'n':
+		return "\n"
+	case 'r':
+		return "\r"
+	case 't':
+		return "\t"
+	case 'v':
+		return "\v"
+	case '\\':
+		return "\\"
+	case '\'':
+		return "'"
+	case '"':
+		return "\""
+	case '?':
+		return "?"
+	default:
+		return string(ch)
+	}
 }
