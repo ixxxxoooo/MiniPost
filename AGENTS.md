@@ -24,7 +24,9 @@ These instructions apply to all automated coding work in this repository.
 ## Build And Launch
 
 - After code changes, build a fresh app instance instead of relying on an old build artifact.
+- Before launching the new instance, close all existing MiniPost processes from previous runs.
 - Start the freshly built instance and perform a quick smoke check for the touched workflow.
+- Keep exactly one MiniPost instance running after launch; if multiple instances are detected, close the older ones and leave only the new instance.
 - If a full desktop launch is not possible in the current environment, record the reason and run the closest available verification command.
 
 ## Git
