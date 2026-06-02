@@ -20,7 +20,24 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 wails dev
 ```
 
-## 3. 产物目录约定
+## 3. 日志查看
+
+MiniPost 会同时把后端日志输出到终端和本地日志文件：
+
+- 日志目录：`~/.minipost/logs/`
+- 当天日志文件：`~/.minipost/logs/minipost-YYYY-MM-DD.log`
+- 实时查看：`tail -f ~/.minipost/logs/minipost-$(date +%F).log`
+
+默认日志级别为 `DEBUG`，方便开发和排查问题。可以通过环境变量调整：
+
+```bash
+MINIPOST_LOG_LEVEL=INFO wails dev
+MINIPOST_LOG_LEVEL=WARN ./scripts/build-macos.sh
+```
+
+支持的级别：`DEBUG`、`INFO`、`WARN`、`ERROR`、`FATAL`。
+
+## 4. 产物目录约定
 
 - `build/bin/`：Wails 原始构建输出
 - `dist/macos/`：macOS 发布产物（`.app` + `.dmg`）
@@ -28,7 +45,7 @@ wails dev
 - 每次构建会先清空对应平台的 `dist` 输出目录，避免旧产物混入本次发布。
 - 发布产物统一命名为 `MiniPost-<version>-<platform>-<arch>` 前缀，便于区分版本、系统和架构。
 
-## 4. 构建（统一一条命令）
+## 5. 构建（统一一条命令）
 
 先赋予脚本执行权限：
 
@@ -36,7 +53,7 @@ wails dev
 chmod +x scripts/*.sh
 ```
 
-### 4.1 构建 macOS（输出 DMG）
+### 5.1 构建 macOS（输出 DMG）
 
 ```bash
 ./scripts/build-macos.sh
@@ -57,7 +74,7 @@ chmod +x scripts/*.sh
 - `OUT_DIR`：输出目录（默认 `dist/macos`）
 - `MACOS_ARTIFACT_PREFIX` / `ARTIFACT_PREFIX`：自定义发布产物文件名前缀
 
-### 4.2 构建 Windows
+### 5.2 构建 Windows
 
 ```bash
 ./scripts/build-windows.sh
@@ -83,7 +100,7 @@ chmod +x scripts/*.sh
 - 在 macOS/Linux 上构建 Windows 需要交叉编译器。脚本会优先使用 `zig`，其次 `x86_64-w64-mingw32-gcc`。
 - 业界最佳实践是使用 CI 的原生 runner 分别构建 macOS 和 Windows，以降低交叉编译不一致风险。
 
-### 4.3 一次构建双平台
+### 5.3 一次构建双平台
 
 ```bash
 ./scripts/build.sh
@@ -96,7 +113,7 @@ SKIP_WINDOWS=1 ./scripts/build.sh
 SKIP_MACOS=1 ./scripts/build.sh
 ```
 
-## 5. macOS 发布最佳实践（签名 + 公证）
+## 6. macOS 发布最佳实践（签名 + 公证）
 
 建议发布版本必须进行以下流程：
 
@@ -126,7 +143,7 @@ xcrun notarytool store-credentials "AC_NOTARY_PROFILE" \
   --password "app-specific-password"
 ```
 
-## 6. “直接授权”命令（内部分发可用）
+## 7. “直接授权”命令（内部分发可用）
 
 对于未公证或内网传输导致的隔离标记，可直接执行：
 
@@ -150,7 +167,7 @@ xattr -dr com.apple.quarantine "dist/macos/MiniPost-<version>-macos-<arch>.app"
 sudo spctl --add --label "MiniPost Local Trust" "dist/macos/MiniPost.app"
 ```
 
-## 7. Windows 签名最佳实践（可选）
+## 8. Windows 签名最佳实践（可选）
 
 脚本支持可选 `signtool` 签名，请在 Windows 主机设置：
 
@@ -167,7 +184,7 @@ WIN_CERT_PASSWORD="***" \
 ./scripts/build-windows.sh
 ```
 
-## 8. 常用命令速查
+## 9. 常用命令速查
 
 ```bash
 # 开发

@@ -29,13 +29,16 @@ var levelNames = map[Level]string{
 }
 
 var (
-	currentLevel = INFO
+	currentLevel = DEBUG
 	fileLogger   *log.Logger
 	logFile      *os.File
+	logPath      string
 )
 
 // Init 初始化日志系统，在 ~/.minipost/logs/ 下创建日志文件
 func Init() error {
+	currentLevel = levelFromEnv(os.Getenv("MINIPOST_LOG_LEVEL"), DEBUG)
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("获取用户目录失败: %w", err)
@@ -47,7 +50,7 @@ func Init() error {
 	}
 
 	logFileName := fmt.Sprintf("minipost-%s.log", time.Now().Format("2006-01-02"))
-	logPath := filepath.Join(logDir, logFileName)
+	logPath = filepath.Join(logDir, logFileName)
 
 	logFile, err = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
@@ -58,6 +61,7 @@ func Init() error {
 
 	Info("日志系统初始化完成",
 		"logPath", logPath,
+		"logLevel", levelNames[currentLevel],
 		"goVersion", runtime.Version(),
 		"os", runtime.GOOS,
 		"arch", runtime.GOARCH,
@@ -76,6 +80,30 @@ func Close() {
 // SetLevel 设置日志级别
 func SetLevel(level Level) {
 	currentLevel = level
+}
+
+// CurrentLogPath 返回当前日志文件路径，日志系统未初始化时返回空字符串。
+func CurrentLogPath() string {
+	return logPath
+}
+
+func levelFromEnv(value string, fallback Level) Level {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "":
+		return fallback
+	case "DEBUG":
+		return DEBUG
+	case "INFO":
+		return INFO
+	case "WARN", "WARNING":
+		return WARN
+	case "ERROR":
+		return ERROR
+	case "FATAL":
+		return FATAL
+	default:
+		return fallback
+	}
 }
 
 func formatMessage(level Level, msg string, kvPairs []interface{}) string {

@@ -25,6 +25,7 @@ import (
 	"minipost/internal/model"
 	appErrors "minipost/internal/pkg/errors"
 	"minipost/internal/pkg/httputil"
+	"minipost/internal/pkg/logger"
 )
 
 type HttpService struct {
@@ -195,26 +196,63 @@ func (s *HttpService) SendRequestStreaming(input model.SendRequestInput, onChunk
 }
 
 func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(model.StreamChunk)) (*model.HttpResponse, error) {
+	requestID := newHTTPRequestLogID()
+	originalTarget := logger.RedactRequestTarget(input.URL)
+	logger.Debug("HTTP 请求输入开始",
+		"requestID", requestID,
+		"method", input.Method,
+		"target", originalTarget,
+		"paramCount", len(input.Params),
+		"headerCount", len(input.Headers),
+		"bodyType", input.Body.Type,
+		"streaming", onChunk != nil,
+	)
+
 	normalizedInput, err := s.normalizeInput(input)
 	if err != nil {
+		logger.Warn("HTTP 请求输入规范化失败", "requestID", requestID, "target", originalTarget, "error", err.Error())
 		return nil, err
+	}
+	if normalizedInput.URL != input.URL {
+		logger.Info("HTTP 请求已从 cURL 解析", "requestID", requestID, "method", normalizedInput.Method, "target", logger.RedactRequestTarget(normalizedInput.URL))
 	}
 	input = normalizedInput
 	options := s.extractRequestOptions(input.Options)
+	logger.Debug("HTTP 请求选项已解析",
+		"requestID", requestID,
+		"followRedirects", options.followRedirects,
+		"timeoutMs", options.timeout.Milliseconds(),
+		"maxResponseBytes", options.maxResponseBytes,
+		"sslVerify", options.sslVerify,
+		"httpVersion", options.httpVersion,
+		"disableDefaultUserAgent", options.disableDefaultUserAgent,
+		"disableDefaultAccept", options.disableDefaultAccept,
+		"disableAutoContentType", options.disableAutoContentType,
+	)
 
 	reqURL, err := s.buildURL(input.URL, input.Params)
 	if err != nil {
+		logger.Warn("HTTP 请求 URL 构建失败", "requestID", requestID, "target", logger.RedactRequestTarget(input.URL), "error", err.Error())
 		return nil, appErrors.Wrap("INVALID_URL", "URL 解析失败", err)
 	}
+	logURL := logger.RedactURL(reqURL)
 
 	bodyReader, contentType, err := s.buildBody(input.Body)
 	if err != nil {
+		logger.Warn("HTTP 请求体构建失败", "requestID", requestID, "method", input.Method, "url", logURL, "bodyType", input.Body.Type, "error", err.Error())
 		return nil, appErrors.Wrap("INVALID_BODY", "请求体构建失败", err)
 	}
 	requestBodyBytes := estimateRequestBodyBytes(input.Body)
+	logger.Debug("HTTP 请求体已构建",
+		"requestID", requestID,
+		"bodyType", input.Body.Type,
+		"requestBodyBytes", requestBodyBytes,
+		"autoContentType", contentType != "",
+	)
 
 	req, err := http.NewRequest(input.Method, reqURL, bodyReader)
 	if err != nil {
+		logger.Warn("HTTP 请求对象构建失败", "requestID", requestID, "method", input.Method, "url", logURL, "error", err.Error())
 		return nil, appErrors.Wrap("REQUEST_BUILD_FAILED", "请求构建失败", err)
 	}
 
@@ -306,10 +344,26 @@ func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(mod
 	start := time.Now()
 	trace.requestStart = start
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), clientTrace))
+	logger.Info("HTTP 请求发送开始",
+		"requestID", requestID,
+		"method", req.Method,
+		"url", logURL,
+		"headerCount", len(req.Header),
+		"requestBodyBytes", requestBodyBytes,
+		"streaming", onChunk != nil,
+	)
 	resp, err := client.Do(req)
 
 	if err != nil {
 		code, message, detail := classifyRequestSendError(err, reqURL)
+		logger.Warn("HTTP 请求发送失败",
+			"requestID", requestID,
+			"method", req.Method,
+			"url", logURL,
+			"code", code,
+			"message", message,
+			"error", err.Error(),
+		)
 		return nil, &appErrors.AppError{
 			Code:    code,
 			Message: message,
@@ -319,6 +373,15 @@ func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(mod
 	defer resp.Body.Close()
 	responseHeaderBytes := estimateResponseHeaderBytes(resp)
 	network := buildNetworkDetails(resp, trace)
+	logger.Info("HTTP 响应头已收到",
+		"requestID", requestID,
+		"status", resp.StatusCode,
+		"protocol", resp.Proto,
+		"contentType", resp.Header.Get("Content-Type"),
+		"responseHeaderBytes", responseHeaderBytes,
+		"remoteAddress", networkValue(network, "remoteAddress"),
+		"tlsProtocol", networkValue(network, "tlsProtocol"),
+	)
 
 	if onChunk != nil {
 		type responseStartPayload struct {
@@ -347,6 +410,7 @@ func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(mod
 			Sequence:   1,
 			BytesTotal: responseHeaderBytes,
 		})
+		logger.Debug("HTTP 流式响应开始", "requestID", requestID, "status", resp.StatusCode, "contentType", resp.Header.Get("Content-Type"))
 	}
 
 	wrappedOnChunk := onChunk
@@ -359,6 +423,13 @@ func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(mod
 	}
 	bodyBytes, err := s.readResponseBody(resp.Body, options.maxResponseBytes, resp.Header.Get("Content-Type"), wrappedOnChunk)
 	if err != nil {
+		logger.Warn("HTTP 响应体读取失败",
+			"requestID", requestID,
+			"status", resp.StatusCode,
+			"contentType", resp.Header.Get("Content-Type"),
+			"maxResponseBytes", options.maxResponseBytes,
+			"error", err.Error(),
+		)
 		return nil, err
 	}
 	bodyDone := time.Now()
@@ -395,6 +466,21 @@ func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(mod
 	if timings.Total <= 0 {
 		timings.Total = float64(done.Sub(start)) / float64(time.Millisecond)
 	}
+	logger.Info("HTTP 响应读取完成",
+		"requestID", requestID,
+		"status", resp.StatusCode,
+		"durationMs", timings.Total,
+		"responseBodyBytes", responseBodyBytes,
+		"responseTotalBytes", sizeDetails.ResponseTotal,
+		"requestTotalBytes", sizeDetails.RequestTotal,
+		"bodyIsBinary", bodyIsBinary,
+		"warningCount", len(warnings),
+		"dnsMs", timings.DNSLookup,
+		"tcpMs", timings.TCPHandshake,
+		"tlsMs", timings.SSLHandshake,
+		"ttfbMs", timings.WaitingTTFB,
+		"downloadMs", timings.Download,
+	)
 
 	return &model.HttpResponse{
 		StatusCode:   resp.StatusCode,
@@ -412,6 +498,24 @@ func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(mod
 		Timings:      timings,
 		SizeDetails:  sizeDetails,
 	}, nil
+}
+
+func newHTTPRequestLogID() string {
+	return fmt.Sprintf("http-%x", time.Now().UnixNano())
+}
+
+func networkValue(network *model.NetworkDetails, field string) string {
+	if network == nil {
+		return ""
+	}
+	switch field {
+	case "remoteAddress":
+		return network.RemoteAddress
+	case "tlsProtocol":
+		return network.TLSProtocol
+	default:
+		return ""
+	}
 }
 
 func buildNetworkDetails(resp *http.Response, trace requestTrace) *model.NetworkDetails {

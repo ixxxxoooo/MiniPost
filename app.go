@@ -212,16 +212,17 @@ func (a *App) SendRequestWithEnvStream(input model.SendRequestInput, projectID, 
 func (a *App) sendRequestWithEnv(input model.SendRequestInput, projectID, envID string, onChunk func(model.StreamChunk)) (*model.HttpResponse, error) {
 	normalizedInput, err := normalizeCurlInput(input)
 	if err != nil {
-		logger.Warn("cURL 解析失败", "url", input.URL, "error", err.Error())
+		logger.Warn("cURL 解析失败", "target", logger.RedactRequestTarget(input.URL), "error", err.Error())
 		return nil, err
 	}
 	input = normalizedInput
 
 	logger.Debug("SendRequestWithEnv 调用",
 		"method", input.Method,
-		"url", input.URL,
+		"target", logger.RedactRequestTarget(input.URL),
 		"projectID", projectID,
 		"envID", envID,
+		"streaming", onChunk != nil,
 	)
 
 	if envID != "" && projectID != "" {
@@ -244,13 +245,13 @@ func (a *App) sendRequestWithEnv(input model.SendRequestInput, projectID, envID 
 		resp, err = a.httpSvc.SendRequest(input)
 	}
 	if err != nil {
-		logger.Warn("HTTP 请求失败", "method", input.Method, "url", input.URL, "error", err.Error())
+		logger.Warn("HTTP 请求失败", "method", input.Method, "target", logger.RedactRequestTarget(input.URL), "error", err.Error())
 		return nil, err
 	}
 
 	logger.Info("HTTP 请求完成",
 		"method", input.Method,
-		"url", input.URL,
+		"target", logger.RedactRequestTarget(input.URL),
 		"status", resp.StatusCode,
 		"duration_ms", resp.Duration,
 		"size", resp.Size,
@@ -291,18 +292,18 @@ func (a *App) emitHTTPStreamEvent(streamID string, chunk model.StreamChunk) {
 func (a *App) SendRequest(input model.SendRequestInput) (*model.HttpResponse, error) {
 	normalizedInput, err := normalizeCurlInput(input)
 	if err != nil {
-		logger.Warn("cURL 解析失败", "url", input.URL, "error", err.Error())
+		logger.Warn("cURL 解析失败", "target", logger.RedactRequestTarget(input.URL), "error", err.Error())
 		return nil, err
 	}
 	input = normalizedInput
 
-	logger.Debug("SendRequest 调用", "method", input.Method, "url", input.URL)
+	logger.Debug("SendRequest 调用", "method", input.Method, "target", logger.RedactRequestTarget(input.URL))
 	resp, err := a.httpSvc.SendRequest(input)
 	if err != nil {
-		logger.Warn("HTTP 请求失败", "method", input.Method, "url", input.URL, "error", err.Error())
+		logger.Warn("HTTP 请求失败", "method", input.Method, "target", logger.RedactRequestTarget(input.URL), "error", err.Error())
 		return nil, err
 	}
-	logger.Info("HTTP 请求完成", "method", input.Method, "url", input.URL, "status", resp.StatusCode)
+	logger.Info("HTTP 请求完成", "method", input.Method, "target", logger.RedactRequestTarget(input.URL), "status", resp.StatusCode)
 	return resp, nil
 }
 
@@ -735,7 +736,7 @@ func (a *App) ImportFromURL(projectID, format, sourceURL string) error {
 		return err
 	}
 
-	logger.Info("开始从 URL 导入集合", "projectID", projectID, "url", trimmedURL, "resolvedURL", resolvedURL, "size", len(content))
+	logger.Info("开始从 URL 导入集合", "projectID", projectID, "url", logger.RedactURL(trimmedURL), "resolvedURL", logger.RedactURL(resolvedURL), "size", len(content))
 	return a.importCollectionContent(projectID, format, content, resolvedURL)
 }
 
@@ -748,7 +749,7 @@ func (a *App) ImportCurl(curlCommand string) (*model.SendRequestInput, error) {
 		logger.Error("cURL 解析失败", "error", err.Error())
 		return nil, err
 	}
-	logger.Info("cURL 解析成功", "method", result.Method, "url", result.URL)
+	logger.Info("cURL 解析成功", "method", result.Method, "target", logger.RedactRequestTarget(result.URL))
 	return result, nil
 }
 
