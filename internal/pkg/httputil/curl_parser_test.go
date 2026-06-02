@@ -122,6 +122,8 @@ func TestParseCurlCommand_ChromeDataRawAnsiCQuotedJSON(t *testing.T) {
   -H 'content-type: application/json;charset=UTF-8' \
   -b 'ZYBIPSCAS=IPS_token; ZYBIPSUN=user; BL_SS=session' \
   -H 'origin: https://bluewhale-lwj-cc.suanshubang.cc' \
+  --compressed \
+  --location \
   --data-raw $'{"sql":"select\\n    *\\nfrom\\n    dataware.dwd_change_course\\nwhere\\n    dt = \'20230607\'\\nlimit\\n    100","script_type":2,"queue_id":384}'`
 
 	input, err := ParseCurlCommand(cmd)
@@ -157,5 +159,94 @@ func TestParseCurlCommand_ChromeDataRawAnsiCQuotedJSON(t *testing.T) {
 	}
 	if contentType != "application/json;charset=UTF-8" {
 		t.Fatalf("expected content-type header to be parsed, got %q", contentType)
+	}
+}
+
+func TestParseCurlCommand_EqualsStyleOptions(t *testing.T) {
+	cmd := `curl --request=PUT --url=https://example.com/api --header=content-type: application/json --data-raw='{"ok":true}' --compressed --location`
+	input, err := ParseCurlCommand(cmd)
+	if err != nil {
+		t.Fatalf("ParseCurlCommand returned error: %v", err)
+	}
+	if input.Method != "PUT" {
+		t.Fatalf("expected PUT, got %s", input.Method)
+	}
+	if input.URL != "https://example.com/api" {
+		t.Fatalf("expected URL to be parsed, got %s", input.URL)
+	}
+	if input.Body.Type != "json" || input.Body.JSON != `{"ok":true}` {
+		t.Fatalf("unexpected body: %+v", input.Body)
+	}
+	if len(input.Headers) != 1 || input.Headers[0].Key != "content-type" || input.Headers[0].Value != "application/json" {
+		t.Fatalf("unexpected headers: %+v", input.Headers)
+	}
+}
+
+func TestParseCurlCommand_EqualsStyleFormAndUser(t *testing.T) {
+	cmd := `curl --url=https://example.com/upload --user=alice:secret --form=name=alice --form=file=@/tmp/avatar.png`
+	input, err := ParseCurlCommand(cmd)
+	if err != nil {
+		t.Fatalf("ParseCurlCommand returned error: %v", err)
+	}
+	if input.Method != "POST" {
+		t.Fatalf("expected POST, got %s", input.Method)
+	}
+	if input.Auth.Type != "basic" || input.Auth.Basic.Username != "alice" || input.Auth.Basic.Password != "secret" {
+		t.Fatalf("unexpected auth: %+v", input.Auth)
+	}
+	if input.Body.Type != "form-data" || len(input.Body.FormData) != 2 {
+		t.Fatalf("unexpected form body: %+v", input.Body)
+	}
+	if input.Body.FormData[0].Key != "name" || input.Body.FormData[0].Value != "alice" {
+		t.Fatalf("unexpected text field: %+v", input.Body.FormData[0])
+	}
+	if input.Body.FormData[1].Key != "file" || input.Body.FormData[1].FilePath != "/tmp/avatar.png" {
+		t.Fatalf("unexpected file field: %+v", input.Body.FormData[1])
+	}
+}
+
+func TestParseCurlCommand_MultipleDataSegments(t *testing.T) {
+	cmd := `curl https://example.com/form -d foo=1 --data bar=2 --data-raw=baz=3`
+	input, err := ParseCurlCommand(cmd)
+	if err != nil {
+		t.Fatalf("ParseCurlCommand returned error: %v", err)
+	}
+	if input.Method != "POST" {
+		t.Fatalf("expected POST, got %s", input.Method)
+	}
+	if input.Body.Type != "raw" || input.Body.Raw != "foo=1&bar=2&baz=3" {
+		t.Fatalf("unexpected body: %+v", input.Body)
+	}
+}
+
+func TestParseCurlCommand_AnsiCQuotedExtendedEscapes(t *testing.T) {
+	cmd := "curl https://example.com/api --data-raw $'quote=\\' slash=\\\\ hex=\\x27 uni=\\u4F60 octal=\\141 bad=\\xZ short=\\u12Z'"
+	input, err := ParseCurlCommand(cmd)
+	if err != nil {
+		t.Fatalf("ParseCurlCommand returned error: %v", err)
+	}
+	expected := "quote=' slash=\\ hex=' uni=\u4f60 octal=a bad=\\xZ short=\\u12Z"
+	if input.Body.Type != "raw" || input.Body.Raw != expected {
+		t.Fatalf("unexpected body:\nwant %q\ngot  %q", expected, input.Body.Raw)
+	}
+}
+
+func TestParseCurlCommand_WindowsCmdLineContinuations(t *testing.T) {
+	cmd := "curl \"https://example.com/api?x=1&y=2\" ^\r\n  -H \"accept: application/json\" ^\r\n  --data-raw \"name=alice\" ^\r\n  --compressed"
+	input, err := ParseCurlCommand(cmd)
+	if err != nil {
+		t.Fatalf("ParseCurlCommand returned error: %v", err)
+	}
+	if input.Method != "POST" {
+		t.Fatalf("expected POST, got %s", input.Method)
+	}
+	if input.URL != "https://example.com/api?x=1&y=2" {
+		t.Fatalf("expected URL to be parsed, got %s", input.URL)
+	}
+	if input.Body.Type != "raw" || input.Body.Raw != "name=alice" {
+		t.Fatalf("unexpected body: %+v", input.Body)
+	}
+	if len(input.Headers) != 1 || input.Headers[0].Key != "accept" || input.Headers[0].Value != "application/json" {
+		t.Fatalf("unexpected headers: %+v", input.Headers)
 	}
 }
