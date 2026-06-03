@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { writeClipboardText } from "@/lib/clipboard"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { buildDraftRequestFromCurl } from "@/lib/curlImportDraft"
+import { info } from "@/lib/logger"
 import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore, getProjectActiveTabIdFromState, getProjectTabsFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
@@ -744,6 +745,14 @@ export function Sidebar() {
       const draftRequest = buildDraftRequestFromCurl(parsed, {
         projectId: currentProjectId,
         name: "Imported cURL",
+      })
+      info("CurlImport", "cURL imported into draft tab", {
+        source: "sidebar",
+        commandLength: command.length,
+        method: draftRequest.method,
+        hasUrl: Boolean(draftRequest.url),
+        headerCount: draftRequest.headers.filter((item) => item.key.trim()).length,
+        bodyType: draftRequest.body.type,
       })
       addTab({
         title: draftRequest.name || "Imported cURL",
