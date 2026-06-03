@@ -12,6 +12,7 @@ import { WindowControls } from "./WindowControls"
 import { WorkspaceHeader } from "./WorkspaceHeader"
 import { cn } from "@/lib/utils"
 import { buildDraftRequestFromCurl } from "@/lib/curlImportDraft"
+import { info } from "@/lib/logger"
 
 function useTitlebarDoubleClick() {
   const lastClickRef = useRef<{ time: number; x: number; y: number }>({
@@ -82,6 +83,14 @@ export function Toolbar() {
       const draftRequest = buildDraftRequestFromCurl(result, {
         projectId: currentProjectId,
         name: "Imported cURL",
+      })
+      info("CurlImport", "cURL imported into draft tab", {
+        source: "toolbar",
+        commandLength: curlCommand.trim().length,
+        method: draftRequest.method,
+        hasUrl: Boolean(draftRequest.url),
+        headerCount: draftRequest.headers.filter((item) => item.key.trim()).length,
+        bodyType: draftRequest.body.type,
       })
       addTab({
         title: draftRequest.name || "Imported cURL",
