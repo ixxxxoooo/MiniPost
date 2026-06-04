@@ -247,7 +247,11 @@ const MENU_BTN = "h-5 w-5 flex items-center justify-center rounded-[var(--radius
 const MENU_ITEM = "w-full whitespace-nowrap px-2.5 py-1.5 rounded-[7px] text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] flex items-center gap-2"
 const MENU_ITEM_HOTKEY = "text-[10px] text-[var(--fg-muted)] font-mono ml-4"
 
-export function Sidebar() {
+interface SidebarProps {
+  forceOpen?: boolean
+}
+
+export function Sidebar({ forceOpen = false }: SidebarProps) {
   const { t } = useI18n()
   const { sidebarWidth, setSidebarWidth, sidebarCollapsed, editingEnvironmentId, setEditingEnvironmentId } = useUIStore()
   const {
@@ -1209,12 +1213,12 @@ export function Sidebar() {
   const rootNodes = getChildren("")
   const rootFolderName = t("根目录", "Root")
 
-  if (sidebarCollapsed) return null
+  if (sidebarCollapsed && !forceOpen) return null
 
   return (
     <div
       className={cn(
-        "relative flex min-h-0 flex-col overflow-y-hidden overflow-x-visible border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)]"
+        "relative flex h-full min-h-0 flex-col overflow-y-hidden overflow-x-visible border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)]"
       )}
       style={{ width: sidebarWidth }}
     >
