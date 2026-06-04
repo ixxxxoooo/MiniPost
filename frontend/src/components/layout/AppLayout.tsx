@@ -17,11 +17,12 @@ import appLogo from "@/assets/images/appicon.png"
 
 export function AppLayout() {
   const { t } = useI18n()
-  const { layoutDirection, editingEnvironmentId, workspaceView, sidebarCollapsed, setSidebarCollapsed } = useUIStore()
+  const { layoutDirection, editingEnvironmentId, workspaceView, sidebarCollapsed } = useUIStore()
   const currentProjectId = useProjectStore((s) => s.currentProjectId)
   const activeTab = useTabStore(getProjectActiveTabFromState)
 
   const [splitRatio, setSplitRatio] = useState(0.55)
+  const [sidebarPreviewOpen, setSidebarPreviewOpen] = useState(false)
   const splitContainerRef = useRef<HTMLDivElement>(null)
   const resizingRef = useRef(false)
   const splitRafRef = useRef<number | null>(null)
@@ -41,6 +42,10 @@ export function AppLayout() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (!sidebarCollapsed) setSidebarPreviewOpen(false)
+  }, [sidebarCollapsed])
 
   const handleSplitDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -105,20 +110,33 @@ export function AppLayout() {
           </div>
         ) : (
           <>
-            <Sidebar />
+            {!sidebarCollapsed && <Sidebar />}
 
             {sidebarCollapsed && (
-              <button
-                type="button"
-                aria-label={t("展开侧边栏", "Expand sidebar")}
-                className={cn(
-                  "absolute bottom-0 left-0 top-0 z-30 w-2 cursor-default titlebar-no-drag",
-                  "bg-transparent transition-colors hover:bg-[var(--accent)]/10 focus-visible:bg-[var(--accent)]/10 focus-visible:outline-none"
+              <>
+                {sidebarPreviewOpen && (
+                  <div
+                    className="absolute bottom-0 left-0 top-0 z-40 titlebar-no-drag shadow-[var(--shadow-lg)]"
+                    data-testid="sidebar-preview"
+                    onMouseLeave={() => setSidebarPreviewOpen(false)}
+                  >
+                    <Sidebar forceOpen />
+                  </div>
                 )}
-                data-testid="sidebar-reveal-rail"
-                onMouseEnter={() => setSidebarCollapsed(false)}
-                onFocus={() => setSidebarCollapsed(false)}
-              />
+                <button
+                  type="button"
+                  aria-label={t("临时展开侧边栏", "Temporarily reveal sidebar")}
+                  className={cn(
+                    "absolute bottom-0 left-0 top-0 z-30 w-2 cursor-default titlebar-no-drag",
+                    "bg-transparent transition-colors hover:bg-[var(--accent)]/10 focus-visible:bg-[var(--accent)]/10 focus-visible:outline-none",
+                    sidebarPreviewOpen && "pointer-events-none"
+                  )}
+                  data-testid="sidebar-reveal-rail"
+                  onMouseEnter={() => setSidebarPreviewOpen(true)}
+                  onFocus={() => setSidebarPreviewOpen(true)}
+                  onBlur={() => setSidebarPreviewOpen(false)}
+                />
+              </>
             )}
 
             <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
