@@ -20,6 +20,12 @@ interface TabContextMenuState {
 const DROPDOWN_CHAR_WIDTH = 7
 const DROPDOWN_PANEL_CLASS = "rounded-[10px] border border-[var(--border-color)] bg-[var(--surface-elevated)] shadow-[var(--shadow-lg)]"
 const DROPDOWN_ITEM_CLASS = "w-full whitespace-nowrap px-3 py-1.5 rounded-[7px] text-[11px] text-left transition-colors flex items-center gap-2"
+const TAB_BAR_CLASS = "relative z-[40] flex h-[34px] flex-shrink-0 items-stretch border-b bg-[var(--surface-secondary)] border-[var(--tab-divider)]"
+const TAB_ITEM_CLASS = "group relative flex h-full min-w-[148px] max-w-[230px] flex-shrink-0 cursor-pointer select-none items-center gap-2 border-r border-[var(--tab-divider)] px-3 text-[13px] transition-colors"
+const TAB_ITEM_ACTIVE_CLASS = "bg-[var(--tab-active-bg)] font-medium text-[var(--fg)]"
+const TAB_ITEM_INACTIVE_CLASS = "text-[var(--fg-secondary)] hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)]"
+const TAB_ICON_CLASS = "h-[15px] w-[15px] flex-shrink-0"
+const TAB_ACTION_BUTTON_CLASS = "flex h-[24px] w-[24px] flex-shrink-0 items-center justify-center rounded-[6px] text-[var(--fg-muted)] transition-colors hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)]"
 
 export function TabBar() {
   const { t } = useI18n()
@@ -449,14 +455,11 @@ export function TabBar() {
     return (
       <>
         <div
-          className={cn(
-            "relative z-[40] flex items-center h-[var(--size-tab)] border-b flex-shrink-0",
-            "bg-[var(--surface-secondary)] border-[var(--tab-divider)]"
-          )}
+          className={TAB_BAR_CLASS}
         >
-          <div className="flex items-center gap-1 px-2 flex-shrink-0">
+          <div className="flex flex-shrink-0 items-center border-r border-[var(--tab-divider)] px-1.5">
             <button
-              className="h-[22px] w-[22px] flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)] transition-colors"
+              className={TAB_ACTION_BUTTON_CLASS}
               onClick={handleAddTab}
               title={t("新建请求", "New request")}
             >
@@ -464,13 +467,13 @@ export function TabBar() {
             </button>
           </div>
           <div className="flex-1" />
-          <div className="flex items-center gap-1 px-2 flex-shrink-0">
+          <div className="flex flex-shrink-0 items-center border-l border-[var(--tab-divider)] px-1.5">
             {/* 环境选择 */}
             <div className="relative">
               <button
                 ref={envTriggerRef}
                 className={cn(
-                  "h-[22px] px-2 flex items-center gap-1 rounded-[6px] text-[10px] transition-colors",
+                  "flex h-[26px] items-center gap-1.5 rounded-[6px] px-2 text-[11px] transition-colors",
                   "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]",
                   activeEnvironmentId && "text-[var(--accent)]"
                 )}
@@ -500,21 +503,18 @@ export function TabBar() {
 
   return (
     <div
-      className={cn(
-        "relative z-[40] flex items-end h-[var(--size-tab)] border-b flex-shrink-0",
-        "bg-[var(--surface-secondary)] border-[var(--tab-divider)]"
-      )}
+      className={TAB_BAR_CLASS}
     >
       {hasOverflow && (
-        <div className="flex items-center flex-shrink-0 h-[calc(var(--size-tab)-2px)] px-0.5">
+        <div className="flex h-full flex-shrink-0 items-center border-r border-[var(--tab-divider)] px-0.5">
           <button
-            className="h-full px-1 flex items-center justify-center text-[var(--fg-secondary)] hover:bg-[var(--tab-hover-bg)] transition-colors"
+            className="flex h-[26px] w-[24px] items-center justify-center rounded-[6px] text-[var(--fg-secondary)] transition-colors hover:bg-[var(--tab-hover-bg)]"
             onClick={() => scrollContainerRef.current?.scrollBy({ left: -200, behavior: "smooth" })}
           >
             <AppIcon name="arrowLeft" size={12} />
           </button>
           <button
-            className="h-full px-1 flex items-center justify-center text-[var(--fg-secondary)] hover:bg-[var(--tab-hover-bg)] transition-colors"
+            className="flex h-[26px] w-[24px] items-center justify-center rounded-[6px] text-[var(--fg-secondary)] transition-colors hover:bg-[var(--tab-hover-bg)]"
             onClick={() => scrollContainerRef.current?.scrollBy({ left: 200, behavior: "smooth" })}
           >
             <AppIcon name="arrowRight" size={12} />
@@ -524,7 +524,7 @@ export function TabBar() {
 
       <div
         ref={scrollContainerRef}
-        className="flex items-end flex-1 min-w-0 overflow-x-hidden"
+        className="flex min-w-0 flex-1 items-stretch overflow-x-hidden"
       >
         {tabs.map((tab) => {
           const isActive = !editingEnvironmentId && tab.id === activeTabId
@@ -535,13 +535,9 @@ export function TabBar() {
                 <div
                   data-tab-id={tab.id}
                   className={cn(
-                    "flex items-center gap-[var(--size-gap-sm)] px-2.5 h-[calc(var(--size-tab)-2px)]",
-                    "text-[length:var(--size-font-2xs)] cursor-pointer select-none",
-                "border-r border-[var(--tab-divider)] transition-colors group min-w-0 flex-shrink-0",
-                isActive
-                  ? "bg-[var(--surface)] text-[var(--fg)] border-r-transparent border-b-2 border-b-[var(--accent)]"
-                  : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]"
-              )}
+                    TAB_ITEM_CLASS,
+                    isActive ? TAB_ITEM_ACTIVE_CLASS : TAB_ITEM_INACTIVE_CLASS
+                  )}
                   onPointerDown={(e) => {
                     if (e.button === 0) {
                       e.preventDefault()
@@ -552,24 +548,24 @@ export function TabBar() {
                   }}
                   onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id }) }}
                 >
-                  <span className={cn(
-                    "text-[9px] font-mono font-bold uppercase flex-shrink-0 min-w-[40px] text-right",
-                    METHOD_COLORS[tab.request.method as HttpMethod] || "text-[var(--fg-muted)]"
-                  )}>
-                    {tab.request.method || "GET"}
-                  </span>
-                  <span className={cn("truncate max-w-[100px]", isActive ? "text-[var(--fg)]" : "text-[var(--fg-secondary)]")}>
+                  {isActive && <span className="absolute inset-x-0 bottom-[-1px] h-0.5 bg-[var(--tab-active-border)]" />}
+                  <AppIcon
+                    name="commandLine"
+                    size={15}
+                    strokeWidth={1.75}
+                    className={cn(TAB_ICON_CLASS, isActive ? "text-[var(--fg)]" : "text-[var(--fg-secondary)]")}
+                  />
+                  <span className={cn("min-w-0 flex-1 truncate", isActive ? "text-[var(--fg)]" : "text-[var(--fg-secondary)]")}>
                     {tab.title}
                   </span>
                   {tab.dirty && (
-                    <span className="w-1 h-1 rounded-full bg-[var(--accent)] flex-shrink-0" />
+                    <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--accent)]" />
                   )}
                   {tab.closable && (
                     <button
                       className={cn(
-                        "flex items-center justify-center flex-shrink-0 transition-opacity",
-                        "opacity-0 group-hover:opacity-100",
-                        "text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                        "flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-[4px] transition-opacity",
+                        "text-[var(--fg-muted)] opacity-0 hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)] group-hover:opacity-100"
                       )}
                       onClick={(e) => { e.stopPropagation(); requestTabClose(tab.id) }}
                     >
@@ -596,12 +592,8 @@ export function TabBar() {
               key={environmentTab.id}
               data-tab-id={`env-${environmentTab.id}`}
               className={cn(
-                "flex items-center gap-[var(--size-gap-sm)] px-2.5 h-[calc(var(--size-tab)-2px)]",
-                "text-[length:var(--size-font-2xs)] cursor-pointer select-none",
-                "border-r border-[var(--tab-divider)] transition-colors group min-w-0 flex-shrink-0",
-                isEnvironmentTabActive
-                  ? "bg-[var(--surface)] text-[var(--fg)] border-r-transparent border-b-2 border-b-[var(--accent)]"
-                  : "text-[var(--fg-secondary)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]"
+                TAB_ITEM_CLASS,
+                isEnvironmentTabActive ? TAB_ITEM_ACTIVE_CLASS : TAB_ITEM_INACTIVE_CLASS
               )}
               title={`${t("环境", "Environment")} ${environmentTab.name}`}
               onPointerDown={(e) => {
@@ -615,22 +607,23 @@ export function TabBar() {
                 }
               }}
             >
+              {isEnvironmentTabActive && <span className="absolute inset-x-0 bottom-[-1px] h-0.5 bg-[var(--tab-active-border)]" />}
               <AppIcon
                 name="globe"
-                size={11}
+                size={15}
+                strokeWidth={1.75}
                 className={cn(
-                  "flex-shrink-0",
-                  isEnvironmentTabActive ? "text-[var(--accent)]" : "text-[var(--fg-muted)]"
+                  TAB_ICON_CLASS,
+                  isEnvironmentTabActive ? "text-[var(--fg)]" : "text-[var(--fg-secondary)]"
                 )}
               />
-              <span className={cn("truncate max-w-[120px]", isEnvironmentTabActive ? "text-[var(--fg)]" : "text-[var(--fg-secondary)]")}>
+              <span className={cn("min-w-0 flex-1 truncate", isEnvironmentTabActive ? "text-[var(--fg)]" : "text-[var(--fg-secondary)]")}>
                 {environmentTab.name}
               </span>
               <button
                 className={cn(
-                  "flex items-center justify-center flex-shrink-0 transition-opacity",
-                  "opacity-0 group-hover:opacity-100",
-                  "text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                  "flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-[4px] transition-opacity",
+                  "text-[var(--fg-muted)] opacity-0 hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)] group-hover:opacity-100"
                 )}
                 onClick={(e) => {
                   e.stopPropagation()
@@ -645,7 +638,7 @@ export function TabBar() {
         })}
         {!hasOverflow && (
           <button
-            className="h-[22px] w-[22px] flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)] transition-colors flex-shrink-0 ml-0.5 self-center"
+            className={cn(TAB_ACTION_BUTTON_CLASS, "ml-1 self-center")}
             onClick={handleAddTab}
             title={t("新建请求", "New request")}
           >
@@ -655,10 +648,10 @@ export function TabBar() {
       </div>
 
       {/* 右侧工具区：Tab下拉列表、环境选择 */}
-      <div className="flex items-center gap-0.5 px-1.5 flex-shrink-0 h-[calc(var(--size-tab)-2px)]">
+      <div className="flex h-full flex-shrink-0 items-center gap-0.5 border-l border-[var(--tab-divider)] px-1.5">
         {hasOverflow && (
           <button
-            className="h-[22px] w-[22px] flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)] transition-colors"
+            className={TAB_ACTION_BUTTON_CLASS}
             onClick={handleAddTab}
             title={t("新建请求", "New request")}
           >
@@ -669,7 +662,7 @@ export function TabBar() {
         {/* Tab 下拉列表 */}
         <div className="relative" ref={tabListRef}>
           <button
-            className="h-[22px] w-[22px] flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)] transition-colors"
+            className={TAB_ACTION_BUTTON_CLASS}
             onClick={() => setShowTabList(!showTabList)}
             title={t("显示所有标签", "Show all tabs")}
           >
@@ -739,7 +732,7 @@ export function TabBar() {
           <button
             ref={envTriggerRef}
             className={cn(
-              "h-[22px] px-2 flex items-center gap-1 rounded-[6px] text-[10px] transition-colors",
+              "flex h-[26px] items-center gap-1.5 rounded-[6px] px-2 text-[11px] transition-colors",
               "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]",
               activeEnvironmentId && "text-[var(--accent)]"
             )}
