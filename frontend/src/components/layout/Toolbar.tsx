@@ -34,7 +34,7 @@ function useTitlebarDoubleClick() {
 
 export function Toolbar() {
   const { t } = useI18n()
-  const { resolved, setTheme, setSettingsOpen } = useUIStore()
+  const { resolved, sidebarCollapsed, toggleSidebar, setTheme, setSettingsOpen } = useUIStore()
   const { currentProjectId } = useProjectStore()
   const addTab = useTabStore((s) => s.addTab)
   const [showCurlDialog, setShowCurlDialog] = useState(false)
@@ -122,7 +122,31 @@ export function Toolbar() {
           <WindowControls />
         </div>
 
-        <div className="ml-1.5">
+        <div className="titlebar-no-drag ml-1.5 flex items-center" onMouseDown={(e) => e.stopPropagation()}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                aria-label={sidebarCollapsed ? t("展开侧边栏", "Expand sidebar") : t("收起侧边栏", "Collapse sidebar")}
+                className="flex h-[24px] w-[24px] items-center justify-center rounded-[7px] transition-colors hover:bg-[var(--surface-secondary)]"
+                data-testid="sidebar-toggle"
+                onClick={toggleSidebar}
+                type="button"
+              >
+                <AppIcon
+                  name={sidebarCollapsed ? "sidebarExpand" : "sidebarCollapse"}
+                  size={15}
+                  strokeWidth={1.65}
+                  className="text-[var(--fg-secondary)]"
+                />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {sidebarCollapsed ? t("展开侧边栏", "Expand sidebar") : t("收起侧边栏", "Collapse sidebar")} (⌘B)
+            </TooltipContent>
+          </Tooltip>
+        </div>
+
+        <div className="ml-1">
           <WorkspaceHeader />
         </div>
 
