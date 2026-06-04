@@ -21,11 +21,11 @@ const DROPDOWN_CHAR_WIDTH = 7
 const DROPDOWN_PANEL_CLASS = "rounded-[10px] border border-[var(--border-color)] bg-[var(--surface-elevated)] shadow-[var(--shadow-lg)]"
 const DROPDOWN_ITEM_CLASS = "w-full whitespace-nowrap px-3 py-1.5 rounded-[7px] text-[11px] text-left transition-colors flex items-center gap-2"
 const TAB_BAR_CLASS = "relative z-[40] flex h-[var(--size-tab)] flex-shrink-0 items-stretch border-b bg-[var(--surface-secondary)] border-[var(--tab-divider)]"
-const TAB_ITEM_CLASS = "group relative flex h-[calc(var(--size-tab)-2px)] min-w-[148px] max-w-[230px] flex-shrink-0 cursor-pointer select-none items-center gap-2 self-end border-r border-[var(--tab-divider)] px-3 text-[length:var(--size-font-2xs)] transition-colors"
+const TAB_ITEM_CLASS = "group relative flex h-[calc(var(--size-tab)-2px)] min-w-[148px] max-w-[230px] flex-shrink-0 cursor-pointer select-none items-center gap-1.5 self-end border-r border-[var(--tab-divider)] px-2 text-[length:var(--size-font-2xs)] transition-colors"
 const TAB_ITEM_ACTIVE_CLASS = "bg-[var(--tab-active-bg)] font-medium text-[var(--fg)]"
 const TAB_ITEM_INACTIVE_CLASS = "text-[var(--fg-secondary)] hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)]"
 const TAB_ICON_CLASS = "h-[15px] w-[15px] flex-shrink-0"
-const TAB_METHOD_CLASS = "min-w-[34px] flex-shrink-0 text-right font-mono text-[9px] font-bold uppercase leading-none"
+const TAB_METHOD_CLASS = "min-w-[30px] flex-shrink-0 text-left font-mono text-[9px] font-bold uppercase leading-none"
 const TAB_ACTION_BUTTON_CLASS = "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] transition-colors hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)]"
 
 export function TabBar() {
