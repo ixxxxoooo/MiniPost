@@ -25,6 +25,7 @@ const TAB_ITEM_CLASS = "group relative flex h-[calc(var(--size-tab)-2px)] min-w-
 const TAB_ITEM_ACTIVE_CLASS = "bg-[var(--tab-active-bg)] font-medium text-[var(--fg)]"
 const TAB_ITEM_INACTIVE_CLASS = "text-[var(--fg-secondary)] hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)]"
 const TAB_ICON_CLASS = "h-[15px] w-[15px] flex-shrink-0"
+const TAB_METHOD_CLASS = "min-w-[34px] flex-shrink-0 text-right font-mono text-[9px] font-bold uppercase leading-none"
 const TAB_ACTION_BUTTON_CLASS = "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] transition-colors hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)]"
 
 export function TabBar() {
@@ -549,12 +550,12 @@ export function TabBar() {
                   onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id }) }}
                 >
                   {isActive && <span className="absolute inset-x-0 bottom-[-1px] h-0.5 bg-[var(--tab-active-border)]" />}
-                  <AppIcon
-                    name="commandLine"
-                    size={15}
-                    strokeWidth={1.75}
-                    className={cn(TAB_ICON_CLASS, isActive ? "text-[var(--fg)]" : "text-[var(--fg-secondary)]")}
-                  />
+                  <span className={cn(
+                    TAB_METHOD_CLASS,
+                    METHOD_COLORS[tab.request.method as HttpMethod] || "text-[var(--fg-muted)]"
+                  )}>
+                    {tab.request.method || "GET"}
+                  </span>
                   <span className={cn("min-w-0 flex-1 truncate", isActive ? "text-[var(--fg)]" : "text-[var(--fg-secondary)]")}>
                     {tab.title}
                   </span>
