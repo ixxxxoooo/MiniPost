@@ -20,12 +20,12 @@ interface TabContextMenuState {
 const DROPDOWN_CHAR_WIDTH = 7
 const DROPDOWN_PANEL_CLASS = "rounded-[10px] border border-[var(--border-color)] bg-[var(--surface-elevated)] shadow-[var(--shadow-lg)]"
 const DROPDOWN_ITEM_CLASS = "w-full whitespace-nowrap px-3 py-1.5 rounded-[7px] text-[11px] text-left transition-colors flex items-center gap-2"
-const TAB_BAR_CLASS = "relative z-[40] flex h-[34px] flex-shrink-0 items-stretch border-b bg-[var(--surface-secondary)] border-[var(--tab-divider)]"
-const TAB_ITEM_CLASS = "group relative flex h-full min-w-[148px] max-w-[230px] flex-shrink-0 cursor-pointer select-none items-center gap-2 border-r border-[var(--tab-divider)] px-3 text-[13px] transition-colors"
+const TAB_BAR_CLASS = "relative z-[40] flex h-[var(--size-tab)] flex-shrink-0 items-stretch border-b bg-[var(--surface-secondary)] border-[var(--tab-divider)]"
+const TAB_ITEM_CLASS = "group relative flex h-[calc(var(--size-tab)-2px)] min-w-[148px] max-w-[230px] flex-shrink-0 cursor-pointer select-none items-center gap-2 self-end border-r border-[var(--tab-divider)] px-3 text-[length:var(--size-font-2xs)] transition-colors"
 const TAB_ITEM_ACTIVE_CLASS = "bg-[var(--tab-active-bg)] font-medium text-[var(--fg)]"
 const TAB_ITEM_INACTIVE_CLASS = "text-[var(--fg-secondary)] hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)]"
 const TAB_ICON_CLASS = "h-[15px] w-[15px] flex-shrink-0"
-const TAB_ACTION_BUTTON_CLASS = "flex h-[24px] w-[24px] flex-shrink-0 items-center justify-center rounded-[6px] text-[var(--fg-muted)] transition-colors hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)]"
+const TAB_ACTION_BUTTON_CLASS = "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] transition-colors hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)]"
 
 export function TabBar() {
   const { t } = useI18n()
@@ -473,7 +473,7 @@ export function TabBar() {
               <button
                 ref={envTriggerRef}
                 className={cn(
-                  "flex h-[26px] items-center gap-1.5 rounded-[6px] px-2 text-[11px] transition-colors",
+                  "flex h-[22px] items-center gap-1 rounded-[6px] px-2 text-[10px] transition-colors",
                   "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]",
                   activeEnvironmentId && "text-[var(--accent)]"
                 )}
@@ -506,15 +506,15 @@ export function TabBar() {
       className={TAB_BAR_CLASS}
     >
       {hasOverflow && (
-        <div className="flex h-full flex-shrink-0 items-center border-r border-[var(--tab-divider)] px-0.5">
+        <div className="flex h-[calc(var(--size-tab)-2px)] flex-shrink-0 items-center self-end border-r border-[var(--tab-divider)] px-0.5">
           <button
-            className="flex h-[26px] w-[24px] items-center justify-center rounded-[6px] text-[var(--fg-secondary)] transition-colors hover:bg-[var(--tab-hover-bg)]"
+            className="flex h-full px-1 items-center justify-center text-[var(--fg-secondary)] transition-colors hover:bg-[var(--tab-hover-bg)]"
             onClick={() => scrollContainerRef.current?.scrollBy({ left: -200, behavior: "smooth" })}
           >
             <AppIcon name="arrowLeft" size={12} />
           </button>
           <button
-            className="flex h-[26px] w-[24px] items-center justify-center rounded-[6px] text-[var(--fg-secondary)] transition-colors hover:bg-[var(--tab-hover-bg)]"
+            className="flex h-full px-1 items-center justify-center text-[var(--fg-secondary)] transition-colors hover:bg-[var(--tab-hover-bg)]"
             onClick={() => scrollContainerRef.current?.scrollBy({ left: 200, behavior: "smooth" })}
           >
             <AppIcon name="arrowRight" size={12} />
@@ -732,7 +732,7 @@ export function TabBar() {
           <button
             ref={envTriggerRef}
             className={cn(
-              "flex h-[26px] items-center gap-1.5 rounded-[6px] px-2 text-[11px] transition-colors",
+              "flex h-[22px] items-center gap-1 rounded-[6px] px-2 text-[10px] transition-colors",
               "text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--tab-hover-bg)]",
               activeEnvironmentId && "text-[var(--accent)]"
             )}
