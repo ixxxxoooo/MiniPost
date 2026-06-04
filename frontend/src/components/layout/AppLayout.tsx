@@ -17,7 +17,7 @@ import appLogo from "@/assets/images/appicon.png"
 
 export function AppLayout() {
   const { t } = useI18n()
-  const { layoutDirection, editingEnvironmentId, workspaceView } = useUIStore()
+  const { layoutDirection, editingEnvironmentId, workspaceView, sidebarCollapsed, setSidebarCollapsed } = useUIStore()
   const currentProjectId = useProjectStore((s) => s.currentProjectId)
   const activeTab = useTabStore(getProjectActiveTabFromState)
 
@@ -97,7 +97,7 @@ export function AppLayout() {
     <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--surface)]">
       <Toolbar />
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="relative flex flex-1 min-h-0 overflow-hidden">
         {showProjectHome ? (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <ProjectHome />
@@ -106,6 +106,20 @@ export function AppLayout() {
         ) : (
           <>
             <Sidebar />
+
+            {sidebarCollapsed && (
+              <button
+                type="button"
+                aria-label={t("展开侧边栏", "Expand sidebar")}
+                className={cn(
+                  "absolute bottom-0 left-0 top-0 z-30 w-2 cursor-default titlebar-no-drag",
+                  "bg-transparent transition-colors hover:bg-[var(--accent)]/10 focus-visible:bg-[var(--accent)]/10 focus-visible:outline-none"
+                )}
+                data-testid="sidebar-reveal-rail"
+                onMouseEnter={() => setSidebarCollapsed(false)}
+                onFocus={() => setSidebarCollapsed(false)}
+              />
+            )}
 
             <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
               <TabBar />

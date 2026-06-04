@@ -61,6 +61,7 @@ interface UIState {
   setTheme: (theme: Theme) => void
   setLocale: (locale: Locale) => void
   setSidebarWidth: (width: number) => void
+  setSidebarCollapsed: (collapsed: boolean) => void
   toggleSidebar: () => void
   setLayoutDirection: (d: LayoutDirection) => void
   setIsSending: (v: boolean) => void
@@ -446,6 +447,7 @@ export const useUIStore = create<UIState>((set) => ({
     set({ locale })
   },
   setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
+  setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   setLayoutDirection: (layoutDirection) => set({ layoutDirection }),
   setIsSending: (isSending) => set({ isSending }),
