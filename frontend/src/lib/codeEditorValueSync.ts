@@ -22,3 +22,7 @@ export function getEditorValueSyncDecision(
 export function shouldApplyPendingEditorValue(currentEditorValue: string, pendingValue: string | null): pendingValue is string {
   return pendingValue !== null && currentEditorValue !== pendingValue
 }
+
+export function shouldEmitComposedEditorValue(composingValue: string | null, appliedPendingExternalValue: boolean): composingValue is string {
+  return composingValue !== null && !appliedPendingExternalValue
+}
