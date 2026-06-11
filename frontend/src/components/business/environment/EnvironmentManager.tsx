@@ -1,10 +1,18 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import { createPortal } from "react-dom"
 import { AppIcon } from "@/components/ui/icon"
 import { useI18n } from "@/hooks/useI18n"
+import { getEnvironmentDeleteConfirmMessage, getEnvironmentDeleteConfirmTitle } from "@/lib/environmentDeleteConfirm"
+import * as logger from "@/lib/logger"
 import { cn } from "@/lib/utils"
 import { useProjectStore } from "@/stores/projectStore"
 import { useEnvironmentStore } from "@/stores/environmentStore"
 import { useUIStore } from "@/stores/uiStore"
+
+interface DeleteConfirmState {
+  id: string
+  name: string
+}
 
 export function EnvironmentManager() {
   const { t } = useI18n()
@@ -17,6 +25,8 @@ export function EnvironmentManager() {
 
   const [newEnvName, setNewEnvName] = useState("")
   const [showNewInput, setShowNewInput] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null)
+  const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false)
 
   const handleCreateEnv = async () => {
     if (!currentProjectId || !newEnvName.trim()) return
@@ -36,10 +46,36 @@ export function EnvironmentManager() {
     }
   }
 
-  const handleDeleteEnv = async (envId: string) => {
-    if (!currentProjectId) return
-    await deleteEnvironment(currentProjectId, envId)
-    closeEnvironmentTab(envId)
+  const requestDeleteEnv = (env: DeleteConfirmState) => {
+    logger.info("EnvironmentManager", "请求删除环境确认", { envID: env.id, projectID: currentProjectId })
+    setDeleteConfirm(env)
+  }
+
+  const cancelDeleteEnv = () => {
+    if (deleteConfirmLoading) return
+    if (deleteConfirm) {
+      logger.debug("EnvironmentManager", "取消删除环境", { envID: deleteConfirm.id, projectID: currentProjectId })
+    }
+    setDeleteConfirm(null)
+  }
+
+  const handleConfirmDeleteEnv = async () => {
+    if (!currentProjectId || !deleteConfirm || deleteConfirmLoading) return
+    setDeleteConfirmLoading(true)
+    try {
+      await deleteEnvironment(currentProjectId, deleteConfirm.id)
+      closeEnvironmentTab(deleteConfirm.id)
+      logger.info("EnvironmentManager", "环境删除确认完成", { envID: deleteConfirm.id, projectID: currentProjectId })
+      setDeleteConfirm(null)
+    } catch (error) {
+      logger.error("EnvironmentManager", "环境删除失败", {
+        envID: deleteConfirm.id,
+        projectID: currentProjectId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setDeleteConfirmLoading(false)
+    }
   }
 
   if (!currentProjectId) return null
@@ -105,7 +141,8 @@ export function EnvironmentManager() {
             </span>
             <button
               className="opacity-0 group-hover:opacity-100 h-4 w-4 flex items-center justify-center rounded-[var(--radius-sm)] hover:bg-[var(--sidebar-hover)] text-[var(--fg-muted)] hover:text-[var(--danger)] transition-all flex-shrink-0"
-              onClick={(e) => { e.stopPropagation(); void handleDeleteEnv(env.id) }}
+              onClick={(e) => { e.stopPropagation(); requestDeleteEnv({ id: env.id, name: env.name }) }}
+              title={t("删除环境", "Delete environment")}
             >
               <AppIcon name="delete" size={10} />
             </button>
@@ -118,6 +155,45 @@ export function EnvironmentManager() {
           </div>
         )}
       </div>
+
+      {deleteConfirm && createPortal(
+        <div
+          className="fixed inset-0 z-[330] flex items-center justify-center"
+          onClick={cancelDeleteEnv}
+        >
+          <div className="absolute inset-0 bg-black/45 backdrop-blur-[1.5px]" />
+          <div
+            className="relative z-[331] w-[400px] rounded-[12px] border border-[var(--border-color)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b border-[var(--border-subtle)]">
+              <div className="text-[16px] font-semibold text-[var(--fg)]">{getEnvironmentDeleteConfirmTitle(t)}</div>
+            </div>
+            <div className="px-4 py-4 text-[13px] text-[var(--fg-secondary)] leading-[1.6]">
+              {getEnvironmentDeleteConfirmMessage(t, deleteConfirm.name)}
+            </div>
+            <div className="px-4 py-3 border-t border-[var(--border-subtle)] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="h-[32px] px-3 rounded-[8px] border border-[var(--button-border)] text-[12px] text-[var(--fg)] hover:bg-[var(--button-bg)] disabled:opacity-60"
+                onClick={cancelDeleteEnv}
+                disabled={deleteConfirmLoading}
+              >
+                {t("取消", "Cancel")}
+              </button>
+              <button
+                type="button"
+                className="h-[32px] px-3 rounded-[8px] bg-[var(--danger)] text-white text-[12px] font-medium hover:opacity-95 disabled:opacity-60"
+                onClick={() => void handleConfirmDeleteEnv()}
+                disabled={deleteConfirmLoading}
+              >
+                {deleteConfirmLoading ? t("删除中...", "Deleting...") : t("确认删除", "Delete")}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
