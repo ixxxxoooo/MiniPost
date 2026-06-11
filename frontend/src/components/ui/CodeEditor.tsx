@@ -5,7 +5,7 @@ import type { editor as MonacoEditorType } from "monaco-editor"
 import "monaco-editor/esm/vs/language/json/monaco.contribution"
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker"
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker"
-import { getEditorValueSyncDecision, shouldApplyPendingEditorValue } from "@/lib/codeEditorValueSync"
+import { getEditorValueSyncDecision, shouldApplyPendingEditorValue, shouldEmitComposedEditorValue } from "@/lib/codeEditorValueSync"
 import { registerMonacoSelectionProvider } from "@/lib/editorSelectionBridge"
 import { cn } from "@/lib/utils"
 
@@ -151,7 +151,19 @@ export function CodeEditor({
   const compositionDisposablesRef = useRef<Array<{ dispose: () => void }>>([])
   const isComposingRef = useRef(false)
   const pendingExternalValueRef = useRef<string | null>(null)
+  const pendingFormatSignalRef = useRef<number | null>(null)
+  const composingValueRef = useRef<string | null>(null)
+  const onChangeRef = useRef(onChange)
+  const formatSignalRef = useRef(formatSignal)
   const valueRef = useRef(value)
+
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
+
+  useEffect(() => {
+    formatSignalRef.current = formatSignal
+  }, [formatSignal])
 
   useEffect(() => {
     valueRef.current = value
@@ -400,6 +412,10 @@ export function CodeEditor({
     if (formatSignal === undefined) return
     const editor = editorRef.current
     if (!editor) return
+    if (isComposingRef.current) {
+      pendingFormatSignalRef.current = formatSignal
+      return
+    }
     editor.focus()
     const action = editor.getAction("editor.action.formatDocument")
     if (action) {
@@ -444,13 +460,31 @@ export function CodeEditor({
             editor.onDidCompositionStart(() => {
               isComposingRef.current = true
               pendingExternalValueRef.current = null
+              pendingFormatSignalRef.current = null
+              composingValueRef.current = null
             }),
             editor.onDidCompositionEnd(() => {
               isComposingRef.current = false
               const pendingValue = pendingExternalValueRef.current
+              const pendingFormatSignal = pendingFormatSignalRef.current
+              const composingValue = composingValueRef.current
               pendingExternalValueRef.current = null
-              if (shouldApplyPendingEditorValue(editor.getValue(), pendingValue)) {
+              pendingFormatSignalRef.current = null
+              composingValueRef.current = null
+              const appliedPendingExternalValue = shouldApplyPendingEditorValue(editor.getValue(), pendingValue)
+              if (appliedPendingExternalValue) {
                 applyExternalEditorValue(editor, pendingValue)
+              } else if (shouldEmitComposedEditorValue(composingValue, appliedPendingExternalValue)) {
+                onChangeRef.current?.(composingValue)
+              }
+              if (pendingFormatSignal !== null && pendingFormatSignal === formatSignalRef.current) {
+                editor.focus()
+                const action = editor.getAction("editor.action.formatDocument")
+                if (action) {
+                  void action.run()
+                  return
+                }
+                editor.trigger("minipost", "editor.action.formatDocument", null)
               }
             }),
           ]
@@ -465,7 +499,9 @@ export function CodeEditor({
           const normalizedValue = nextValue ?? ""
           valueRef.current = normalizedValue
           if (isComposingRef.current) {
+            composingValueRef.current = normalizedValue
             pendingExternalValueRef.current = null
+            return
           }
           onChange?.(normalizedValue)
         }}

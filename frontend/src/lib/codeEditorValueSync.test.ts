@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { getEditorValueSyncDecision, shouldApplyPendingEditorValue } from "./codeEditorValueSync"
+import { getEditorValueSyncDecision, shouldApplyPendingEditorValue, shouldEmitComposedEditorValue } from "./codeEditorValueSync"
 
 describe("code editor value sync", () => {
   it("does nothing when the editor already has the incoming value", () => {
@@ -22,5 +22,11 @@ describe("code editor value sync", () => {
     expect(shouldApplyPendingEditorValue("old", "new")).toBe(true)
     expect(shouldApplyPendingEditorValue("new", "new")).toBe(false)
     expect(shouldApplyPendingEditorValue("new", null)).toBe(false)
+  })
+
+  it("emits the final composed value unless an external value was applied", () => {
+    expect(shouldEmitComposedEditorValue("中文", false)).toBe(true)
+    expect(shouldEmitComposedEditorValue("中文", true)).toBe(false)
+    expect(shouldEmitComposedEditorValue(null, false)).toBe(false)
   })
 })
