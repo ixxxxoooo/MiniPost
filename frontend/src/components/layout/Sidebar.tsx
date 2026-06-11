@@ -247,6 +247,15 @@ const MENU_BTN = "h-5 w-5 flex items-center justify-center rounded-[var(--radius
 const MENU_ITEM = "w-full whitespace-nowrap px-2.5 py-1.5 rounded-[7px] text-[length:var(--size-font-2xs)] text-left hover:bg-[var(--sidebar-hover)] text-[var(--fg)] flex items-center gap-2"
 const MENU_ITEM_HOTKEY = "text-[10px] text-[var(--fg-muted)] font-mono ml-4"
 
+type ImportConflictStrategy = "update" | "copy" | "overwrite"
+
+interface ImportConflictPrompt {
+  count: number
+  samples: Array<{ method: string; url: string; name: string }>
+  content: string
+  sourceURL: string
+}
+
 interface SidebarProps {
   forceOpen?: boolean
 }
@@ -270,8 +279,9 @@ export function Sidebar({ forceOpen = false }: SidebarProps) {
     duplicateFolder,
     moveCollectionNode,
     exportProjectJSON,
-    importFromFile,
-    importFromURL,
+    previewImportFromFile,
+    previewImportFromURL,
+    importWithStrategy,
   } = useProjectStore()
   const { openRequestTab, addTab } = useTabStore()
   const tabs = useTabStore(getProjectTabsFromState)
@@ -297,6 +307,8 @@ export function Sidebar({ forceOpen = false }: SidebarProps) {
   const [isImportFileDragActive, setIsImportFileDragActive] = useState(false)
   const [urlImportInput, setUrlImportInput] = useState("")
   const [curlImportInput, setCurlImportInput] = useState("")
+  const [importConflictPrompt, setImportConflictPrompt] = useState<ImportConflictPrompt | null>(null)
+  const [importConflictStrategy, setImportConflictStrategy] = useState<ImportConflictStrategy>("update")
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null)
   const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -367,14 +379,18 @@ export function Sidebar({ forceOpen = false }: SidebarProps) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault()
-        if (!importLoading) {
-          setShowImportDialog(false)
+        if (importLoading) return
+        // 冲突选择弹层打开时，Escape 仅关闭该弹层
+        if (importConflictPrompt) {
+          setImportConflictPrompt(null)
+          return
         }
+        setShowImportDialog(false)
       }
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [importLoading, showImportDialog])
+  }, [importConflictPrompt, importLoading, showImportDialog])
 
   useEffect(() => {
     const handler = () => {
@@ -609,6 +625,8 @@ export function Sidebar({ forceOpen = false }: SidebarProps) {
     importFileDragDepthRef.current = 0
     setUrlImportInput("")
     setCurlImportInput("")
+    setImportConflictPrompt(null)
+    setImportConflictStrategy("update")
   }
 
   const openImportDialog = () => {
@@ -704,6 +722,35 @@ export function Sidebar({ forceOpen = false }: SidebarProps) {
     setImportProgress(100)
   }
 
+  const cancelImportProgress = () => {
+    if (importProgressTimerRef.current) clearInterval(importProgressTimerRef.current)
+    importProgressTimerRef.current = null
+    setImportProgress(0)
+  }
+
+  const finishImportSuccess = (message: string) => {
+    finishImportProgress()
+    setImportSuccess(message)
+    setActiveTab("requests")
+    setSearchQuery("")
+  }
+
+  // 预检发现 URL 重复时挂起导入流程，弹出策略选择（默认推荐“更新已有”）
+  const promptImportConflicts = (preview: { conflictCount: number; conflicts?: Array<{ method: string; url: string; name: string }> }, content: string, sourceURL: string) => {
+    cancelImportProgress()
+    setImportConflictStrategy("update")
+    setImportConflictPrompt({
+      count: preview.conflictCount,
+      samples: preview.conflicts ?? [],
+      content,
+      sourceURL,
+    })
+    info("Import", "Import conflicts detected, waiting for strategy choice", {
+      conflictCount: preview.conflictCount,
+      hasSourceURL: Boolean(sourceURL),
+    })
+  }
+
   const handleFileImportConfirm = async () => {
     if (!importContent.trim()) {
       setImportError(t("请先选择导入文件", "Please select an import file first"))
@@ -716,15 +763,41 @@ export function Sidebar({ forceOpen = false }: SidebarProps) {
     startImportProgress()
 
     try {
-      await importFromFile("auto", importContent)
-      finishImportProgress()
-      setImportSuccess(t("导入完成", "Import completed"))
-      setActiveTab("requests")
-      setSearchQuery("")
+      const preview = await previewImportFromFile("auto", importContent)
+      if ((preview.conflictCount ?? 0) > 0) {
+        promptImportConflicts(preview, importContent, "")
+        return
+      }
+      await importWithStrategy("auto", importContent, "", "copy")
+      finishImportSuccess(t("导入完成", "Import completed"))
     } catch (err) {
-      if (importProgressTimerRef.current) clearInterval(importProgressTimerRef.current)
-      importProgressTimerRef.current = null
-      setImportProgress(0)
+      cancelImportProgress()
+      setImportError(getImportErrorMessage(err, t("导入失败", "Import failed")))
+    } finally {
+      setImportLoading(false)
+    }
+  }
+
+  // 用户在冲突弹层中确认策略后真正执行导入
+  const handleConflictStrategyConfirm = async () => {
+    if (!importConflictPrompt) return
+
+    setImportLoading(true)
+    setImportError("")
+    setImportSuccess("")
+    startImportProgress()
+
+    try {
+      await importWithStrategy("auto", importConflictPrompt.content, importConflictPrompt.sourceURL, importConflictStrategy)
+      setImportConflictPrompt(null)
+      finishImportSuccess(t("导入完成", "Import completed"))
+      info("Import", "Import completed with conflict strategy", {
+        strategy: importConflictStrategy,
+        conflictCount: importConflictPrompt.count,
+      })
+    } catch (err) {
+      cancelImportProgress()
+      setImportConflictPrompt(null)
       setImportError(getImportErrorMessage(err, t("导入失败", "Import failed")))
     } finally {
       setImportLoading(false)
@@ -798,15 +871,17 @@ export function Sidebar({ forceOpen = false }: SidebarProps) {
     startImportProgress()
 
     try {
-      await importFromURL("auto", sourceURL)
-      finishImportProgress()
-      setImportSuccess(t("已从地址导入完成", "Imported successfully from URL"))
-      setActiveTab("requests")
-      setSearchQuery("")
+      // 预检会一并返回已拉取的远程内容，后续导入无需二次请求
+      const preview = await previewImportFromURL("auto", sourceURL)
+      const resolvedURL = preview.resolvedURL || sourceURL
+      if ((preview.conflictCount ?? 0) > 0) {
+        promptImportConflicts(preview, preview.content, resolvedURL)
+        return
+      }
+      await importWithStrategy("auto", preview.content, resolvedURL, "copy")
+      finishImportSuccess(t("已从地址导入完成", "Imported successfully from URL"))
     } catch (err) {
-      if (importProgressTimerRef.current) clearInterval(importProgressTimerRef.current)
-      importProgressTimerRef.current = null
-      setImportProgress(0)
+      cancelImportProgress()
       setImportError(getImportErrorMessage(err, t("地址导入失败", "URL import failed")))
     } finally {
       setImportLoading(false)
@@ -1719,6 +1794,108 @@ export function Sidebar({ forceOpen = false }: SidebarProps) {
               </button>
             </div>
           </div>
+
+          {/* 重复接口处理策略弹层 */}
+          {importConflictPrompt && (
+            <div
+              className="absolute inset-0 z-[330] flex items-center justify-center"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="absolute inset-0 bg-black/45 backdrop-blur-[1px]" />
+              <div className="relative z-[331] w-[540px] rounded-[12px] border border-[var(--border-color)] bg-[var(--surface)] shadow-[var(--shadow-lg)] overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--border-subtle)]">
+                  <div className="text-[13px] font-semibold text-[var(--fg)]">{t("发现重复接口", "Duplicate requests found")}</div>
+                  <div className="mt-0.5 text-[11px] text-[var(--fg-secondary)]">
+                    {t(
+                      `本次导入有 ${importConflictPrompt.count} 个接口与当前项目中的接口 URL 重复，请选择处理方式。`,
+                      `${importConflictPrompt.count} request(s) in this import share the same URL as existing requests. Choose how to handle them.`
+                    )}
+                  </div>
+                </div>
+
+                {importConflictPrompt.samples.length > 0 && (
+                  <div className="mx-4 mt-3 max-h-[120px] overflow-auto rounded-[8px] border border-[var(--border-subtle)] bg-[var(--surface-secondary)]">
+                    {importConflictPrompt.samples.map((sample, index) => (
+                      <div key={`${sample.method}-${sample.url}-${index}`} className="flex items-center gap-2 px-2.5 py-1.5 border-b border-[var(--border-subtle)] last:border-b-0">
+                        <span className="shrink-0 font-mono text-[10px] font-semibold text-[var(--accent)]">{sample.method}</span>
+                        <span className="truncate font-mono text-[11px] text-[var(--fg)]">{sample.url}</span>
+                        {sample.name && <span className="ml-auto shrink-0 max-w-[140px] truncate text-[10px] text-[var(--fg-muted)]">{sample.name}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-2 px-4 py-3">
+                  {([
+                    {
+                      value: "update" as ImportConflictStrategy,
+                      title: t("更新已有（推荐）", "Update existing (Recommended)"),
+                      description: t("保留你的本地修改（参数值、Body、Auth 等），仅合并文档新增的参数与说明", "Keep your local changes (param values, body, auth) and merge new params and descriptions from the document"),
+                    },
+                    {
+                      value: "copy" as ImportConflictStrategy,
+                      title: t("导入副本", "Import as copy"),
+                      description: t("保留已有接口不变，另外新建一份导入的接口", "Keep existing requests untouched and create new copies from the import"),
+                    },
+                    {
+                      value: "overwrite" as ImportConflictStrategy,
+                      title: t("覆盖已有", "Overwrite existing"),
+                      description: t("用导入内容完全替换已有接口，本地修改将丢失", "Replace existing requests entirely with the imported content; local changes will be lost"),
+                    },
+                  ]).map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      disabled={importLoading}
+                      onClick={() => setImportConflictStrategy(option.value)}
+                      className={cn(
+                        "w-full rounded-[10px] border px-3 py-2.5 text-left transition-colors",
+                        importConflictStrategy === option.value
+                          ? "border-[var(--accent)] bg-[var(--accent)]/8"
+                          : "border-[var(--border-color)] bg-[var(--surface-secondary)] hover:bg-[var(--button-bg)]"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "h-3.5 w-3.5 shrink-0 rounded-full border flex items-center justify-center",
+                            importConflictStrategy === option.value
+                              ? "border-[var(--accent)]"
+                              : "border-[var(--border-color)]"
+                          )}
+                        >
+                          {importConflictStrategy === option.value && (
+                            <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+                          )}
+                        </span>
+                        <span className="text-[12px] font-medium text-[var(--fg)]">{option.title}</span>
+                      </div>
+                      <div className="mt-1 pl-[22px] text-[11px] text-[var(--fg-secondary)]">{option.description}</div>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-[var(--border-subtle)]">
+                  <button
+                    type="button"
+                    disabled={importLoading}
+                    className="h-8 px-4 rounded-[8px] text-[12px] font-medium border border-[var(--border-color)] text-[var(--fg-secondary)] hover:bg-[var(--surface-secondary)] disabled:opacity-40"
+                    onClick={() => setImportConflictPrompt(null)}
+                  >
+                    {t("取消", "Cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={importLoading}
+                    className="h-8 px-4 rounded-[8px] text-[12px] font-medium text-white bg-[var(--accent)] hover:brightness-105 disabled:opacity-40"
+                    onClick={() => void handleConflictStrategyConfirm()}
+                  >
+                    {importLoading ? t("导入中...", "Importing...") : t("确认导入", "Confirm import")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>,
         document.body
       )}

@@ -62,6 +62,10 @@ export function GetHistory(arg1) {
   return window['go']['main']['App']['GetHistory'](arg1);
 }
 
+export function ImportCollectionWithStrategy(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['ImportCollectionWithStrategy'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function ImportCurl(arg1) {
   return window['go']['main']['App']['ImportCurl'](arg1);
 }
@@ -120,6 +124,14 @@ export function OpenFileDialogAny() {
 
 export function OpenFileDialogJSON() {
   return window['go']['main']['App']['OpenFileDialogJSON']();
+}
+
+export function PreviewImportFromFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['PreviewImportFromFile'](arg1, arg2, arg3);
+}
+
+export function PreviewImportFromURL(arg1, arg2, arg3) {
+  return window['go']['main']['App']['PreviewImportFromURL'](arg1, arg2, arg3);
 }
 
 export function RenameFolder(arg1, arg2, arg3) {
