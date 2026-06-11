@@ -86,8 +86,8 @@ export function ProjectHome() {
           <div className="flex w-[320px] items-center gap-2">
             <input
               className={cn(
-                "h-9 flex-1 rounded-[10px] border border-[var(--button-border)] bg-[var(--surface-secondary)] px-3",
-                "text-[13px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
+                "h-[var(--size-input)] flex-1 rounded-[var(--radius-input)] border border-[var(--border-color)] bg-[var(--surface)] px-3",
+                "text-[length:var(--size-font-sm)] text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)] focus:border-[var(--accent)]"
               )}
               value={newProjectName}
               onChange={(event) => setNewProjectName(event.target.value)}
@@ -100,7 +100,7 @@ export function ProjectHome() {
               type="button"
               onClick={() => void handleCreateProject()}
               className={cn(
-                "h-9 rounded-[10px] px-3 text-[13px] font-medium transition-colors",
+                "h-[var(--size-btn)] rounded-[var(--radius-btn)] px-3 text-[length:var(--size-font-sm)] font-medium transition-colors",
                 "bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]"
               )}
             >
@@ -172,8 +172,8 @@ export function ProjectHome() {
                         void handleSaveDescription(project.id)
                       }}
                       className={cn(
-                        "h-7 w-full rounded-[8px] border border-[var(--button-border)] bg-[var(--surface-secondary)] px-2.5",
-                        "text-[11px] text-[var(--fg-secondary)] outline-none transition-colors",
+                        "h-[var(--size-input-sm)] w-full rounded-[var(--radius-input)] border border-[var(--border-color)] bg-[var(--surface)] px-3",
+                        "text-[length:var(--size-font-xs)] text-[var(--fg-secondary)] outline-none transition-colors",
                         "focus:border-[var(--accent)] placeholder:text-[var(--fg-muted)]"
                       )}
                       placeholder={t("输入项目描述（回车或失焦保存）", "Enter project description (save on Enter/blur)")}
@@ -187,7 +187,7 @@ export function ProjectHome() {
                         setThemePickerProjectId((prev) => prev === project.id ? null : project.id)
                       }}
                       className={cn(
-                        "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] transition-colors",
+                        "inline-flex h-[var(--size-btn)] items-center gap-1.5 rounded-[var(--radius-btn)] border px-3 text-[length:var(--size-font-xs)] transition-colors",
                         "border-[var(--border-color)] bg-[var(--surface-secondary)] text-[var(--fg-secondary)] hover:text-[var(--fg)]"
                       )}
                     >
