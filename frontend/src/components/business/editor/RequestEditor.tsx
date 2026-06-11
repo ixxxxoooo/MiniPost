@@ -22,6 +22,7 @@ import { stripJsonComments } from "@/components/ui/CodeEditor"
 import { ensureRequestProtocol, resolveTemplateVariables } from "@/lib/variableResolver"
 import { areParamsEquivalent, syncParamsWithUrlQuery } from "@/lib/urlQuerySync"
 import { buildSaveResponsePayload, suggestResponseFilename } from "@/lib/responseDownload"
+import { defaultEditorTabForMethod } from "@/lib/requestEditorTabs"
 import { useI18n } from "@/hooks/useI18n"
 
 const TOKEN_HEADER_NAME = "MiniPost-Token"
@@ -797,7 +798,8 @@ export function RequestEditorBody() {
   const paramsCount = request.params.filter(isMeaningfulKeyValue).length
   const headersCount = request.headers.filter((item) => isMeaningfulKeyValue(item) && !isAutoHeaderDisabledMarkerKey(item.key ?? "")).length
   const requestEditorTabKey = `${activeTab.projectId || request.projectId || "project"}:${activeTab.requestId || request.id}`
-  const activeEditorTab = editorTabByRequestKey[requestEditorTabKey] ?? "params"
+  // 用户没有手动切换过标签时，按请求方法决定默认定位：GET 类停在 Params，POST 类停在 Body
+  const activeEditorTab = editorTabByRequestKey[requestEditorTabKey] ?? defaultEditorTabForMethod(request.method)
 
   return (
     <div className="flex h-full flex-col bg-[var(--surface)] overflow-hidden">

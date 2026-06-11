@@ -2,6 +2,7 @@ import { create } from "zustand"
 import type { RequestData } from "@/types/request"
 import type { HttpResponse, HttpStreamEntry } from "@/types/response"
 import { createDefaultRequest } from "@/types/request"
+import { shouldDefaultBodyToJson } from "@/lib/requestEditorTabs"
 
 const TAB_STORAGE_KEY = "minipost:project-tabs"
 
@@ -392,6 +393,10 @@ export const useTabStore = create<TabState>((set, get) => ({
     }
 
     const id = crypto.randomUUID()
+    // POST 类请求打开时若 body 还是 none，默认切到 JSON，便于直接编辑请求体（不标记为已修改）
+    const normalizedBody = shouldDefaultBodyToJson(request.method, request.body?.type)
+      ? { ...request.body, type: "json" as const }
+      : request.body
     const tab: RequestTab = {
       id,
       title: request.name || "Untitled",
@@ -401,6 +406,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       dirty: false,
       request: {
         ...request,
+        body: normalizedBody,
         projectId: request.projectId ?? projectId,
       },
       response: null,
