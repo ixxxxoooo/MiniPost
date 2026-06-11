@@ -21,9 +21,9 @@ const DROPDOWN_CHAR_WIDTH = 7
 const DROPDOWN_PANEL_CLASS = "rounded-[10px] border border-[var(--border-color)] bg-[var(--surface-elevated)] shadow-[var(--shadow-lg)]"
 const DROPDOWN_ITEM_CLASS = "w-full whitespace-nowrap px-3 py-1.5 rounded-[7px] text-[11px] text-left transition-colors flex items-center gap-2"
 const TAB_BAR_CLASS = "relative z-[40] flex h-[var(--size-tab)] flex-shrink-0 items-stretch border-b bg-[var(--surface-secondary)] border-[var(--tab-divider)]"
-const TAB_ITEM_CLASS = "group relative flex h-[calc(var(--size-tab)-2px)] min-w-[148px] max-w-[230px] flex-shrink-0 cursor-pointer select-none items-center gap-1 self-end border-r border-[var(--tab-divider)] px-2 text-[length:var(--size-font-2xs)] transition-colors"
-const TAB_ITEM_ACTIVE_CLASS = "bg-[var(--tab-active-bg)] font-medium text-[var(--fg)]"
-const TAB_ITEM_INACTIVE_CLASS = "text-[var(--fg-secondary)] hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)]"
+const TAB_ITEM_CLASS = "group relative flex h-[calc(var(--size-tab)-2px)] min-w-[148px] max-w-[230px] flex-shrink-0 cursor-pointer select-none items-center gap-1 self-end border-r border-b-2 border-r-[var(--tab-divider)] px-2 text-[length:var(--size-font-2xs)] transition-colors"
+const TAB_ITEM_ACTIVE_CLASS = "border-b-[var(--accent)] bg-[var(--tab-active-bg)] font-medium text-[var(--fg)]"
+const TAB_ITEM_INACTIVE_CLASS = "border-b-transparent text-[var(--fg-secondary)] hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)]"
 const TAB_ICON_CLASS = "h-[15px] w-[15px] flex-shrink-0"
 const TAB_METHOD_CLASS = "flex-shrink-0 text-left font-mono text-[9px] font-bold uppercase leading-none"
 const TAB_ACTION_BUTTON_CLASS = "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-muted)] transition-colors hover:bg-[var(--tab-hover-bg)] hover:text-[var(--fg)]"
@@ -549,7 +549,6 @@ export function TabBar() {
                   }}
                   onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id }) }}
                 >
-                  {isActive && <span className="absolute inset-x-0 bottom-[-1px] h-0.5 bg-[var(--tab-active-border)]" />}
                   <span className={cn(
                     TAB_METHOD_CLASS,
                     METHOD_COLORS[tab.request.method as HttpMethod] || "text-[var(--fg-muted)]"
@@ -608,7 +607,6 @@ export function TabBar() {
                 }
               }}
             >
-              {isEnvironmentTabActive && <span className="absolute inset-x-0 bottom-[-1px] h-0.5 bg-[var(--tab-active-border)]" />}
               <AppIcon
                 name="globe"
                 size={15}
