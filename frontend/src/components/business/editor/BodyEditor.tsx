@@ -7,7 +7,6 @@ import { FormDataEditor } from "./FormDataEditor"
 import { CodeEditor } from "@/components/ui/CodeEditor"
 import { AppIcon } from "@/components/ui/icon"
 import { useI18n } from "@/hooks/useI18n"
-import { shouldAutoFormatJsonOnEntry } from "@/lib/bodyEditorAutoFormat"
 import { cn } from "@/lib/utils"
 
 const BODY_TYPE_LABELS: Record<string, string> = {
@@ -45,17 +44,18 @@ export function BodyEditor() {
   }
 
   useEffect(() => {
-    if (!tabId) return
+    if (!activeTab) return
     if (body.type !== "json") {
       autoFormattedByTabRef.current[tabId] = false
       return
     }
-    const alreadyFormattedForTab = Boolean(autoFormattedByTabRef.current[tabId])
-    if (shouldAutoFormatJsonOnEntry(body.json ?? "", alreadyFormattedForTab)) {
-      triggerJsonFormat()
-    }
+    if (autoFormattedByTabRef.current[tabId]) return
     autoFormattedByTabRef.current[tabId] = true
-  }, [body.type, tabId, triggerJsonFormat])
+
+    const current = body.json ?? ""
+    if (!current.trim()) return
+    triggerJsonFormat()
+  }, [body.type, body.json, tabId, triggerJsonFormat])
 
   const handleFormatJson = () => {
     triggerJsonFormat()
