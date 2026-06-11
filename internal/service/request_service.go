@@ -418,13 +418,27 @@ func (s *RequestService) uniqueEnvironmentName(projectID, preferred string) (str
 	}
 }
 
-func (s *RequestService) saveImportedEnvironment(projectID, preferredName string, variables []model.Variable) error {
+func (s *RequestService) saveImportedEnvironment(projectID, preferredName string, variables []model.Variable, reuseExisting bool) error {
 	variables = normalizeImportedVariables(variables)
 	if len(variables) == 0 {
 		return nil
 	}
 
-	name, err := s.uniqueEnvironmentName(projectID, preferredName)
+	base := strings.TrimSpace(preferredName)
+	if reuseExisting && base != "" {
+		envs, err := s.store.ListEnvironments(projectID)
+		if err != nil {
+			return err
+		}
+		for _, env := range envs {
+			// 更新/覆盖策略下同名环境已存在时跳过，保留用户当前的环境配置
+			if env.Name == base {
+				return nil
+			}
+		}
+	}
+
+	name, err := s.uniqueEnvironmentName(projectID, base)
 	if err != nil {
 		return err
 	}
@@ -849,7 +863,7 @@ func collectOpenAPIOperations(pathItem openAPIPathItem) []struct {
 	}
 }
 
-func (s *RequestService) importOpenAPIEnvironments(projectID string, doc openAPIDoc, sourceURL string) (string, error) {
+func (s *RequestService) importOpenAPIEnvironments(projectID string, doc openAPIDoc, sourceURL string, reuseExisting bool) (string, error) {
 	baseName := strings.TrimSpace(doc.Info.Title)
 	if baseName == "" {
 		baseName = "OpenAPI"
@@ -893,7 +907,7 @@ func (s *RequestService) importOpenAPIEnvironments(projectID string, doc openAPI
 			if strings.TrimSpace(server.Description) != "" && len(doc.Servers) > 1 {
 				envName = fmt.Sprintf("%s - %s", baseName, strings.TrimSpace(server.Description))
 			}
-			if err := s.saveImportedEnvironment(projectID, envName, variables); err != nil {
+			if err := s.saveImportedEnvironment(projectID, envName, variables, reuseExisting); err != nil {
 				return "", err
 			}
 		}
@@ -913,7 +927,7 @@ func (s *RequestService) importOpenAPIEnvironments(projectID string, doc openAPI
 				Enabled:  true,
 				IsSecret: false,
 			},
-		}); err != nil {
+		}, reuseExisting); err != nil {
 			return "", err
 		}
 		return "{{baseUrl}}", nil
@@ -935,7 +949,7 @@ func (s *RequestService) importOpenAPIEnvironments(projectID string, doc openAPI
 			Enabled:  true,
 			IsSecret: false,
 		},
-	}); err != nil {
+	}, reuseExisting); err != nil {
 		return "", err
 	}
 	return "{{baseUrl}}", nil
@@ -1310,16 +1324,30 @@ func buildRequestRawURL(request model.RequestItem) string {
 	return raw + "?" + encoded
 }
 
-// ImportPostmanCollection 导入 Postman Collection v2.1 格式
+// ImportPostmanCollection 导入 Postman Collection v2.1 格式（历史行为：冲突时直接新建副本）
 func (s *RequestService) ImportPostmanCollection(projectID string, raw []byte) error {
+	_, err := s.ImportPostmanCollectionWithStrategy(projectID, raw, ImportStrategyCopy)
+	return err
+}
+
+// ImportPostmanCollectionWithStrategy 按指定冲突策略导入 Postman Collection v2.1 格式
+func (s *RequestService) ImportPostmanCollectionWithStrategy(projectID string, raw []byte, strategy string) (*ImportSummary, error) {
 	var collection postmanCollection
 	if err := unmarshalJSONPossiblyCommented(raw, &collection); err != nil {
-		return fmt.Errorf("解析 Postman JSON 失败: %w", err)
+		return nil, fmt.Errorf("解析 Postman JSON 失败: %w", err)
 	}
-	if err := s.saveImportedEnvironment(projectID, strings.TrimSpace(collection.Info.Name), convertPostmanVariables(collection.Variable)); err != nil {
-		return err
+	applier, err := s.newImportApplier(projectID, strategy)
+	if err != nil {
+		return nil, err
 	}
-	return s.importPostmanItems(projectID, "", collection.Item)
+	reuseEnv := applier.strategy != ImportStrategyCopy
+	if err := s.saveImportedEnvironment(projectID, strings.TrimSpace(collection.Info.Name), convertPostmanVariables(collection.Variable), reuseEnv); err != nil {
+		return nil, err
+	}
+	if err := s.importPostmanItems(applier, "", collection.Item); err != nil {
+		return nil, err
+	}
+	return &applier.summary, nil
 }
 
 func (s *RequestService) ImportPostmanEnvironment(projectID string, raw []byte) error {
@@ -1331,7 +1359,7 @@ func (s *RequestService) ImportPostmanEnvironment(projectID string, raw []byte) 
 	if name == "" {
 		name = "Postman Environment"
 	}
-	return s.saveImportedEnvironment(projectID, name, convertPostmanVariables(env.Values))
+	return s.saveImportedEnvironment(projectID, name, convertPostmanVariables(env.Values), false)
 }
 
 func parsePostmanFormDataFilePath(raw json.RawMessage) string {
@@ -1354,23 +1382,20 @@ func parsePostmanFormDataFilePath(raw json.RawMessage) string {
 	return ""
 }
 
-func (s *RequestService) importPostmanItems(projectID, parentFolderID string, items []postmanItem) error {
+func (s *RequestService) importPostmanItems(applier *importApplier, parentFolderID string, items []postmanItem) error {
 	for _, item := range items {
 		if len(item.Item) > 0 {
 			// 这是一个文件夹
-			folder, err := s.CreateFolder(projectID, parentFolderID, item.Name)
+			folderID, err := applier.ensureFolder(parentFolderID, item.Name)
 			if err != nil {
 				return err
 			}
-			if err := s.importPostmanItems(projectID, folder.ID, item.Item); err != nil {
+			if err := s.importPostmanItems(applier, folderID, item.Item); err != nil {
 				return err
 			}
 		} else if item.Request != nil {
 			// 这是一个请求
-			req, err := s.CreateRequest(projectID, parentFolderID, item.Name)
-			if err != nil {
-				return err
-			}
+			req := newImportedRequestTemplate(item.Name)
 			req.Method = item.Request.Method
 			if item.Request.URL.Raw != "" {
 				req.URL = item.Request.URL.Raw
@@ -1429,7 +1454,7 @@ func (s *RequestService) importPostmanItems(projectID, parentFolderID string, it
 					req.Body = model.RequestBody{Type: "form-data", FormData: formData}
 				}
 			}
-			if err := s.SaveRequest(req); err != nil {
+			if err := applier.applyRequest(parentFolderID, req); err != nil {
 				return err
 			}
 		}
@@ -1442,15 +1467,27 @@ func (s *RequestService) ImportSwagger(projectID string, raw []byte) error {
 	return s.ImportSwaggerWithSource(projectID, raw, "")
 }
 
+// ImportSwaggerWithSource 导入 OpenAPI/Swagger（历史行为：冲突时直接新建副本）
 func (s *RequestService) ImportSwaggerWithSource(projectID string, raw []byte, sourceURL string) error {
+	_, err := s.ImportSwaggerWithSourceStrategy(projectID, raw, sourceURL, ImportStrategyCopy)
+	return err
+}
+
+// ImportSwaggerWithSourceStrategy 按指定冲突策略导入 OpenAPI/Swagger 2.0 或 3.x 格式
+func (s *RequestService) ImportSwaggerWithSourceStrategy(projectID string, raw []byte, sourceURL, strategy string) (*ImportSummary, error) {
 	var doc openAPIDoc
 	if err := unmarshalJSONPossiblyCommented(raw, &doc); err != nil {
-		return fmt.Errorf("解析 OpenAPI JSON 失败: %w", err)
+		return nil, fmt.Errorf("解析 OpenAPI JSON 失败: %w", err)
 	}
 
-	baseURLTemplate, err := s.importOpenAPIEnvironments(projectID, doc, sourceURL)
+	applier, err := s.newImportApplier(projectID, strategy)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	baseURLTemplate, err := s.importOpenAPIEnvironments(projectID, doc, sourceURL, applier.strategy != ImportStrategyCopy)
+	if err != nil {
+		return nil, err
 	}
 
 	// 按 tag 分组创建文件夹
@@ -1469,12 +1506,12 @@ func (s *RequestService) ImportSwaggerWithSource(projectID string, raw []byte, s
 				if fid, ok := tagFolders[tag]; ok {
 					folderID = fid
 				} else {
-					folder, err := s.CreateFolder(projectID, "", tag)
+					fid, err := applier.ensureFolder("", tag)
 					if err != nil {
-						return err
+						return nil, err
 					}
-					tagFolders[tag] = folder.ID
-					folderID = folder.ID
+					tagFolders[tag] = fid
+					folderID = fid
 				}
 			}
 
@@ -1486,18 +1523,15 @@ func (s *RequestService) ImportSwaggerWithSource(projectID string, raw []byte, s
 				name = methodUpper + " " + pathStr
 			}
 
-			req, err := s.CreateRequest(projectID, folderID, name)
-			if err != nil {
-				return err
-			}
+			req := newImportedRequestTemplate(name)
 			req.Method = methodUpper
 			req.URL = joinURLTemplate(baseURLTemplate, replacePathPlaceholders(pathStr))
 			applyOpenAPIParameters(req, append(entry.parameters, op.Parameters...), doc)
 			applyOpenAPIRequestBody(req, op.RequestBody, doc)
-			if err := s.SaveRequest(req); err != nil {
-				return err
+			if err := applier.applyRequest(folderID, req); err != nil {
+				return nil, err
 			}
 		}
 	}
-	return nil
+	return &applier.summary, nil
 }

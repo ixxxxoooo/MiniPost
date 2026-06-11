@@ -21,6 +21,9 @@ import {
   ExportProjectJSON,
   ImportFromFile,
   ImportFromURL,
+  ImportCollectionWithStrategy,
+  PreviewImportFromFile,
+  PreviewImportFromURL,
   UpdateProjectDescription,
   UpdateProjectTheme,
 } from "../../wailsjs/go/main/App"
@@ -51,6 +54,12 @@ export const collectionService = {
     ImportFromFile(projectID, format, content),
   importFromURL: (projectID: string, format: string, sourceURL: string) =>
     ImportFromURL(projectID, format, sourceURL),
+  previewImportFromFile: (projectID: string, format: string, content: string) =>
+    PreviewImportFromFile(projectID, format, content),
+  previewImportFromURL: (projectID: string, format: string, sourceURL: string) =>
+    PreviewImportFromURL(projectID, format, sourceURL),
+  importWithStrategy: (projectID: string, format: string, content: string, sourceURL: string, strategy: string) =>
+    ImportCollectionWithStrategy(projectID, format, content, sourceURL, strategy),
 }
 
 export const folderService = {

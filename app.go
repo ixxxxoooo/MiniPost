@@ -598,62 +598,183 @@ func (a *App) ImportSwagger(projectID, jsonStr string) error {
 	return nil
 }
 
-func (a *App) importCollectionContent(projectID, format, content, sourceURL string) error {
-	parseAsObject := func(raw string) (map[string]json.RawMessage, string, error) {
-		var data map[string]json.RawMessage
-		if err := json.Unmarshal([]byte(raw), &data); err == nil {
+func parseImportContentAsObject(raw string) (map[string]json.RawMessage, string, error) {
+	var data map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &data); err == nil {
+		return data, raw, nil
+	}
+	cleaned := stripJSONComments([]byte(raw))
+	if !bytes.Equal(cleaned, []byte(raw)) {
+		if err := json.Unmarshal(cleaned, &data); err == nil {
 			return data, raw, nil
 		}
-		cleaned := stripJSONComments([]byte(raw))
-		if !bytes.Equal(cleaned, []byte(raw)) {
-			if err := json.Unmarshal(cleaned, &data); err == nil {
-				return data, raw, nil
-			}
-		}
-
-		// fallback: YAML -> JSON
-		var yamlObj map[string]interface{}
-		if err := yaml.Unmarshal([]byte(raw), &yamlObj); err != nil {
-			return nil, "", fmt.Errorf("无法解析 JSON/YAML: %w", err)
-		}
-		normalized, err := json.Marshal(yamlObj)
-		if err != nil {
-			return nil, "", fmt.Errorf("YAML 转换失败: %w", err)
-		}
-		if err := json.Unmarshal(normalized, &data); err != nil {
-			return nil, "", fmt.Errorf("转换后的 JSON 解析失败: %w", err)
-		}
-		return data, string(normalized), nil
 	}
 
+	// fallback: YAML -> JSON
+	var yamlObj map[string]interface{}
+	if err := yaml.Unmarshal([]byte(raw), &yamlObj); err != nil {
+		return nil, "", fmt.Errorf("无法解析 JSON/YAML: %w", err)
+	}
+	normalized, err := json.Marshal(yamlObj)
+	if err != nil {
+		return nil, "", fmt.Errorf("YAML 转换失败: %w", err)
+	}
+	if err := json.Unmarshal(normalized, &data); err != nil {
+		return nil, "", fmt.Errorf("转换后的 JSON 解析失败: %w", err)
+	}
+	return data, string(normalized), nil
+}
+
+// resolveImportKind 解析导入内容的实际类型（postman / postman-environment / swagger），并返回规范化后的内容
+func resolveImportKind(format, content string) (string, string, error) {
 	switch format {
 	case "postman":
-		return a.ImportPostmanCollection(projectID, content)
+		return "postman", content, nil
 	case "postman-environment":
-		return a.ImportPostmanEnvironment(projectID, content)
+		return "postman-environment", content, nil
 	case "swagger", "openapi":
-		return a.requestSvc.ImportSwaggerWithSource(projectID, []byte(content), sourceURL)
+		return "swagger", content, nil
 	default:
 		// 自动检测格式
-		raw, normalizedContent, err := parseAsObject(content)
+		raw, normalizedContent, err := parseImportContentAsObject(content)
 		if err != nil {
-			return err
+			return "", "", err
 		}
 		if _, ok := raw["info"]; ok {
 			if _, ok2 := raw["item"]; ok2 {
-				return a.ImportPostmanCollection(projectID, normalizedContent)
+				return "postman", normalizedContent, nil
 			}
 		}
 		if _, ok := raw["values"]; ok {
 			if _, hasItem := raw["item"]; !hasItem {
-				return a.ImportPostmanEnvironment(projectID, normalizedContent)
+				return "postman-environment", normalizedContent, nil
 			}
 		}
 		if _, ok := raw["paths"]; ok {
-			return a.requestSvc.ImportSwaggerWithSource(projectID, []byte(normalizedContent), sourceURL)
+			return "swagger", normalizedContent, nil
 		}
+		return "", "", fmt.Errorf("无法识别文件格式，请选择正确的导入格式")
+	}
+}
+
+func (a *App) importCollectionContent(projectID, format, content, sourceURL string) error {
+	return a.importCollectionContentWithStrategy(projectID, format, content, sourceURL, service.ImportStrategyCopy)
+}
+
+func (a *App) importCollectionContentWithStrategy(projectID, format, content, sourceURL, strategy string) error {
+	kind, normalizedContent, err := resolveImportKind(format, content)
+	if err != nil {
+		return err
+	}
+
+	switch kind {
+	case "postman":
+		summary, err := a.requestSvc.ImportPostmanCollectionWithStrategy(projectID, []byte(normalizedContent), strategy)
+		if err != nil {
+			logger.Error("导入 Postman 集合失败", "projectID", projectID, "strategy", strategy, "error", err.Error())
+			return err
+		}
+		logger.Info("导入 Postman 集合成功", "projectID", projectID, "strategy", strategy,
+			"created", summary.Created, "updated", summary.Updated, "overwritten", summary.Overwritten)
+		return nil
+	case "postman-environment":
+		return a.ImportPostmanEnvironment(projectID, normalizedContent)
+	case "swagger":
+		summary, err := a.requestSvc.ImportSwaggerWithSourceStrategy(projectID, []byte(normalizedContent), sourceURL, strategy)
+		if err != nil {
+			logger.Error("导入 Swagger 失败", "projectID", projectID, "strategy", strategy, "error", err.Error())
+			return err
+		}
+		logger.Info("导入 Swagger 成功", "projectID", projectID, "strategy", strategy,
+			"created", summary.Created, "updated", summary.Updated, "overwritten", summary.Overwritten)
+		return nil
+	default:
 		return fmt.Errorf("无法识别文件格式，请选择正确的导入格式")
 	}
+}
+
+// ImportPreview 导入预检结果：包含与已有请求的 URL 冲突信息
+type ImportPreview struct {
+	Kind          string                   `json:"kind"`
+	Content       string                   `json:"content"`
+	ResolvedURL   string                   `json:"resolvedURL"`
+	ConflictCount int                      `json:"conflictCount"`
+	Conflicts     []service.ImportConflict `json:"conflicts"`
+}
+
+const importPreviewMaxConflictSamples = 20
+
+func (a *App) buildImportPreview(projectID, format, content, sourceURL string) (*ImportPreview, error) {
+	kind, normalizedContent, err := resolveImportKind(format, content)
+	if err != nil {
+		return nil, err
+	}
+
+	var conflicts []service.ImportConflict
+	switch kind {
+	case "postman":
+		conflicts, err = a.requestSvc.PreviewPostmanConflicts(projectID, []byte(normalizedContent))
+	case "swagger":
+		conflicts, err = a.requestSvc.PreviewSwaggerConflicts(projectID, []byte(normalizedContent), sourceURL)
+	default:
+		// 环境导入不涉及请求冲突
+		conflicts = nil
+	}
+	if err != nil {
+		logger.Error("导入冲突预检失败", "projectID", projectID, "kind", kind, "error", err.Error())
+		return nil, err
+	}
+
+	preview := &ImportPreview{
+		Kind:          kind,
+		ResolvedURL:   sourceURL,
+		ConflictCount: len(conflicts),
+		Conflicts:     conflicts,
+	}
+	if len(preview.Conflicts) > importPreviewMaxConflictSamples {
+		preview.Conflicts = preview.Conflicts[:importPreviewMaxConflictSamples]
+	}
+	logger.Info("导入冲突预检完成", "projectID", projectID, "kind", kind, "conflictCount", preview.ConflictCount)
+	return preview, nil
+}
+
+// PreviewImportFromFile 预检文件导入内容与项目中已有请求的 URL 冲突
+func (a *App) PreviewImportFromFile(projectID, format, content string) (*ImportPreview, error) {
+	return a.buildImportPreview(projectID, format, content, "")
+}
+
+// PreviewImportFromURL 拉取远程导入内容并预检 URL 冲突；返回内容供后续导入复用，避免二次拉取
+func (a *App) PreviewImportFromURL(projectID, format, sourceURL string) (*ImportPreview, error) {
+	trimmedURL := strings.TrimSpace(sourceURL)
+	if trimmedURL == "" {
+		return nil, fmt.Errorf("导入地址不能为空")
+	}
+
+	parsedURL, err := neturl.Parse(trimmedURL)
+	if err != nil {
+		return nil, fmt.Errorf("导入地址无效: %w", err)
+	}
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return nil, fmt.Errorf("仅支持 http/https 导入地址")
+	}
+
+	content, resolvedURL, err := fetchRemoteImportContent(a.ctx, trimmedURL)
+	if err != nil {
+		return nil, err
+	}
+
+	preview, err := a.buildImportPreview(projectID, format, content, resolvedURL)
+	if err != nil {
+		return nil, err
+	}
+	preview.Content = content
+	preview.ResolvedURL = resolvedURL
+	return preview, nil
+}
+
+// ImportCollectionWithStrategy 按指定冲突策略导入集合内容（strategy: update / copy / overwrite）
+func (a *App) ImportCollectionWithStrategy(projectID, format, content, sourceURL, strategy string) error {
+	return a.importCollectionContentWithStrategy(projectID, format, content, sourceURL, strategy)
 }
 
 func fetchRemoteImportContent(ctx context.Context, sourceURL string) (string, string, error) {
