@@ -5,6 +5,7 @@ import type { editor as MonacoEditorType } from "monaco-editor"
 import "monaco-editor/esm/vs/language/json/monaco.contribution"
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker"
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker"
+import { getEditorValueSyncDecision, shouldApplyPendingEditorValue } from "@/lib/codeEditorValueSync"
 import { registerMonacoSelectionProvider } from "@/lib/editorSelectionBridge"
 import { cn } from "@/lib/utils"
 
@@ -111,6 +112,19 @@ function toMonacoLanguage(language: EditorLanguage): string {
   }
 }
 
+function applyExternalEditorValue(editor: MonacoEditorType.IStandaloneCodeEditor, nextValue: string) {
+  const position = editor.getPosition()
+  const selections = editor.getSelections()
+  const scrollTop = editor.getScrollTop()
+  const scrollLeft = editor.getScrollLeft()
+
+  editor.setValue(nextValue)
+  if (selections) editor.setSelections(selections)
+  if (position) editor.setPosition(position)
+  editor.setScrollTop(scrollTop)
+  editor.setScrollLeft(scrollLeft)
+}
+
 export function CodeEditor({
   value,
   onChange,
@@ -134,6 +148,9 @@ export function CodeEditor({
   const unregisterSelectionProviderRef = useRef<(() => void) | null>(null)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const tooltipObserverRef = useRef<MutationObserver | null>(null)
+  const compositionDisposablesRef = useRef<Array<{ dispose: () => void }>>([])
+  const isComposingRef = useRef(false)
+  const pendingExternalValueRef = useRef<string | null>(null)
   const valueRef = useRef(value)
 
   useEffect(() => {
@@ -142,18 +159,20 @@ export function CodeEditor({
     if (!editor) return
 
     const currentValue = editor.getValue()
-    if (currentValue === value) return
+    const decision = getEditorValueSyncDecision(currentValue, value, isComposingRef.current)
 
-    const position = editor.getPosition()
-    const selections = editor.getSelections()
-    const scrollTop = editor.getScrollTop()
-    const scrollLeft = editor.getScrollLeft()
+    if (decision.type === "none") {
+      pendingExternalValueRef.current = null
+      return
+    }
 
-    editor.setValue(value)
-    if (selections) editor.setSelections(selections)
-    if (position) editor.setPosition(position)
-    editor.setScrollTop(scrollTop)
-    editor.setScrollLeft(scrollLeft)
+    if (decision.type === "defer") {
+      pendingExternalValueRef.current = decision.pendingValue
+      return
+    }
+
+    pendingExternalValueRef.current = null
+    applyExternalEditorValue(editor, value)
   }, [value])
 
   const layoutEditor = useCallback((editor = editorRef.current) => {
@@ -318,7 +337,7 @@ export function CodeEditor({
     readOnly,
     minimap: { enabled: false },
     scrollBeyondLastLine: false,
-    smoothScrolling: true,
+    smoothScrolling: false,
     automaticLayout: false,
     contextmenu: true,
     renderValidationDecorations: "off",
@@ -330,7 +349,7 @@ export function CodeEditor({
     glyphMargin: false,
     folding: true,
     cursorBlinking: "smooth",
-    cursorSmoothCaretAnimation: "on",
+    cursorSmoothCaretAnimation: "off",
     padding: { top: 8, bottom: 8 },
     suggestOnTriggerCharacters: !readOnly,
     quickSuggestions: !readOnly,
@@ -393,6 +412,8 @@ export function CodeEditor({
   useEffect(() => () => {
     unregisterSelectionProviderRef.current?.()
     unregisterSelectionProviderRef.current = null
+    compositionDisposablesRef.current.forEach((disposable) => disposable.dispose())
+    compositionDisposablesRef.current = []
     resizeObserverRef.current?.disconnect()
     resizeObserverRef.current = null
     tooltipObserverRef.current?.disconnect()
@@ -418,6 +439,21 @@ export function CodeEditor({
           editorRef.current = editor
           unregisterSelectionProviderRef.current?.()
           unregisterSelectionProviderRef.current = registerMonacoSelectionProvider(editor)
+          compositionDisposablesRef.current.forEach((disposable) => disposable.dispose())
+          compositionDisposablesRef.current = [
+            editor.onDidCompositionStart(() => {
+              isComposingRef.current = true
+              pendingExternalValueRef.current = null
+            }),
+            editor.onDidCompositionEnd(() => {
+              isComposingRef.current = false
+              const pendingValue = pendingExternalValueRef.current
+              pendingExternalValueRef.current = null
+              if (shouldApplyPendingEditorValue(editor.getValue(), pendingValue)) {
+                applyExternalEditorValue(editor, pendingValue)
+              }
+            }),
+          ]
           watchEditorContainerSize(editor)
           stabilizeFindWidgetTooltips(editor)
           if (!enableSendShortcut || readOnly) return
@@ -428,6 +464,9 @@ export function CodeEditor({
         onChange={(nextValue) => {
           const normalizedValue = nextValue ?? ""
           valueRef.current = normalizedValue
+          if (isComposingRef.current) {
+            pendingExternalValueRef.current = null
+          }
           onChange?.(normalizedValue)
         }}
       />
