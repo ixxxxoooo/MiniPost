@@ -23,8 +23,9 @@ func ResolveKeyValues(kvs []model.KeyValue, variables []model.Variable) []model.
 	resolved := make([]model.KeyValue, len(kvs))
 	for i, kv := range kvs {
 		resolved[i] = model.KeyValue{
-			Key:   ResolveVariables(kv.Key, variables),
-			Value: ResolveVariables(kv.Value, variables),
+			Key:         ResolveVariables(kv.Key, variables),
+			Value:       ResolveVariables(kv.Value, variables),
+			Description: kv.Description,
 		}
 	}
 	return resolved

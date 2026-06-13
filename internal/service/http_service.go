@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -29,7 +30,9 @@ import (
 )
 
 type HttpService struct {
-	client *http.Client
+	client     *http.Client
+	inflightMu sync.Mutex
+	inflight   map[string]context.CancelFunc
 }
 
 type requestOptions struct {
@@ -182,7 +185,51 @@ func NewHttpService() *HttpService {
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		inflight: make(map[string]context.CancelFunc),
 	}
+}
+
+func (s *HttpService) registerInflight(requestID string, cancel context.CancelFunc) {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" || cancel == nil {
+		return
+	}
+	s.inflightMu.Lock()
+	defer s.inflightMu.Unlock()
+	if s.inflight == nil {
+		s.inflight = make(map[string]context.CancelFunc)
+	}
+	s.inflight[requestID] = cancel
+}
+
+func (s *HttpService) unregisterInflight(requestID string) {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return
+	}
+	s.inflightMu.Lock()
+	defer s.inflightMu.Unlock()
+	delete(s.inflight, requestID)
+}
+
+// CancelRequest 取消仍在进行中的 HTTP 请求。
+func (s *HttpService) CancelRequest(requestID string) bool {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return false
+	}
+	s.inflightMu.Lock()
+	cancel, ok := s.inflight[requestID]
+	if ok {
+		delete(s.inflight, requestID)
+	}
+	s.inflightMu.Unlock()
+	if !ok || cancel == nil {
+		return false
+	}
+	cancel()
+	logger.Info("HTTP 请求已取消", "requestID", requestID)
+	return true
 }
 
 // SendRequest 执行 HTTP 请求并返回响应
@@ -254,6 +301,18 @@ func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(mod
 	if err != nil {
 		logger.Warn("HTTP 请求对象构建失败", "requestID", requestID, "method", input.Method, "url", logURL, "error", err.Error())
 		return nil, appErrors.Wrap("REQUEST_BUILD_FAILED", "请求构建失败", err)
+	}
+
+	requestCtx := req.Context()
+	if strings.TrimSpace(input.RequestID) != "" {
+		var cancel context.CancelFunc
+		requestCtx, cancel = context.WithCancel(requestCtx)
+		s.registerInflight(input.RequestID, cancel)
+		defer func() {
+			cancel()
+			s.unregisterInflight(input.RequestID)
+		}()
+		req = req.WithContext(requestCtx)
 	}
 
 	// 设置 Content-Type（仅在有 body 时）
@@ -355,6 +414,13 @@ func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(mod
 	resp, err := client.Do(req)
 
 	if err != nil {
+		if requestCtx.Err() != nil {
+			logger.Info("HTTP 请求已取消", "requestID", requestID, "method", req.Method, "url", logURL)
+			return nil, &appErrors.AppError{
+				Code:    "REQUEST_CANCELLED",
+				Message: "请求已取消",
+			}
+		}
 		code, message, detail := classifyRequestSendError(err, reqURL)
 		logger.Warn("HTTP 请求发送失败",
 			"requestID", requestID,
@@ -423,6 +489,13 @@ func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(mod
 	}
 	bodyBytes, err := s.readResponseBody(resp.Body, options.maxResponseBytes, resp.Header.Get("Content-Type"), wrappedOnChunk)
 	if err != nil {
+		if requestCtx.Err() != nil {
+			logger.Info("HTTP 响应读取已取消", "requestID", requestID, "status", resp.StatusCode)
+			return nil, &appErrors.AppError{
+				Code:    "REQUEST_CANCELLED",
+				Message: "请求已取消",
+			}
+		}
 		logger.Warn("HTTP 响应体读取失败",
 			"requestID", requestID,
 			"status", resp.StatusCode,

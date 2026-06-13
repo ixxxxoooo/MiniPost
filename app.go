@@ -289,6 +289,15 @@ func (a *App) emitHTTPStreamEvent(streamID string, chunk model.StreamChunk) {
 	})
 }
 
+// CancelHTTPRequest 取消仍在进行中的 HTTP 请求。
+func (a *App) CancelHTTPRequest(requestID string) bool {
+	cancelled := a.httpSvc.CancelRequest(requestID)
+	if cancelled {
+		logger.Info("已取消 HTTP 请求", "requestID", requestID)
+	}
+	return cancelled
+}
+
 func (a *App) SendRequest(input model.SendRequestInput) (*model.HttpResponse, error) {
 	normalizedInput, err := normalizeCurlInput(input)
 	if err != nil {

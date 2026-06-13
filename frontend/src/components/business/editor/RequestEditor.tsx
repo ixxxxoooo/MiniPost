@@ -12,7 +12,7 @@ import { useTabStore, getProjectActiveTabFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
 import { useProjectStore } from "@/stores/projectStore"
 import { useEnvironmentStore } from "@/stores/environmentStore"
-import { sendHttpRequest } from "@/services/httpService"
+import { cancelHttpRequest, sendHttpRequest } from "@/services/httpService"
 import { useCookieStore } from "@/stores/cookieStore"
 import type { RequestData } from "@/types/request"
 import type { HttpResponse, HttpStreamEntry } from "@/types/response"
@@ -279,6 +279,7 @@ function useRequestEditorActions() {
 
   const { addConsoleRequest, updateConsoleResponse, updateConsoleError } = useUIStore()
   const abortRefByTab = useRef<Record<string, AbortController>>({})
+  const requestIdRefByTab = useRef<Record<string, string>>({})
   const sendingSeqByTabRef = useRef<Record<string, number>>({})
   const [saveDraftDialogOpen, setSaveDraftDialogOpen] = useState(false)
   const [saveDraftName, setSaveDraftName] = useState("")
@@ -290,6 +291,11 @@ function useRequestEditorActions() {
   const handleCancel = useCallback(() => {
     if (!activeTab) return
     const tabId = activeTab.id
+    const requestId = requestIdRefByTab.current[tabId]
+    if (requestId) {
+      void cancelHttpRequest(requestId)
+      delete requestIdRefByTab.current[tabId]
+    }
     abortRefByTab.current[tabId]?.abort()
     delete abortRefByTab.current[tabId]
     sendingSeqByTabRef.current[tabId] = (sendingSeqByTabRef.current[tabId] ?? 0) + 1
@@ -329,6 +335,7 @@ function useRequestEditorActions() {
     const requestProtocol = uiState.httpVersion === "http2" ? "HTTP/2.0" : "HTTP/1.1"
 
     const streamId = crypto.randomUUID()
+    requestIdRefByTab.current[tabId] = streamId
     const shouldUseStreaming = requestWantsStreaming(requestForSend) || requestForSend.method === "GET"
     const logId = addConsoleRequest({
       method: activeTab.request.method,
@@ -396,6 +403,7 @@ function useRequestEditorActions() {
         activeEnvironmentId ?? undefined,
         shouldUseStreaming ? {
           streamId,
+          requestId: streamId,
           onStreamEvent: (event) => {
             if (!isCurrentTabSend()) return
             if (event.kind === "response_start") {
@@ -447,7 +455,8 @@ function useRequestEditorActions() {
             })
             scheduleFlush()
           },
-        } : undefined
+        } : undefined,
+        streamId,
       )
       if (flushTimer !== null) {
         window.clearTimeout(flushTimer)
@@ -484,6 +493,7 @@ function useRequestEditorActions() {
       if (!isCurrentTabSend()) return
       if ((err as Error)?.name === "AbortError") return
       const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes("请求已取消") || msg.includes("REQUEST_CANCELLED")) return
       setTabResponse(tabId, null)
       setTabResponseError(tabId, msg)
       updateConsoleError(logId, msg)
@@ -493,6 +503,7 @@ function useRequestEditorActions() {
       if (currentAbortController === abortController) {
         delete abortRefByTab.current[tabId]
       }
+      delete requestIdRefByTab.current[tabId]
       if (sendingSeqByTabRef.current[tabId] === sendingSeq) {
         setTabStreamActive(tabId, false)
         setTabSending(tabId, false)

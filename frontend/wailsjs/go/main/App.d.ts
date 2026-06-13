@@ -5,6 +5,8 @@ import {main} from '../models';
 
 export function ClearHistory(arg1:string):Promise<void>;
 
+export function CancelHTTPRequest(arg1:string):Promise<boolean>;
+
 export function CreateBackup():Promise<string>;
 
 export function CreateEnvironment(arg1:string,arg2:string):Promise<model.Environment>;
