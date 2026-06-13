@@ -11,6 +11,7 @@ import { ensureRequestProtocol, resolveTemplateVariables } from "@/lib/variableR
 const TOKEN_HEADER_NAME = "MiniPost-Token"
 
 export interface SendRequestPayload {
+  requestId?: string
   method: string
   url: string
   params: { key: string; value: string }[]
@@ -42,6 +43,7 @@ export interface SendRequestPayload {
 
 export interface SendRequestStreamOptions {
   streamId: string
+  requestId: string
   onStreamEvent: (event: HttpStreamEventPayload) => void
 }
 
@@ -65,8 +67,9 @@ function dedupeHeaders(headers: Array<{ key: string; value: string }>): Array<{ 
   return result
 }
 
-function buildPayload(request: RequestData): SendRequestPayload {
+function buildPayload(request: RequestData, requestId: string): SendRequestPayload {
   return {
+    requestId,
     method: request.method,
     url: request.url,
     params: request.params
@@ -209,7 +212,8 @@ export async function sendHttpRequest(
   request: RequestData,
   projectId?: string,
   envId?: string,
-  streamOptions?: SendRequestStreamOptions
+  streamOptions?: SendRequestStreamOptions,
+  requestId: string = crypto.randomUUID(),
 ): Promise<HttpResponse> {
   const envState = useEnvironmentStore.getState()
   let activeVariables = envState.getActiveVariables()
@@ -221,7 +225,7 @@ export async function sendHttpRequest(
         .map((variable) => ({ key: variable.key, value: variable.value }))
     }
   }
-  const payload = resolvePayloadVariables(buildPayload(request), activeVariables)
+  const payload = resolvePayloadVariables(buildPayload(request, requestId), activeVariables)
   payload.url = ensureRequestProtocol(payload.url)
   const uiSettings = useUIStore.getState()
   const cookieStore = useCookieStore.getState()
@@ -309,4 +313,11 @@ export async function sendHttpRequest(
     cookieStore.absorbResponseCookies(resolvedRequestUrl, normalizedResult.headers)
   }
   return normalizedResult
+}
+
+export async function cancelHttpRequest(requestId: string): Promise<boolean> {
+  const trimmed = requestId.trim()
+  if (!trimmed) return false
+  const { CancelHTTPRequest } = await import("../../wailsjs/go/main/App")
+  return CancelHTTPRequest(trimmed)
 }

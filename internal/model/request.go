@@ -2,13 +2,14 @@ package model
 
 // SendRequestInput 前端发送请求时传入的参数
 type SendRequestInput struct {
-	Method  string          `json:"method"`
-	URL     string          `json:"url"`
-	Params  []KeyValue      `json:"params"`
-	Headers []KeyValue      `json:"headers"`
-	Body    RequestBody     `json:"body"`
-	Auth    AuthConfig      `json:"auth"`
-	Options *RequestOptions `json:"options,omitempty"`
+	RequestID string          `json:"requestId,omitempty"`
+	Method    string          `json:"method"`
+	URL       string          `json:"url"`
+	Params    []KeyValue      `json:"params"`
+	Headers   []KeyValue      `json:"headers"`
+	Body      RequestBody     `json:"body"`
+	Auth      AuthConfig      `json:"auth"`
+	Options   *RequestOptions `json:"options,omitempty"`
 }
 
 type RequestOptions struct {

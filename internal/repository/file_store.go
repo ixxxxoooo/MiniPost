@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -108,18 +109,22 @@ type FileStore struct {
 	mu      sync.RWMutex
 }
 
+func NewFileStoreWithDir(baseDir string) (*FileStore, error) {
+	if strings.TrimSpace(baseDir) == "" {
+		return nil, fmt.Errorf("数据目录不能为空")
+	}
+	if err := os.MkdirAll(baseDir, 0755); err != nil {
+		return nil, fmt.Errorf("创建数据目录失败: %w", err)
+	}
+	return &FileStore{baseDir: baseDir}, nil
+}
+
 func NewFileStore() (*FileStore, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("获取用户目录失败: %w", err)
 	}
-
-	baseDir := filepath.Join(home, ".minipost")
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
-		return nil, fmt.Errorf("创建数据目录失败: %w", err)
-	}
-
-	return &FileStore{baseDir: baseDir}, nil
+	return NewFileStoreWithDir(filepath.Join(home, ".minipost"))
 }
 
 // BaseDir 返回数据存储根目录路径
@@ -870,5 +875,33 @@ func (fs *FileStore) writeJSON(path string, v interface{}) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+
+	// 先写临时文件再 rename，避免写入中断导致 JSON 损坏。
+	tmpPath := path + ".tmp"
+	file, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+
+	writeErr := func(cleanup error) error {
+		_ = file.Close()
+		_ = os.Remove(tmpPath)
+		return cleanup
+	}
+
+	if _, err := file.Write(data); err != nil {
+		return writeErr(err)
+	}
+	if err := file.Sync(); err != nil {
+		return writeErr(err)
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	return nil
 }

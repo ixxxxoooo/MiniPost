@@ -6,6 +6,10 @@ export function ClearHistory(arg1) {
   return window['go']['main']['App']['ClearHistory'](arg1);
 }
 
+export function CancelHTTPRequest(arg1) {
+  return window['go']['main']['App']['CancelHTTPRequest'](arg1);
+}
+
 export function CreateBackup() {
   return window['go']['main']['App']['CreateBackup']();
 }

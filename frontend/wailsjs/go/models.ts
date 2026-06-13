@@ -601,6 +601,7 @@ export namespace model {
 	    }
 	}
 	export class SendRequestInput {
+	    requestId?: string;
 	    method: string;
 	    url: string;
 	    params: KeyValue[];
@@ -615,6 +616,7 @@ export namespace model {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.requestId = source["requestId"];
 	        this.method = source["method"];
 	        this.url = source["url"];
 	        this.params = this.convertValues(source["params"], KeyValue);

@@ -373,3 +373,40 @@ func TestSendRequest_ProvidesTimingAndSizeBreakdown(t *testing.T) {
 		t.Fatalf("duration should match timings total, duration=%f total=%f", resp.Duration, resp.Timings.Total)
 	}
 }
+
+func TestSendRequest_CancelRequestStopsInflightRequest(t *testing.T) {
+	started := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	svc := NewHttpService()
+	requestID := "cancel-test-request"
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := svc.SendRequest(model.SendRequestInput{
+			RequestID: requestID,
+			Method:    "GET",
+			URL:       server.URL,
+			Body:      model.RequestBody{Type: "none"},
+			Auth:      model.AuthConfig{Type: "none"},
+		})
+		errCh <- err
+	}()
+
+	<-started
+	if !svc.CancelRequest(requestID) {
+		t.Fatalf("取消进行中的请求应返回 true")
+	}
+
+	err := <-errCh
+	if err == nil {
+		t.Fatalf("取消后应返回错误")
+	}
+	var appErr *appErrors.AppError
+	if !errors.As(err, &appErr) || appErr.Code != "REQUEST_CANCELLED" {
+		t.Fatalf("期望 REQUEST_CANCELLED，实际: %v", err)
+	}
+}
