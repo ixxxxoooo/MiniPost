@@ -181,6 +181,62 @@ func TestDeleteFolder_RemovesDescendants(t *testing.T) {
 	}
 }
 
+func TestGetCollectionData_DoesNotRewriteOnRead(t *testing.T) {
+	store := newTestFileStore(t)
+	projectID := uuid.New().String()
+
+	if err := store.SaveProject(&model.Project{
+		ID:        projectID,
+		Name:      "读不回写",
+		CreatedAt: "2026-06-13T00:00:00Z",
+		UpdatedAt: "2026-06-13T00:00:00Z",
+	}); err != nil {
+		t.Fatalf("保存项目失败: %v", err)
+	}
+	if err := store.SaveFolder(&model.Folder{ID: "f1", Name: "F", ProjectID: projectID}); err != nil {
+		t.Fatalf("保存文件夹失败: %v", err)
+	}
+
+	// 在 folders.json 注入额外标记字段；写路径的结构化序列化会丢弃它，
+	// 因此只要读取后标记仍在，即证明读路径没有回写文件。
+	foldersPath := filepath.Join(store.BaseDir(), "projects", projectID, "folders.json")
+	raw, err := os.ReadFile(foldersPath)
+	if err != nil {
+		t.Fatalf("读取 folders.json 失败: %v", err)
+	}
+	var asMap map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &asMap); err != nil {
+		t.Fatalf("解析 folders.json 失败: %v", err)
+	}
+	asMap["_marker"] = json.RawMessage(`"keep"`)
+	marked, err := json.Marshal(asMap)
+	if err != nil {
+		t.Fatalf("序列化标记后的 folders.json 失败: %v", err)
+	}
+	if err := os.WriteFile(foldersPath, marked, 0644); err != nil {
+		t.Fatalf("写入标记后的 folders.json 失败: %v", err)
+	}
+
+	if _, err := store.GetCollectionData(projectID); err != nil {
+		t.Fatalf("读取集合数据失败: %v", err)
+	}
+	if _, err := store.ListFolders(projectID); err != nil {
+		t.Fatalf("列出文件夹失败: %v", err)
+	}
+
+	after, err := os.ReadFile(foldersPath)
+	if err != nil {
+		t.Fatalf("再次读取 folders.json 失败: %v", err)
+	}
+	var afterMap map[string]json.RawMessage
+	if err := json.Unmarshal(after, &afterMap); err != nil {
+		t.Fatalf("解析读取后的 folders.json 失败: %v", err)
+	}
+	if _, ok := afterMap["_marker"]; !ok {
+		t.Fatal("读取路径不应回写 folders.json（标记字段丢失说明发生了回写）")
+	}
+}
+
 func TestAddHistory_TruncatesToMaxSize(t *testing.T) {
 	store := newTestFileStore(t)
 	projectID := uuid.New().String()

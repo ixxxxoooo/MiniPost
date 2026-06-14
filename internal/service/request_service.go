@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"minipost/internal/model"
+	"minipost/internal/pkg/jsonutil"
 	"minipost/internal/repository"
 )
 
@@ -287,84 +288,11 @@ func NewRequestService(store *repository.FileStore) *RequestService {
 	return &RequestService{store: store}
 }
 
-func stripJSONComments(raw []byte) []byte {
-	if len(raw) == 0 {
-		return raw
-	}
-
-	result := make([]byte, 0, len(raw))
-	inString := false
-	escapeNext := false
-	inLineComment := false
-	inBlockComment := false
-
-	for i := 0; i < len(raw); i++ {
-		ch := raw[i]
-		next := byte(0)
-		hasNext := i+1 < len(raw)
-		if hasNext {
-			next = raw[i+1]
-		}
-
-		if inLineComment {
-			if ch == '\n' {
-				inLineComment = false
-				result = append(result, ch)
-			}
-			continue
-		}
-		if inBlockComment {
-			if ch == '*' && hasNext && next == '/' {
-				inBlockComment = false
-				i++
-			}
-			continue
-		}
-
-		if inString {
-			result = append(result, ch)
-			if escapeNext {
-				escapeNext = false
-				continue
-			}
-			if ch == '\\' {
-				escapeNext = true
-				continue
-			}
-			if ch == '"' {
-				inString = false
-			}
-			continue
-		}
-
-		if ch == '"' {
-			inString = true
-			result = append(result, ch)
-			continue
-		}
-
-		if ch == '/' && hasNext && next == '/' {
-			inLineComment = true
-			i++
-			continue
-		}
-		if ch == '/' && hasNext && next == '*' {
-			inBlockComment = true
-			i++
-			continue
-		}
-
-		result = append(result, ch)
-	}
-
-	return result
-}
-
 func unmarshalJSONPossiblyCommented(raw []byte, target any) error {
 	if err := json.Unmarshal(raw, target); err == nil {
 		return nil
 	}
-	cleaned := stripJSONComments(raw)
+	cleaned := jsonutil.StripComments(raw)
 	return json.Unmarshal(cleaned, target)
 }
 
@@ -1024,7 +952,7 @@ func (s *RequestService) RenameFolder(projectID, folderID, name string) error {
 			return s.store.SaveFolder(&f)
 		}
 	}
-	return nil
+	return fmt.Errorf("文件夹 %s 不存在", folderID)
 }
 
 func (s *RequestService) MoveCollectionNode(projectID, nodeID string, nodeType model.CollectionNodeType, targetParentID string, targetIndex int) error {
@@ -1055,7 +983,7 @@ func (s *RequestService) RenameRequest(projectID, requestID, name string) error 
 			return s.store.SaveRequest(&r)
 		}
 	}
-	return nil
+	return fmt.Errorf("请求 %s 不存在", requestID)
 }
 
 func (s *RequestService) DuplicateRequest(projectID, requestID string) (*model.RequestItem, error) {
@@ -1081,39 +1009,88 @@ func (s *RequestService) DuplicateRequest(projectID, requestID string) (*model.R
 }
 
 func (s *RequestService) DuplicateFolder(projectID, folderID string) (*model.Folder, error) {
-	folders, err := s.store.ListFolders(projectID)
+	data, err := s.store.GetCollectionData(projectID)
 	if err != nil {
 		return nil, err
 	}
-	for _, f := range folders {
-		if f.ID == folderID {
-			dup := &model.Folder{
-				ID:        uuid.New().String(),
-				Name:      f.Name + " (副本)",
-				ProjectID: projectID,
-				ParentID:  f.ParentID,
-				SortOrder: 0,
+
+	folderByID := make(map[string]model.Folder, len(data.Folders))
+	for _, f := range data.Folders {
+		folderByID[f.ID] = f
+	}
+	requestByID := make(map[string]model.RequestItem, len(data.Requests))
+	for _, r := range data.Requests {
+		requestByID[r.ID] = r
+	}
+
+	source, ok := folderByID[folderID]
+	if !ok {
+		return nil, fmt.Errorf("文件夹 %s 不存在", folderID)
+	}
+
+	// 按父节点归类并排序子节点，保证复制后保持原有的层级与顺序。
+	childrenByParent := make(map[string][]model.CollectionNode)
+	for _, node := range data.TreeNodes {
+		childrenByParent[node.ParentFolderID] = append(childrenByParent[node.ParentFolderID], node)
+	}
+	for parent := range childrenByParent {
+		nodes := childrenByParent[parent]
+		sort.SliceStable(nodes, func(i, j int) bool {
+			if nodes[i].SortOrder == nodes[j].SortOrder {
+				if nodes[i].NodeType == nodes[j].NodeType {
+					return nodes[i].NodeID < nodes[j].NodeID
+				}
+				return nodes[i].NodeType < nodes[j].NodeType
 			}
-			if err := s.store.SaveFolder(dup); err != nil {
-				return nil, err
-			}
-			// 复制文件夹内的请求
-			requests, _ := s.store.ListRequests(projectID)
-			for _, r := range requests {
-				if r.FolderID == folderID {
-					now := time.Now().UTC().Format(time.RFC3339)
-					dupReq := r
-					dupReq.ID = uuid.New().String()
-					dupReq.FolderID = dup.ID
-					dupReq.CreatedAt = now
-					dupReq.UpdatedAt = now
-					_ = s.store.SaveRequest(&dupReq)
+			return nodes[i].SortOrder < nodes[j].SortOrder
+		})
+		childrenByParent[parent] = nodes
+	}
+
+	// 递归复制文件夹及其全部后代（子文件夹 + 请求）。
+	var duplicateSubtree func(srcFolderID, dstParentID, name string) (*model.Folder, error)
+	duplicateSubtree = func(srcFolderID, dstParentID, name string) (*model.Folder, error) {
+		newFolder := &model.Folder{
+			ID:        uuid.New().String(),
+			Name:      name,
+			ProjectID: projectID,
+			ParentID:  dstParentID,
+			SortOrder: 0,
+		}
+		if err := s.store.SaveFolder(newFolder); err != nil {
+			return nil, err
+		}
+
+		for _, node := range childrenByParent[srcFolderID] {
+			switch node.NodeType {
+			case model.CollectionNodeTypeFolder:
+				child, exists := folderByID[node.NodeID]
+				if !exists {
+					continue
+				}
+				if _, err := duplicateSubtree(node.NodeID, newFolder.ID, child.Name); err != nil {
+					return nil, err
+				}
+			case model.CollectionNodeTypeRequest:
+				r, exists := requestByID[node.NodeID]
+				if !exists {
+					continue
+				}
+				now := time.Now().UTC().Format(time.RFC3339)
+				dupReq := r
+				dupReq.ID = uuid.New().String()
+				dupReq.FolderID = newFolder.ID
+				dupReq.CreatedAt = now
+				dupReq.UpdatedAt = now
+				if err := s.store.SaveRequest(&dupReq); err != nil {
+					return nil, err
 				}
 			}
-			return dup, nil
 		}
+		return newFolder, nil
 	}
-	return nil, fmt.Errorf("文件夹 %s 不存在", folderID)
+
+	return duplicateSubtree(folderID, source.ParentID, source.Name+" (副本)")
 }
 
 // ExportProjectJSON 导出项目为 Postman Collection v2.1 JSON

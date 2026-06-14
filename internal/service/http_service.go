@@ -33,6 +33,11 @@ type HttpService struct {
 	client     *http.Client
 	inflightMu sync.Mutex
 	inflight   map[string]context.CancelFunc
+	// transportMu 保护 transports 缓存。
+	transportMu sync.Mutex
+	// transports 按 (sslVerify, httpVersion) 维度缓存 *http.Transport，
+	// 以便跨请求复用连接池（keep-alive），避免每次请求都新建 transport 导致重复握手与空闲连接堆积。
+	transports map[string]*http.Transport
 }
 
 type requestOptions struct {
@@ -185,7 +190,8 @@ func NewHttpService() *HttpService {
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		inflight: make(map[string]context.CancelFunc),
+		inflight:   make(map[string]context.CancelFunc),
+		transports: make(map[string]*http.Transport),
 	}
 }
 
@@ -819,15 +825,30 @@ func (s *HttpService) buildClient(options requestOptions) *http.Client {
 		}
 	}
 
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	if currentTransport, ok := s.client.Transport.(*http.Transport); ok && currentTransport != nil {
-		transport = currentTransport.Clone()
+	// 复用按 (sslVerify, httpVersion) 缓存的 transport，保证连接池跨请求生效。
+	client.Transport = s.transportFor(options)
+	return &client
+}
+
+// transportFor 返回与给定选项匹配的 *http.Transport，命中缓存则直接复用，否则构建后缓存。
+// 单个 *http.Transport 可并发安全使用，缓存后可在多次请求间复用连接池。
+func (s *HttpService) transportFor(options requestOptions) *http.Transport {
+	key := fmt.Sprintf("ssl=%t|ver=%s", options.sslVerify, options.httpVersion)
+
+	s.transportMu.Lock()
+	defer s.transportMu.Unlock()
+
+	if s.transports == nil {
+		s.transports = make(map[string]*http.Transport)
+	}
+	if cached, ok := s.transports[key]; ok && cached != nil {
+		return cached
 	}
 
+	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if !options.sslVerify {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
-
 	switch options.httpVersion {
 	case "http1":
 		transport.ForceAttemptHTTP2 = false
@@ -835,8 +856,8 @@ func (s *HttpService) buildClient(options requestOptions) *http.Client {
 		transport.ForceAttemptHTTP2 = true
 	}
 
-	client.Transport = transport
-	return &client
+	s.transports[key] = transport
+	return transport
 }
 
 func (s *HttpService) readResponseBody(body io.Reader, maxResponseBytes int64, contentType string, onChunk func(model.StreamChunk)) ([]byte, error) {
@@ -1112,6 +1133,10 @@ func detectTLSWarning(requestURL string, tlsState *tls.ConnectionState) string {
 func (s *HttpService) applyAuth(req *http.Request, auth model.AuthConfig) {
 	switch auth.Type {
 	case "basic":
+		// 账号与密码都为空时不附加 Authorization，避免发送无意义的空凭证（Basic Og==）。
+		if auth.Basic.Username == "" && auth.Basic.Password == "" {
+			return
+		}
 		encoded := base64.StdEncoding.EncodeToString(
 			[]byte(fmt.Sprintf("%s:%s", auth.Basic.Username, auth.Basic.Password)),
 		)
