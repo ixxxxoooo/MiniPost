@@ -253,6 +253,19 @@ func (fs *FileStore) requestsPath(projectID string) string {
 	return filepath.Join(fs.baseDir, "projects", projectID, "requests.json")
 }
 
+// collectionFile 合并了文件夹、请求与集合树，作为集合数据的单一权威文件。
+// 单文件持久化让一次原子写即可保证三者之间的一致性，避免分散文件之间出现写入不一致。
+type collectionFile struct {
+	SchemaVersion int                    `json:"schemaVersion"`
+	Folders       []model.Folder         `json:"folders"`
+	Requests      []model.RequestItem    `json:"requests"`
+	Nodes         []model.CollectionNode `json:"nodes"`
+}
+
+func (fs *FileStore) collectionPath(projectID string) string {
+	return filepath.Join(fs.baseDir, "projects", projectID, "collection.json")
+}
+
 func (fs *FileStore) loadFoldersUnlocked(projectID string) ([]model.Folder, error) {
 	var data foldersFile
 	if err := fs.readJSON(fs.foldersPath(projectID), &data); err != nil {
@@ -273,20 +286,6 @@ func (fs *FileStore) loadRequestsUnlocked(projectID string) ([]model.RequestItem
 		return nil, err
 	}
 	return data.Requests, nil
-}
-
-func (fs *FileStore) saveFoldersUnlocked(projectID string, folders []model.Folder) error {
-	return fs.writeJSON(fs.foldersPath(projectID), &foldersFile{
-		SchemaVersion: schemaVersion,
-		Folders:       folders,
-	})
-}
-
-func (fs *FileStore) saveRequestsUnlocked(projectID string, requests []model.RequestItem) error {
-	return fs.writeJSON(fs.requestsPath(projectID), &requestsFile{
-		SchemaVersion: schemaVersion,
-		Requests:      requests,
-	})
 }
 
 func (fs *FileStore) buildTreeNodesFromLegacy(projectID string, folders []model.Folder, requests []model.RequestItem) []model.CollectionNode {
@@ -387,64 +386,89 @@ func (fs *FileStore) syncEntitiesWithTree(projectID string, folders []model.Fold
 	return nextFolders, nextRequests
 }
 
-func (fs *FileStore) loadTreeNodesUnlocked(projectID string, folders []model.Folder, requests []model.RequestItem) ([]model.CollectionNode, error) {
+// loadLegacyTreeNodesUnlocked 仅用于迁移：从旧的 tree.json 读取树节点，
+// 不存在时由分散的 folders/requests 推导，且不再单独回写 tree.json。
+func (fs *FileStore) loadLegacyTreeNodesUnlocked(projectID string, folders []model.Folder, requests []model.RequestItem) ([]model.CollectionNode, error) {
 	var data treeFile
 	if err := fs.readJSON(fs.treePath(projectID), &data); err != nil {
 		if !os.IsNotExist(err) {
 			return nil, err
 		}
-		nodes := fs.buildTreeNodesFromLegacy(projectID, folders, requests)
-		if err := fs.writeJSON(fs.treePath(projectID), &treeFile{SchemaVersion: schemaVersion, Nodes: nodes}); err != nil {
-			return nil, err
-		}
-		return nodes, nil
+		return fs.buildTreeNodesFromLegacy(projectID, folders, requests), nil
 	}
 	return sortNodesByOrder(data.Nodes), nil
 }
 
-func (fs *FileStore) saveTreeNodesUnlocked(projectID string, nodes []model.CollectionNode) error {
-	return fs.writeJSON(fs.treePath(projectID), &treeFile{
-		SchemaVersion: schemaVersion,
-		Nodes:         sortNodesByOrder(nodes),
-	})
-}
+// loadCollectionUnlocked 读取集合数据。优先读合并后的 collection.json；
+// 若不存在则从旧的分散文件（folders/requests/tree）构建并标记 migrated=true，由调用方落盘迁移。
+func (fs *FileStore) loadCollectionUnlocked(projectID string) (data *model.CollectionData, migrated bool, err error) {
+	var cf collectionFile
+	if readErr := fs.readJSON(fs.collectionPath(projectID), &cf); readErr == nil {
+		return &model.CollectionData{
+			Folders:   cf.Folders,
+			Requests:  cf.Requests,
+			TreeNodes: cf.Nodes,
+		}, false, nil
+	} else if !os.IsNotExist(readErr) {
+		return nil, false, readErr
+	}
 
-func (fs *FileStore) getCollectionDataUnlocked(projectID string) (*model.CollectionData, error) {
+	// collection.json 不存在：从旧的分散文件迁移。
 	folders, err := fs.loadFoldersUnlocked(projectID)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	requests, err := fs.loadRequestsUnlocked(projectID)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	nodes, err := fs.loadTreeNodesUnlocked(projectID, folders, requests)
+	nodes, err := fs.loadLegacyTreeNodesUnlocked(projectID, folders, requests)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	folders, requests = fs.syncEntitiesWithTree(projectID, folders, requests, nodes)
 	return &model.CollectionData{
 		Folders:   folders,
 		Requests:  requests,
 		TreeNodes: nodes,
-	}, nil
+	}, true, nil
+}
+
+// saveCollectionUnlocked 将集合数据以单文件原子写入 collection.json。
+func (fs *FileStore) saveCollectionUnlocked(projectID string, data *model.CollectionData) error {
+	return fs.writeJSON(fs.collectionPath(projectID), &collectionFile{
+		SchemaVersion: schemaVersion,
+		Folders:       data.Folders,
+		Requests:      data.Requests,
+		Nodes:         data.TreeNodes,
+	})
+}
+
+func (fs *FileStore) getCollectionDataUnlocked(projectID string) (*model.CollectionData, error) {
+	data, migrated, err := fs.loadCollectionUnlocked(projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	folders, requests := fs.syncEntitiesWithTree(projectID, data.Folders, data.Requests, data.TreeNodes)
+	data.Folders = folders
+	data.Requests = requests
+	data.TreeNodes = sortNodesByOrder(data.TreeNodes)
+
+	// 仅在首次迁移（collection.json 不存在）时落盘，普通读路径不回写。
+	if migrated {
+		if err := fs.saveCollectionUnlocked(projectID, data); err != nil {
+			return nil, err
+		}
+	}
+	return data, nil
 }
 
 func (fs *FileStore) saveCollectionDataUnlocked(projectID string, data *model.CollectionData) error {
 	folders, requests := fs.syncEntitiesWithTree(projectID, data.Folders, data.Requests, data.TreeNodes)
-	if err := fs.saveFoldersUnlocked(projectID, folders); err != nil {
-		return err
-	}
-	if err := fs.saveRequestsUnlocked(projectID, requests); err != nil {
-		return err
-	}
-	if err := fs.saveTreeNodesUnlocked(projectID, data.TreeNodes); err != nil {
-		return err
-	}
 	data.Folders = folders
 	data.Requests = requests
 	data.TreeNodes = sortNodesByOrder(data.TreeNodes)
-	return nil
+	return fs.saveCollectionUnlocked(projectID, data)
 }
 
 func (fs *FileStore) ListFolders(projectID string) ([]model.Folder, error) {
