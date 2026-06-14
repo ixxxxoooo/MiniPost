@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,8 +18,52 @@ const (
 	backupProjectsDir  = "projects"
 	backupConfigFile   = "config.json"
 	backupFilenameFmt  = "minipost-backup-20060102-150405.zip"
+	backupFilePrefix   = "minipost-backup-"
 	safetyBackupPrefix = "minipost-safety-"
+
+	// 备份保留上限：超过数量的最旧备份会在创建新备份后被清理，避免备份目录无限增长。
+	maxRegularBackupRetention = 20
+	maxSafetyBackupRetention  = 5
 )
+
+// cleanupBackups 仅保留指定前缀的最新 keep 个 .zip 备份，删除其余更旧的备份。
+// 文件名带有时间戳，可按字典序升序即时间先后排序。清理失败不影响主流程。
+func cleanupBackups(backupsDir, prefix string, keep int) int {
+	if keep <= 0 {
+		return 0
+	}
+	entries, err := os.ReadDir(backupsDir)
+	if err != nil {
+		return 0
+	}
+
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".zip") {
+			names = append(names, name)
+		}
+	}
+	if len(names) <= keep {
+		return 0
+	}
+
+	sort.Strings(names)
+	removable := names[:len(names)-keep]
+	removed := 0
+	for _, name := range removable {
+		if err := os.Remove(filepath.Join(backupsDir, name)); err == nil {
+			removed++
+		}
+	}
+	if removed > 0 {
+		logger.Info("已清理过期备份", "prefix", prefix, "removed", removed, "kept", keep)
+	}
+	return removed
+}
 
 func shouldIncludeInBackup(relPath string) bool {
 	rel := filepath.ToSlash(strings.TrimSpace(relPath))
@@ -42,6 +87,9 @@ func (a *App) CreateBackup() (string, error) {
 	if err := createBackupArchive(baseDir, backupPath); err != nil {
 		return "", err
 	}
+
+	// 创建成功后清理超出保留上限的旧备份，避免（尤其是自动备份场景下）备份目录无限增长。
+	cleanupBackups(backupsDir, backupFilePrefix, maxRegularBackupRetention)
 
 	logger.Info("创建备份成功", "path", backupPath)
 	return backupPath, nil
@@ -265,15 +313,19 @@ func (a *App) createSafetyBackup() {
 	}
 
 	base := filepath.Base(path)
-	if !strings.HasPrefix(base, "minipost-backup-") {
+	if !strings.HasPrefix(base, backupFilePrefix) {
 		return
 	}
 
-	safetyName := strings.Replace(base, "minipost-backup-", safetyBackupPrefix, 1)
+	safetyName := strings.Replace(base, backupFilePrefix, safetyBackupPrefix, 1)
 	safetyPath := filepath.Join(filepath.Dir(path), safetyName)
 	if renameErr := os.Rename(path, safetyPath); renameErr != nil {
 		logger.Warn("重命名安全备份失败", "from", path, "to", safetyPath, "error", renameErr.Error())
+		return
 	}
+
+	// 安全备份同样设保留上限，避免多次恢复后无限堆积。
+	cleanupBackups(filepath.Dir(safetyPath), safetyBackupPrefix, maxSafetyBackupRetention)
 }
 
 func (a *App) RestoreBackup(backupPath string) error {
