@@ -19,6 +19,7 @@ import (
 	"minipost/internal/model"
 	appErrors "minipost/internal/pkg/errors"
 	"minipost/internal/pkg/httputil"
+	"minipost/internal/pkg/jsonutil"
 	"minipost/internal/pkg/logger"
 	"minipost/internal/repository"
 	"minipost/internal/service"
@@ -50,79 +51,6 @@ type httpStreamEventPayload struct {
 	Timestamp  string `json:"timestamp"`
 	Sequence   int    `json:"sequence"`
 	BytesTotal int64  `json:"bytesTotal,omitempty"`
-}
-
-func stripJSONComments(raw []byte) []byte {
-	if len(raw) == 0 {
-		return raw
-	}
-
-	result := make([]byte, 0, len(raw))
-	inString := false
-	escapeNext := false
-	inLineComment := false
-	inBlockComment := false
-
-	for i := 0; i < len(raw); i++ {
-		ch := raw[i]
-		next := byte(0)
-		hasNext := i+1 < len(raw)
-		if hasNext {
-			next = raw[i+1]
-		}
-
-		if inLineComment {
-			if ch == '\n' {
-				inLineComment = false
-				result = append(result, ch)
-			}
-			continue
-		}
-		if inBlockComment {
-			if ch == '*' && hasNext && next == '/' {
-				inBlockComment = false
-				i++
-			}
-			continue
-		}
-
-		if inString {
-			result = append(result, ch)
-			if escapeNext {
-				escapeNext = false
-				continue
-			}
-			if ch == '\\' {
-				escapeNext = true
-				continue
-			}
-			if ch == '"' {
-				inString = false
-			}
-			continue
-		}
-
-		if ch == '"' {
-			inString = true
-			result = append(result, ch)
-			continue
-		}
-
-		if ch == '/' && hasNext && next == '/' {
-			inLineComment = true
-			i++
-			continue
-		}
-		if ch == '/' && hasNext && next == '*' {
-			inBlockComment = true
-			i++
-			continue
-		}
-
-		result = append(result, ch)
-	}
-
-	return result
 }
 
 func NewApp() *App {
@@ -612,7 +540,7 @@ func parseImportContentAsObject(raw string) (map[string]json.RawMessage, string,
 	if err := json.Unmarshal([]byte(raw), &data); err == nil {
 		return data, raw, nil
 	}
-	cleaned := stripJSONComments([]byte(raw))
+	cleaned := jsonutil.StripComments([]byte(raw))
 	if !bytes.Equal(cleaned, []byte(raw)) {
 		if err := json.Unmarshal(cleaned, &data); err == nil {
 			return data, raw, nil

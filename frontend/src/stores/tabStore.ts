@@ -167,6 +167,29 @@ function sanitizeProjectTabs(rawProjectTabs: unknown): Record<string, ProjectTab
   return sanitizedProjectTabs
 }
 
+// 持久化时剥离运行期 / 大体积字段（响应体、流式数据、发送态），
+// 仅保留请求本身与标签元信息，避免大响应把 localStorage 写爆导致整个标签状态静默丢失。
+function toPersistableProjectTabs(
+  projectTabs: Record<string, ProjectTabState>,
+): Record<string, { tabs: Array<Omit<RequestTab, "response" | "responseError" | "streamEntries" | "streamActive" | "isSending">>; activeTabId: string | null }> {
+  const result: Record<string, { tabs: Array<Omit<RequestTab, "response" | "responseError" | "streamEntries" | "streamActive" | "isSending">>; activeTabId: string | null }> = {}
+  for (const [projectId, projectState] of Object.entries(projectTabs)) {
+    result[projectId] = {
+      activeTabId: projectState.activeTabId,
+      tabs: projectState.tabs.map((tab) => ({
+        id: tab.id,
+        title: tab.title,
+        projectId: tab.projectId,
+        requestId: tab.requestId,
+        closable: tab.closable,
+        dirty: tab.dirty,
+        request: tab.request,
+      })),
+    }
+  }
+  return result
+}
+
 function readPersistedProjectTabs(): Record<string, ProjectTabState> {
   if (typeof window === "undefined") {
     return {}
@@ -180,7 +203,7 @@ function readPersistedProjectTabs(): Record<string, ProjectTabState> {
 
     const parsed = JSON.parse(raw) as unknown
     const sanitized = sanitizeProjectTabs(parsed)
-    window.localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(sanitized))
+    window.localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(toPersistableProjectTabs(sanitized)))
     return sanitized
   } catch {
     return {}
@@ -201,7 +224,7 @@ function persistProjectTabs(projectTabs: Record<string, ProjectTabState>) {
   persistTimer = setTimeout(() => {
     try {
       const sanitized = sanitizeProjectTabs(projectTabs)
-      window.localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(sanitized))
+      window.localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(toPersistableProjectTabs(sanitized)))
     } catch {
       // 本地持久化失败时不阻断主流程
     }

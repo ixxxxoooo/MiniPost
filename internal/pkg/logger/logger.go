@@ -28,8 +28,11 @@ var levelNames = map[Level]string{
 	FATAL: "FATAL",
 }
 
+// logRetentionDays 控制日志文件保留天数，超过该天数的旧日志会在初始化时被清理。
+const logRetentionDays = 14
+
 var (
-	currentLevel = DEBUG
+	currentLevel = INFO
 	fileLogger   *log.Logger
 	logFile      *os.File
 	logPath      string
@@ -37,7 +40,7 @@ var (
 
 // Init 初始化日志系统，在 ~/.minipost/logs/ 下创建日志文件
 func Init() error {
-	currentLevel = levelFromEnv(os.Getenv("MINIPOST_LOG_LEVEL"), DEBUG)
+	currentLevel = levelFromEnv(os.Getenv("MINIPOST_LOG_LEVEL"), INFO)
 
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -59,15 +62,58 @@ func Init() error {
 
 	fileLogger = log.New(logFile, "", 0)
 
+	removed := cleanupOldLogs(logDir, logRetentionDays)
+
 	Info("日志系统初始化完成",
 		"logPath", logPath,
 		"logLevel", levelNames[currentLevel],
+		"retentionDays", logRetentionDays,
+		"removedOldLogs", removed,
 		"goVersion", runtime.Version(),
 		"os", runtime.GOOS,
 		"arch", runtime.GOARCH,
 	)
 
 	return nil
+}
+
+// cleanupOldLogs 删除日志目录中修改时间超过 retentionDays 的 minipost-*.log 文件，
+// 返回被删除的文件数量。清理失败不影响日志系统初始化。
+func cleanupOldLogs(logDir string, retentionDays int) int {
+	if retentionDays <= 0 {
+		return 0
+	}
+
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		return 0
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+	removed := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasPrefix(name, "minipost-") || !strings.HasSuffix(name, ".log") {
+			continue
+		}
+		fullPath := filepath.Join(logDir, name)
+		if fullPath == logPath {
+			continue
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			if err := os.Remove(fullPath); err == nil {
+				removed++
+			}
+		}
+	}
+	return removed
 }
 
 // Close 关闭日志文件

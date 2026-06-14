@@ -451,11 +451,10 @@ func (fs *FileStore) ListFolders(projectID string) ([]model.Folder, error) {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
+	// 读路径只返回与 tree 同步后的内存数据，不再回写三份 JSON 文件，
+	// 避免「读」产生磁盘写副作用（tree 始终是权威源，下次读会重新同步）。
 	data, err := fs.getCollectionDataUnlocked(projectID)
 	if err != nil {
-		return nil, err
-	}
-	if err := fs.saveCollectionDataUnlocked(projectID, data); err != nil {
 		return nil, err
 	}
 	return data.Folders, nil
@@ -635,11 +634,9 @@ func (fs *FileStore) ListRequests(projectID string) ([]model.RequestItem, error)
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
+	// 读路径不回写，仅返回与 tree 同步后的内存数据，详见 ListFolders 说明。
 	data, err := fs.getCollectionDataUnlocked(projectID)
 	if err != nil {
-		return nil, err
-	}
-	if err := fs.saveCollectionDataUnlocked(projectID, data); err != nil {
 		return nil, err
 	}
 	return data.Requests, nil
@@ -725,11 +722,9 @@ func (fs *FileStore) GetCollectionData(projectID string) (*model.CollectionData,
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
+	// 读路径不回写，仅返回与 tree 同步后的内存数据，详见 ListFolders 说明。
 	data, err := fs.getCollectionDataUnlocked(projectID)
 	if err != nil {
-		return nil, err
-	}
-	if err := fs.saveCollectionDataUnlocked(projectID, data); err != nil {
 		return nil, err
 	}
 	return data, nil
