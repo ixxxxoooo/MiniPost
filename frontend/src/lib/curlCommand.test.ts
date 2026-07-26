@@ -140,4 +140,32 @@ describe("buildCurlCommand", () => {
 
     expect(command).toContain("-H 'X-API-Key: secret'")
   })
+
+  it("omits disabled editor rows from the copied command", () => {
+    const command = buildCurlCommand(request({
+      method: "POST",
+      params: [
+        { key: "included", value: "yes", enabled: true },
+        { key: "disabled-param", value: "no", enabled: false },
+      ],
+      headers: [
+        { key: "X-Included", value: "yes", enabled: true },
+        { key: "X-Disabled", value: "no", enabled: false },
+      ],
+      body: {
+        type: "form-data",
+        formData: [
+          { key: "included-field", value: "yes", type: "text", enabled: true },
+          { key: "disabled-field", value: "no", type: "text", enabled: false },
+        ],
+      },
+    }))
+
+    expect(command).toContain("included=yes")
+    expect(command).toContain("X-Included: yes")
+    expect(command).toContain("included-field=yes")
+    expect(command).not.toContain("disabled-param")
+    expect(command).not.toContain("X-Disabled")
+    expect(command).not.toContain("disabled-field")
+  })
 })
