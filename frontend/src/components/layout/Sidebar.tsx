@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { writeClipboardText } from "@/lib/clipboard"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { buildDraftRequestFromCurl } from "@/lib/curlImportDraft"
-import { buildCurlCommand } from "@/lib/curlCommand"
+import { buildRuntimeCurlCommand } from "@/services/curlExportService"
 import { error as logError, info, warn } from "@/lib/logger"
 import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore, getProjectActiveTabIdFromState, getProjectTabsFromState } from "@/stores/tabStore"
@@ -531,12 +531,12 @@ export function Sidebar({ forceOpen = false }: SidebarProps) {
 
   const handleCopyCurl = async (request: model.RequestItem) => {
     const variables = useEnvironmentStore.getState().getActiveVariables()
-    const curl = buildCurlCommand(request, variables)
-    const copied = await writeClipboardText(curl)
+    const { command, cookieIncluded } = buildRuntimeCurlCommand(request, variables)
+    const copied = await writeClipboardText(command)
     if (copied) {
-      info("CurlExport", "cURL copied", { requestId: request.id, variableCount: variables.length })
+      info("CurlExport", "cURL copied", { requestId: request.id, variableCount: variables.length, cookieIncluded })
     } else {
-      warn("CurlExport", "Failed to copy cURL", { requestId: request.id, variableCount: variables.length })
+      warn("CurlExport", "Failed to copy cURL", { requestId: request.id, variableCount: variables.length, cookieIncluded })
     }
     setDropdownMenu(null)
   }
@@ -544,10 +544,10 @@ export function Sidebar({ forceOpen = false }: SidebarProps) {
   const handleExportCurl = async (request: model.RequestItem) => {
     const variables = useEnvironmentStore.getState().getActiveVariables()
     try {
-      const curl = buildCurlCommand(request, variables)
+      const { command, cookieIncluded } = buildRuntimeCurlCommand(request, variables)
       const filename = `${normalizeFileName(request.name || "request")}.curl.sh`
-      await SaveTextFile(filename, curl)
-      info("CurlExport", "cURL exported", { requestId: request.id, variableCount: variables.length })
+      await SaveTextFile(filename, command)
+      info("CurlExport", "cURL exported", { requestId: request.id, variableCount: variables.length, cookieIncluded })
     } catch (err) {
       logError("CurlExport", "Failed to export cURL", {
         requestId: request.id,

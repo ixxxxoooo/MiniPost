@@ -7,6 +7,7 @@ import { useUIStore } from "@/stores/uiStore"
 import { useEnvironmentStore } from "@/stores/environmentStore"
 import { getSuppressedAutoHeaders, normalizeHeaderName } from "@/lib/autoHeaders"
 import { ensureRequestProtocol, resolveTemplateVariables } from "@/lib/variableResolver"
+import { mergeCookieHeaders } from "@/lib/cookieHeader"
 
 const TOKEN_HEADER_NAME = "MiniPost-Token"
 
@@ -154,27 +155,6 @@ function resolvePayloadVariables(payload: SendRequestPayload, variables: Array<{
   }
 }
 
-function mergeCookieHeader(manual: string, fromJar: string): string {
-  const map = new Map<string, string>()
-  const append = (source: string, overwrite: boolean) => {
-    source.split(";").forEach((pair) => {
-      const trimmed = pair.trim()
-      if (!trimmed) return
-      const sep = trimmed.indexOf("=")
-      if (sep <= 0) return
-      const key = trimmed.slice(0, sep).trim()
-      const value = trimmed.slice(sep + 1).trim()
-      if (!key) return
-      if (overwrite || !map.has(key)) {
-        map.set(key, value)
-      }
-    })
-  }
-  append(fromJar, false)
-  append(manual, true)
-  return Array.from(map.entries()).map(([k, v]) => `${k}=${v}`).join("; ")
-}
-
 function hasHeader(headers: Array<{ key: string; value: string }>, name: string): boolean {
   const target = normalizeHeaderName(name)
   return headers.some((header) => normalizeHeaderName(header.key) === target)
@@ -240,7 +220,7 @@ export async function sendHttpRequest(
       if (!existing) {
         payload.headers.push({ key: "Cookie", value: cookieHeader })
       } else {
-        existing.value = mergeCookieHeader(existing.value, cookieHeader)
+        existing.value = mergeCookieHeaders(existing.value, cookieHeader)
       }
     }
   }
