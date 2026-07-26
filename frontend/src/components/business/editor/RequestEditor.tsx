@@ -24,6 +24,9 @@ import { areParamsEquivalent, syncParamsWithUrlQuery } from "@/lib/urlQuerySync"
 import { buildSaveResponsePayload, suggestResponseFilename } from "@/lib/responseDownload"
 import { defaultEditorTabForMethod } from "@/lib/requestEditorTabs"
 import { useI18n } from "@/hooks/useI18n"
+import { buildCurlCommand } from "@/lib/curlCommand"
+import { writeClipboardText } from "@/lib/clipboard"
+import { info, warn } from "@/lib/logger"
 
 const TOKEN_HEADER_NAME = "MiniPost-Token"
 const REQUEST_EDITOR_TAB_VALUES = ["params", "headers", "body", "auth"] as const
@@ -581,6 +584,23 @@ function useRequestEditorActions() {
     markTabDirty(activeTab.id, false)
   }, [activeTab, currentProjectId, markTabDirty, persistTabRequest])
 
+  const handleCopyCurl = useCallback(async (): Promise<boolean> => {
+    if (!activeTab) return false
+    const variables = useEnvironmentStore.getState().getActiveVariables()
+    const curl = buildCurlCommand(activeTab.request, variables)
+    const copied = await writeClipboardText(curl)
+    const context = {
+      requestId: activeTab.requestId || activeTab.request.id,
+      variableCount: variables.length,
+    }
+    if (copied) {
+      info("CurlExport", "Editor cURL copied", context)
+    } else {
+      warn("CurlExport", "Failed to copy editor cURL", context)
+    }
+    return copied
+  }, [activeTab])
+
   const handleConfirmDraftSave = useCallback(async () => {
     if (!activeTab || !currentProjectId || saveDraftSaving) return
 
@@ -635,6 +655,7 @@ function useRequestEditorActions() {
     handleSend,
     handleCancel,
     handleSave,
+    handleCopyCurl,
     saveDraftDialogOpen,
     saveDraftName,
     saveDraftFolderId,
@@ -654,6 +675,7 @@ export function RequestEditorToolbar() {
     handleSend,
     handleCancel,
     handleSave,
+    handleCopyCurl,
     saveDraftDialogOpen,
     saveDraftName,
     saveDraftFolderId,
@@ -676,7 +698,7 @@ export function RequestEditorToolbar() {
 
   return (
     <>
-      <UrlBar onSend={handleSend} onCancel={handleCancel} onSave={handleSave} />
+      <UrlBar onSend={handleSend} onCancel={handleCancel} onSave={handleSave} onCopyCurl={handleCopyCurl} />
       {saveDraftDialogOpen && createPortal(
         <div className="fixed inset-0 z-[320] flex items-center justify-center" onClick={() => { if (!saveDraftSaving) handleCancelDraftSave() }}>
           <div className="absolute inset-0 bg-black/35 backdrop-blur-[1px]" />

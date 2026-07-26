@@ -13,6 +13,7 @@ interface UrlBarProps {
   onSend: (downloadAfter?: boolean) => void
   onCancel: () => void
   onSave: () => void
+  onCopyCurl: () => Promise<boolean>
 }
 
 type VariableCompletionContext = {
@@ -49,7 +50,7 @@ function tokenizeUrl(url: string): Array<{ type: "text" | "variable"; value: str
   })
 }
 
-export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
+export function UrlBar({ onSend, onCancel, onSave, onCopyCurl }: UrlBarProps) {
   const { t } = useI18n()
   const activeTab = useTabStore(getProjectActiveTabFromState)
   const updateTabRequest = useTabStore((s) => s.updateTabRequest)
@@ -68,6 +69,7 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
   const [urlFocused, setUrlFocused] = useState(false)
   const [variableActiveIndex, setVariableActiveIndex] = useState(0)
   const [nameInputWidth, setNameInputWidth] = useState(96)
+  const [curlCopyState, setCurlCopyState] = useState<"idle" | "copied" | "failed">("idle")
   const sendMenuRef = useRef<HTMLDivElement>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const nameContainerRef = useRef<HTMLDivElement>(null)
@@ -162,6 +164,16 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
     setUrlScrollLeft(0)
     setVariableActiveIndex(0)
   }, [activeTab?.id, requestName, requestUrl.length])
+
+  useEffect(() => {
+    setCurlCopyState("idle")
+  }, [activeTab?.id])
+
+  const handleCopyCurl = useCallback(async () => {
+    const copied = await onCopyCurl()
+    setCurlCopyState(copied ? "copied" : "failed")
+    window.setTimeout(() => setCurlCopyState("idle"), 1600)
+  }, [onCopyCurl])
 
   useEffect(() => {
     if (!isEditingName) return
@@ -329,6 +341,55 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
               </Tooltip>
             )}
           </div>
+
+          <div className="ml-1 flex h-6 flex-shrink-0 items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={t("保存请求", "Save request")}
+                  className={cn(
+                    "inline-flex h-6 items-center justify-center gap-1 rounded-[6px] px-2",
+                    "text-[11px] font-medium transition-colors hover:bg-[var(--sidebar-hover)]",
+                    activeTab.dirty ? "text-[var(--fg-secondary)]" : "text-[var(--fg-muted)]"
+                  )}
+                  onClick={onSave}
+                  disabled={!activeTab.dirty}
+                >
+                  <AppIcon name="save" size={12} strokeWidth={1.9} />
+                  Save
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{t("保存", "Save")} (⌘S)</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={t("复制为 cURL", "Copy as cURL")}
+                  className={cn(
+                    "inline-flex h-6 w-6 items-center justify-center rounded-[6px]",
+                    "text-[var(--fg-secondary)] transition-colors hover:bg-[var(--sidebar-hover)]",
+                    "disabled:pointer-events-none disabled:opacity-40",
+                    curlCopyState === "copied" && "text-[var(--accent)]",
+                    curlCopyState === "failed" && "text-[var(--danger)]"
+                  )}
+                  onClick={() => void handleCopyCurl()}
+                  disabled={!requestUrl.trim()}
+                >
+                  <AppIcon name="copy" size={12} strokeWidth={1.9} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {curlCopyState === "copied"
+                  ? t("已复制 cURL", "cURL copied")
+                  : curlCopyState === "failed"
+                    ? t("复制失败", "Copy failed")
+                    : t("复制为 cURL", "Copy as cURL")}
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </div>
 
@@ -476,25 +537,6 @@ export function UrlBar({ onSend, onCancel, onSave }: UrlBarProps) {
             )}
           </div>
         </div>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              className={cn(
-                "h-[var(--size-btn)] flex-shrink-0 px-3 flex items-center justify-center gap-1 rounded-[var(--radius-btn)]",
-                "text-[length:var(--size-font-2xs)] font-medium transition-colors",
-                "hover:bg-[var(--sidebar-hover)]",
-                activeTab.dirty ? "text-[var(--fg-secondary)]" : "text-[var(--fg-muted)]"
-              )}
-              onClick={onSave}
-              disabled={!activeTab.dirty}
-            >
-              <AppIcon name="save" size={12} strokeWidth={1.9} />
-              Save
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>{t("保存", "Save")} (⌘S)</TooltipContent>
-        </Tooltip>
 
         {/* 发送/取消按钮组 */}
         <div className="relative flex items-center flex-shrink-0 w-[112px]" ref={sendMenuRef}>

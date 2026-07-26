@@ -10,16 +10,17 @@ export type CurlRequest = {
   name?: string
   method?: string
   url?: string
-  params?: Array<{ key: string; value: string; description?: string }>
-  headers?: Array<{ key: string; value: string; description?: string }>
+  params?: Array<{ key: string; value: string; enabled?: boolean; description?: string }>
+  headers?: Array<{ key: string; value: string; enabled?: boolean; description?: string }>
   body?: {
     type: string
     raw?: string
     json?: string
-    formUrlEncoded?: Array<{ key: string; value: string; description?: string }>
+    formUrlEncoded?: Array<{ key: string; value: string; enabled?: boolean; description?: string }>
     formData?: Array<{
       key: string
       value: string
+      enabled?: boolean
       type: string
       filePath?: string
       fileName?: string
@@ -54,6 +55,7 @@ export function buildCurlCommand(request: CurlRequest, variables: VariableLike[]
 
   let fullUrl = ensureRequestProtocol(resolve(request.url, variables))
   for (const param of request.params ?? []) {
+    if (param.enabled === false) continue
     const key = resolve(param.key, variables)
     if (!key) continue
     fullUrl = appendQueryParameter(fullUrl, key, resolve(param.value, variables))
@@ -68,6 +70,7 @@ export function buildCurlCommand(request: CurlRequest, variables: VariableLike[]
   parts.push(shellQuote(fullUrl))
 
   for (const header of request.headers ?? []) {
+    if (header.enabled === false) continue
     const key = resolve(header.key, variables)
     if (!key) continue
     parts.push(`-H ${shellQuote(`${key}: ${resolve(header.value, variables)}`)}`)
@@ -96,6 +99,7 @@ export function buildCurlCommand(request: CurlRequest, variables: VariableLike[]
     parts.push(`-d ${shellQuote(resolve(request.body.raw, variables))}`)
   } else if (request.body?.type === "form-urlencoded") {
     const fields = (request.body.formUrlEncoded ?? []).flatMap((field) => {
+      if (field.enabled === false) return []
       const key = resolve(field.key, variables)
       if (!key) return []
       return [`${encodeURIComponent(key)}=${encodeURIComponent(resolve(field.value, variables))}`]
@@ -106,6 +110,7 @@ export function buildCurlCommand(request: CurlRequest, variables: VariableLike[]
     }
   } else if (request.body?.type === "form-data") {
     for (const field of request.body.formData ?? []) {
+      if (field.enabled === false) continue
       const key = resolve(field.key, variables)
       if (!key) continue
       if (field.type === "file") {
