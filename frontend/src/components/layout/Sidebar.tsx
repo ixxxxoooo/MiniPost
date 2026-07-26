@@ -7,10 +7,12 @@ import { cn } from "@/lib/utils"
 import { writeClipboardText } from "@/lib/clipboard"
 import { METHOD_COLORS, type HttpMethod } from "@/lib/constants"
 import { buildDraftRequestFromCurl } from "@/lib/curlImportDraft"
-import { info } from "@/lib/logger"
+import { buildCurlCommand } from "@/lib/curlCommand"
+import { error as logError, info, warn } from "@/lib/logger"
 import { useProjectStore } from "@/stores/projectStore"
 import { useTabStore, getProjectActiveTabIdFromState, getProjectTabsFromState } from "@/stores/tabStore"
 import { useUIStore } from "@/stores/uiStore"
+import { useEnvironmentStore } from "@/stores/environmentStore"
 import { HistoryPanel } from "@/components/business/history/HistoryPanel"
 import { EnvironmentManager } from "@/components/business/environment/EnvironmentManager"
 import type { model } from "../../../wailsjs/go/models"
@@ -137,52 +139,6 @@ function getImportErrorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
-function buildCurlCommand(request: model.RequestItem): string {
-  const parts: string[] = ["curl"]
-  const method = (request.method || "GET").toUpperCase()
-  if (method !== "GET") parts.push(`-X ${method}`)
-  const url = request.url || ""
-  const params = request.params?.filter((p) => p.key)
-  let fullUrl = url
-  if (params && params.length > 0) {
-    const qs = params.map((p) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value || "")}`).join("&")
-    fullUrl += (url.includes("?") ? "&" : "?") + qs
-  }
-  parts.push(`'${fullUrl}'`)
-  const headers = request.headers?.filter((h) => h.key)
-  if (headers) {
-    for (const h of headers) {
-      parts.push(`-H '${h.key}: ${h.value || ""}'`)
-    }
-  }
-  if (request.auth) {
-    if (request.auth.type === "bearer" && request.auth.bearer?.token) {
-      parts.push(`-H 'Authorization: Bearer ${request.auth.bearer.token}'`)
-    } else if (request.auth.type === "basic" && request.auth.basic) {
-      parts.push(`-u '${request.auth.basic.username || ""}:${request.auth.basic.password || ""}'`)
-    } else if (request.auth.type === "api-key" && request.auth.apiKey) {
-      if ((request.auth.apiKey.addTo || "header") === "header") {
-        parts.push(`-H '${request.auth.apiKey.key}: ${request.auth.apiKey.value || ""}'`)
-      }
-    }
-  }
-  if (request.body) {
-    if (request.body.type === "json" && request.body.json) {
-      parts.push(`-H 'Content-Type: application/json'`)
-      parts.push(`-d '${request.body.json}'`)
-    } else if (request.body.type === "raw" && request.body.raw) {
-      parts.push(`-d '${request.body.raw}'`)
-    } else if (request.body.type === "form-urlencoded" && request.body.formUrlEncoded) {
-      parts.push(`-H 'Content-Type: application/x-www-form-urlencoded'`)
-      const formData = request.body.formUrlEncoded
-        .filter((f: { key: string }) => f.key)
-        .map((f: { key: string; value: string }) => `${encodeURIComponent(f.key)}=${encodeURIComponent(f.value || "")}`)
-        .join("&")
-      if (formData) parts.push(`-d '${formData}'`)
-    }
-  }
-  return parts.join(" \\\n  ")
-}
 
 function normalizeFileName(name: string): string {
   const trimmed = name.trim()
@@ -573,17 +529,33 @@ export function Sidebar({ forceOpen = false }: SidebarProps) {
     setRenamingId(null)
   }
 
-  const handleCopyCurl = (request: model.RequestItem) => {
-    const curl = buildCurlCommand(request)
-    void writeClipboardText(curl)
+  const handleCopyCurl = async (request: model.RequestItem) => {
+    const variables = useEnvironmentStore.getState().getActiveVariables()
+    const curl = buildCurlCommand(request, variables)
+    const copied = await writeClipboardText(curl)
+    if (copied) {
+      info("CurlExport", "cURL copied", { requestId: request.id, variableCount: variables.length })
+    } else {
+      warn("CurlExport", "Failed to copy cURL", { requestId: request.id, variableCount: variables.length })
+    }
     setDropdownMenu(null)
   }
 
   const handleExportCurl = async (request: model.RequestItem) => {
-    const curl = buildCurlCommand(request)
-    const filename = `${normalizeFileName(request.name || "request")}.curl.sh`
-    await SaveTextFile(filename, curl)
-    setDropdownMenu(null)
+    const variables = useEnvironmentStore.getState().getActiveVariables()
+    try {
+      const curl = buildCurlCommand(request, variables)
+      const filename = `${normalizeFileName(request.name || "request")}.curl.sh`
+      await SaveTextFile(filename, curl)
+      info("CurlExport", "cURL exported", { requestId: request.id, variableCount: variables.length })
+    } catch (err) {
+      logError("CurlExport", "Failed to export cURL", {
+        requestId: request.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setDropdownMenu(null)
+    }
   }
 
   const handleDuplicate = async (type: "folder" | "request", id: string) => {
@@ -1490,7 +1462,7 @@ export function Sidebar({ forceOpen = false }: SidebarProps) {
             <span className={MENU_ITEM_HOTKEY}>⌘D</span>
           </button>
           {dropdownMenu.type === "request" && (
-            <button className={MENU_ITEM} onClick={() => { const req = requestMap.get(dropdownMenu.id); if (req) handleCopyCurl(req) }}>
+            <button className={MENU_ITEM} onClick={() => { const req = requestMap.get(dropdownMenu.id); if (req) void handleCopyCurl(req) }}>
               <AppIcon name="commandLine" size={12} /> {t("复制 cURL", "Copy cURL")}
             </button>
           )}
