@@ -1,8 +1,13 @@
 import { ensureRequestProtocol, resolveTemplateVariables } from "@/lib/variableResolver"
+import { mergeCookieHeaders } from "@/lib/cookieHeader"
 
-type VariableLike = {
+export type VariableLike = {
   key: string
   value: string
+}
+
+export type CurlCommandOptions = {
+  cookieHeader?: string
 }
 
 export type CurlRequest = {
@@ -48,12 +53,20 @@ function appendQueryParameter(url: string, key: string, value: string): string {
   return `${url}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`
 }
 
-export function buildCurlCommand(request: CurlRequest, variables: VariableLike[] = []): string {
+export function resolveCurlRequestUrl(request: CurlRequest, variables: VariableLike[] = []): string {
+  return ensureRequestProtocol(resolve(request.url, variables))
+}
+
+export function buildCurlCommand(
+  request: CurlRequest,
+  variables: VariableLike[] = [],
+  options: CurlCommandOptions = {}
+): string {
   const parts: string[] = ["curl"]
   const method = (request.method || "GET").toUpperCase()
   if (method !== "GET") parts.push(`-X ${method}`)
 
-  let fullUrl = ensureRequestProtocol(resolve(request.url, variables))
+  let fullUrl = resolveCurlRequestUrl(request, variables)
   for (const param of request.params ?? []) {
     if (param.enabled === false) continue
     const key = resolve(param.key, variables)
@@ -69,12 +82,20 @@ export function buildCurlCommand(request: CurlRequest, variables: VariableLike[]
   }
   parts.push(shellQuote(fullUrl))
 
+  let manualCookieHeader = ""
   for (const header of request.headers ?? []) {
     if (header.enabled === false) continue
     const key = resolve(header.key, variables)
     if (!key) continue
-    parts.push(`-H ${shellQuote(`${key}: ${resolve(header.value, variables)}`)}`)
+    const value = resolve(header.value, variables)
+    if (key.trim().toLowerCase() === "cookie") {
+      manualCookieHeader = value
+      continue
+    }
+    parts.push(`-H ${shellQuote(`${key}: ${value}`)}`)
   }
+  const cookieHeader = mergeCookieHeaders(manualCookieHeader, options.cookieHeader ?? "")
+  if (cookieHeader) parts.push(`-H ${shellQuote(`Cookie: ${cookieHeader}`)}`)
 
   if (request.auth) {
     if (request.auth.type === "bearer" && request.auth.bearer?.token) {

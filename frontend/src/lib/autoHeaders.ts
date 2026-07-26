@@ -21,7 +21,7 @@ export function extractDisabledHeaderNameFromMarker(key: string): string | null 
   return name || null
 }
 
-export function getSuppressedAutoHeaders(headers: KeyValuePair[]): Set<string> {
+export function getSuppressedAutoHeaders(headers: Array<Pick<KeyValuePair, "key">>): Set<string> {
   const suppressed = new Set<string>()
   headers.forEach((header) => {
     const name = extractDisabledHeaderNameFromMarker(header.key)

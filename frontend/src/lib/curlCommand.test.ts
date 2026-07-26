@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildCurlCommand, type CurlRequest } from "./curlCommand"
+import { buildCurlCommand, resolveCurlRequestUrl, type CurlRequest } from "./curlCommand"
 
 function request(partial: Partial<CurlRequest> = {}): CurlRequest {
   return {
@@ -167,5 +167,26 @@ describe("buildCurlCommand", () => {
     expect(command).not.toContain("disabled-param")
     expect(command).not.toContain("X-Disabled")
     expect(command).not.toContain("disabled-field")
+  })
+
+  it("includes Cookie Jar values and lets a manual Cookie header override matching names", () => {
+    const command = buildCurlCommand(request({
+      headers: [
+        { key: "Cookie", value: "session=manual; preference=compact", enabled: true },
+      ],
+    }), [], {
+      cookieHeader: "session=jar; csrf=token",
+    })
+
+    expect(command).toContain("-H 'Cookie: session=manual; csrf=token; preference=compact'")
+    expect(command.match(/Cookie:/g)).toHaveLength(1)
+  })
+
+  it("resolves the environment URL used for Cookie Jar matching", () => {
+    expect(resolveCurlRequestUrl(request({
+      url: "{{baseUrl}}/private",
+    }), [
+      { key: "baseUrl", value: "https://api.example.com" },
+    ])).toBe("https://api.example.com/private")
   })
 })

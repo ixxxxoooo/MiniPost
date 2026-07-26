@@ -24,7 +24,7 @@ import { areParamsEquivalent, syncParamsWithUrlQuery } from "@/lib/urlQuerySync"
 import { buildSaveResponsePayload, suggestResponseFilename } from "@/lib/responseDownload"
 import { defaultEditorTabForMethod } from "@/lib/requestEditorTabs"
 import { useI18n } from "@/hooks/useI18n"
-import { buildCurlCommand } from "@/lib/curlCommand"
+import { buildRuntimeCurlCommand } from "@/services/curlExportService"
 import { writeClipboardText } from "@/lib/clipboard"
 import { info, warn } from "@/lib/logger"
 
@@ -587,11 +587,12 @@ function useRequestEditorActions() {
   const handleCopyCurl = useCallback(async (): Promise<boolean> => {
     if (!activeTab) return false
     const variables = useEnvironmentStore.getState().getActiveVariables()
-    const curl = buildCurlCommand(activeTab.request, variables)
-    const copied = await writeClipboardText(curl)
+    const { command, cookieIncluded } = buildRuntimeCurlCommand(activeTab.request, variables)
+    const copied = await writeClipboardText(command)
     const context = {
       requestId: activeTab.requestId || activeTab.request.id,
       variableCount: variables.length,
+      cookieIncluded,
     }
     if (copied) {
       info("CurlExport", "Editor cURL copied", context)
