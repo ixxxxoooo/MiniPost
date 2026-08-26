@@ -1,132 +1,136 @@
 # MiniPost
 
-MiniPost 是一个基于 Wails + React + TypeScript 的桌面 API 调试工具。
+<p align="left">
+  <b>English</b> | <a href="README_zh.md">简体中文</a>
+</p>
 
-## 1. 环境要求
+MiniPost is a lightweight desktop API debugging tool built with Wails + React + TypeScript.
+
+## 1. Prerequisites
 
 - Go 1.22+
 - Node.js 20+
 - Wails CLI 2.11+
 
-安装 Wails CLI：
+Install Wails CLI:
 
 ```bash
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 ```
 
-## 2. 本地开发
+## 2. Local Development
 
 ```bash
 wails dev
 ```
 
-## 3. 日志查看
+## 3. Viewing Logs
 
-MiniPost 会同时把后端日志输出到终端和本地日志文件：
+MiniPost outputs backend logs to both the terminal and local log files simultaneously:
 
-- 日志目录：`~/.minipost/logs/`
-- 当天日志文件：`~/.minipost/logs/minipost-YYYY-MM-DD.log`
-- 实时查看：`tail -f ~/.minipost/logs/minipost-$(date +%F).log`
+- Log directory: `~/.minipost/logs/`
+- Daily log file: `~/.minipost/logs/minipost-YYYY-MM-DD.log`
+- Real-time monitoring: `tail -f ~/.minipost/logs/minipost-$(date +%F).log`
 
-默认日志级别为 `DEBUG`，方便开发和排查问题。可以通过环境变量调整：
+The default log level is `DEBUG` for easier development and troubleshooting. You can customize it via environment variables:
 
 ```bash
 MINIPOST_LOG_LEVEL=INFO wails dev
 MINIPOST_LOG_LEVEL=WARN ./scripts/build-macos.sh
 ```
 
-支持的级别：`DEBUG`、`INFO`、`WARN`、`ERROR`、`FATAL`。
+Supported log levels: `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
 
-## 4. 产物目录约定
+## 4. Build Artifact Directory Conventions
 
-- `build/bin/`：Wails 原始构建输出
-- `dist/macos/`：macOS 发布产物（`.app` + `.dmg`）
-- `dist/windows/`：Windows 发布产物（`.exe` / 安装包）
-- 每次构建会先清空对应平台的 `dist` 输出目录，避免旧产物混入本次发布。
-- 发布产物统一命名为 `MiniPost-<version>-<platform>-<arch>` 前缀，便于区分版本、系统和架构。
+- `build/bin/`: Raw Wails build output
+- `dist/macos/`: macOS release artifacts (`.app` + `.dmg`)
+- `dist/windows/`: Windows release artifacts (`.exe` / installer)
+- Each build will first clean the corresponding platform's `dist` output directory to prevent stale artifacts from mixing into the current release.
+- Release artifacts follow a unified naming prefix `MiniPost-<version>-<platform>-<arch>` for clear distinction of versions, operating systems, and architectures.
 
-## 5. 构建（统一一条命令）
+## 5. Build (Unified Commands)
 
-先赋予脚本执行权限：
+First, grant execution permissions to the build scripts:
 
 ```bash
 chmod +x scripts/*.sh
 ```
 
-### 5.1 构建 macOS（输出 DMG）
+### 5.1 Build for macOS (Outputs DMG)
 
 ```bash
 ./scripts/build-macos.sh
 ```
 
-默认输出：
+Default output:
 
 - `dist/macos/MiniPost-<version>-macos-<arch>.app`
 - `dist/macos/MiniPost-<version>-macos-<arch>.dmg`
-- DMG 内含 `Authorize MiniPost.command`（用户可双击完成授权）
+- The DMG includes `Authorize MiniPost.command` (users can double-click to authorize the app)
 
-可选参数（环境变量）：
+Optional parameters (Environment Variables):
 
-- `APP_NAME`：应用名（默认 `MiniPost`）
-- `VERSION`：DMG 版本号（默认自动取 git describe）
-- `MACOS_PLATFORM`：`darwin/arm64` 或 `darwin/amd64`
-- `WAILS_BUILD_FLAGS`：附加 Wails 构建参数
-- `OUT_DIR`：输出目录（默认 `dist/macos`）
-- `MACOS_ARTIFACT_PREFIX` / `ARTIFACT_PREFIX`：自定义发布产物文件名前缀
+- `APP_NAME`: Application name (default: `MiniPost`)
+- `VERSION`: DMG version (default: automatically retrieved via `git describe`)
+- `MACOS_PLATFORM`: `darwin/arm64` or `darwin/amd64`
+- `WAILS_BUILD_FLAGS`: Additional Wails build flags
+- `OUT_DIR`: Output directory (default: `dist/macos`)
+- `MACOS_ARTIFACT_PREFIX` / `ARTIFACT_PREFIX`: Custom release artifact filename prefix
 
-### 5.2 构建 Windows
+### 5.2 Build for Windows
 
 ```bash
 ./scripts/build-windows.sh
 ```
 
-默认输出：
+Default output:
 
 - `dist/windows/MiniPost-<version>-windows-<arch>-portable.exe`
 - `dist/windows/MiniPost-<version>-windows-<arch>-setup.exe`
-- `dist/windows/MiniPost-<version>-windows-<arch>-setup.msi`（如果有）
+- `dist/windows/MiniPost-<version>-windows-<arch>-setup.msi` (if applicable)
 
-可选参数（环境变量）：
+Optional parameters (Environment Variables):
 
-- `VERSION`：版本号（默认自动取 `git describe`）
-- `WINDOWS_PLATFORM`：默认 `windows/amd64`
-- `WEBVIEW2_STRATEGY`：默认 `download`
-- `WAILS_BUILD_FLAGS`：附加 Wails 构建参数
-- `OUT_DIR`：输出目录（默认 `dist/windows`）
-- `WINDOWS_ARTIFACT_PREFIX` / `ARTIFACT_PREFIX`：自定义发布产物文件名前缀
+- `VERSION`: Version string (default: automatically retrieved via `git describe`)
+- `WINDOWS_PLATFORM`: Target platform (default: `windows/amd64`)
+- `WEBVIEW2_STRATEGY`: WebView2 distribution strategy (default: `download`)
+- `WAILS_BUILD_FLAGS`: Additional Wails build flags
+- `OUT_DIR`: Output directory (default: `dist/windows`)
+- `WINDOWS_ARTIFACT_PREFIX` / `ARTIFACT_PREFIX`: Custom release artifact filename prefix
 
-说明：
+Notes:
 
-- 在 macOS/Linux 上构建 Windows 需要交叉编译器。脚本会优先使用 `zig`，其次 `x86_64-w64-mingw32-gcc`。
-- 业界最佳实践是使用 CI 的原生 runner 分别构建 macOS 和 Windows，以降低交叉编译不一致风险。
+- Cross-compiling Windows binaries on macOS/Linux requires a cross compiler. The script prefers `zig`, followed by `x86_64-w64-mingw32-gcc`.
+- Industry best practice recommends using CI native runners for macOS and Windows respectively to minimize cross-compilation inconsistency risks.
 
-### 5.3 一次构建双平台
+### 5.3 Build for Both Platforms
 
 ```bash
 ./scripts/build.sh
 ```
 
-可选：
+Optional filters:
 
 ```bash
 SKIP_WINDOWS=1 ./scripts/build.sh
 SKIP_MACOS=1 ./scripts/build.sh
 ```
 
-## 6. macOS 发布最佳实践（签名 + 公证）
+## 6. macOS Release Best Practices (Code Signing + Notarization)
 
-建议发布版本必须进行以下流程：
+For release builds, the following process is recommended:
 
-1. 使用 `Developer ID Application` 证书签名 `.app` 和 `.dmg`
-2. 使用 `notarytool` 对 `.dmg` 提交公证
-3. 对 `.dmg`（和可单独分发的 `.app`）执行 `stapler`
+1. Sign the `.app` and `.dmg` using a `Developer ID Application` certificate
+2. Submit the `.dmg` for notarization using `notarytool`
+3. Staple the notarization ticket to the `.dmg` (and standalone `.app`)
 
-脚本已内置支持，设置以下环境变量即可：
+The build script has built-in support; simply set the following environment variables:
 
-- `MACOS_SIGN_IDENTITY` 例如：`Developer ID Application: Your Company (TEAMID)`
-- `MACOS_NOTARY_PROFILE` 例如：`AC_NOTARY_PROFILE`
+- `MACOS_SIGN_IDENTITY` e.g., `Developer ID Application: Your Company (TEAMID)`
+- `MACOS_NOTARY_PROFILE` e.g., `AC_NOTARY_PROFILE`
 
-示例：
+Example:
 
 ```bash
 export MACOS_SIGN_IDENTITY="Developer ID Application: Your Company (TEAMID)"
@@ -134,7 +138,7 @@ export MACOS_NOTARY_PROFILE="AC_NOTARY_PROFILE"
 ./scripts/build-macos.sh
 ```
 
-配置 notary profile（一次性）：
+Configure notary profile (one-time setup):
 
 ```bash
 xcrun notarytool store-credentials "AC_NOTARY_PROFILE" \
@@ -143,40 +147,40 @@ xcrun notarytool store-credentials "AC_NOTARY_PROFILE" \
   --password "app-specific-password"
 ```
 
-## 7. “直接授权”命令（内部分发可用）
+## 7. Direct Authorization Command (For Internal Distribution)
 
-对于未公证或内网传输导致的隔离标记，可直接执行：
+For quarantine flags caused by non-notarized apps or internal network distribution, run:
 
 ```bash
 xattr -dr com.apple.quarantine "dist/macos/MiniPost-<version>-macos-<arch>.app"
 ```
 
-或使用脚本：
+Or run the script:
 
 ```bash
 ./scripts/macos-authorize.sh "dist/macos/MiniPost-<version>-macos-<arch>.app"
 ```
 
-对于 DMG 内分发用户：
+For users distributing via DMG:
 
-- 打开 DMG 后，双击 `Authorize MiniPost.command` 即可执行授权。
+- After opening the DMG, double-click `Authorize MiniPost.command` to perform authorization.
 
-可选增强信任（管理员权限）：
+Optional local trust enhancement (requires administrator privileges):
 
 ```bash
 sudo spctl --add --label "MiniPost Local Trust" "dist/macos/MiniPost.app"
 ```
 
-## 8. Windows 签名最佳实践（可选）
+## 8. Windows Code Signing Best Practices (Optional)
 
-脚本支持可选 `signtool` 签名，请在 Windows 主机设置：
+The script supports optional `signtool` signing. Set the following environment variables on a Windows host:
 
-- `WIN_CERT_FILE`：`pfx` 证书路径
-- `WIN_CERT_PASSWORD`：证书密码
-- `WIN_SIGNTOOL`：默认 `signtool`
-- `WIN_TIMESTAMP_URL`：默认 `http://timestamp.digicert.com`
+- `WIN_CERT_FILE`: Path to `pfx` certificate
+- `WIN_CERT_PASSWORD`: Certificate password
+- `WIN_SIGNTOOL`: Sign tool path/binary (default: `signtool`)
+- `WIN_TIMESTAMP_URL`: Timestamp server URL (default: `http://timestamp.digicert.com`)
 
-示例：
+Example:
 
 ```bash
 WIN_CERT_FILE="C:/certs/release.pfx" \
@@ -184,18 +188,18 @@ WIN_CERT_PASSWORD="***" \
 ./scripts/build-windows.sh
 ```
 
-## 9. 常用命令速查
+## 9. Quick Command Reference
 
 ```bash
-# 开发
+# Development
 wails dev
 
-# macOS 发布（dmg）
+# macOS release (dmg)
 ./scripts/build-macos.sh
 
-# Windows 发布
+# Windows release
 ./scripts/build-windows.sh
 
-# 双平台
+# Dual-platform release
 ./scripts/build.sh
 ```
