@@ -34,7 +34,7 @@ var sceneList = []scene{
 	{"hist", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "历史") }},
 	{"envtab", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "环境") }},
 	{"cookies", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "Cookies") }},
-	{"console", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "Console") }},
+	{"console", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "控制台") }},
 	{"settings", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "设置 (⌘,)") }},
 	{"projmenu", false, func(a *app, tt *ui.Tester) {
 		sceneClick(tt, "Demo")

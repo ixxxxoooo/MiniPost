@@ -125,7 +125,7 @@ func TestEditMarksDirtyAndSave(t *testing.T) {
 	if !tab.dirty {
 		t.Fatalf("修改后应标记未保存，实际 dirty=%v texts=%q", tab.dirty, tt.Texts())
 	}
-	if err := tt.Click("Save"); err != nil {
+	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
 	}
 	if got := be.colls[a.projectID].Requests[0].URL; got != "https://changed.example" {

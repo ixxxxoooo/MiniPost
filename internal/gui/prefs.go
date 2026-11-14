@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"minipost/internal/client"
 	"minipost/internal/pkg/logger"
 )
 
@@ -33,7 +34,7 @@ var (
 	detectValues = []string{"auto", "json"}
 	themeValues  = []string{"light", "dark", "system"}
 	localeValues = []string{localeZH, localeEN}
-	fontSizes    = []int{10, 11, 12, 13, 14, 16}
+	fontSizes    = []int{10, 11, 12, 13, 14, 15, 16}
 )
 
 // prefsSections 是左侧菜单：图标名与中英文标题。
@@ -98,6 +99,8 @@ func (a *app) prefsView(c *ui.Context) {
 							s.section = i
 						}
 					}
+					ui.Spacer(c)
+					txtMono(c, "MiniPost "+a.appVersion(), fsSmall, p.muted, 0).PaddingX(8)
 				})
 				vline(c, p.border)
 			})
@@ -111,7 +114,7 @@ func (a *app) prefsView(c *ui.Context) {
 				})
 				hline(c, p.border)
 				ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
-					ui.Column(c).FillWidth().PaddingX(16).PaddingY(10).Gap(12).Children(func() {
+					ui.Column(c).FillWidth().PaddingX(16).PaddingY(10).Gap(14).Children(func() {
 						switch s.section {
 						case 0:
 							changed = a.prefsGeneral(c, s) || changed
@@ -126,6 +129,19 @@ func (a *app) prefsView(c *ui.Context) {
 						}
 					})
 				})
+				if s.section == 0 {
+					hline(c, p.border)
+					ui.Row(c).FillWidth().Height(44).Shrink(0).PaddingX(16).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+						txt(c, a.t("修改会立即生效并自动保存", "Changes apply immediately and are saved automatically"), fsSmall, p.muted, 0)
+						bd := p.btnBorder
+						if a.button(c, btnOpts{h: 26, radius: 7, padX: 10, border: &bd, key: "prefs-reset"}, func(bool) {
+							txt(c, a.t("恢复默认", "Restore defaults"), fsSmall, p.fg2, 0)
+						}) {
+							a.resetGeneralSettings(s)
+							changed = true
+						}
+					})
+				}
 			})
 		})
 	})
@@ -178,58 +194,104 @@ func atoiOr(s string, def int) int {
 	return def
 }
 
+// selectBox 是设置页的下拉选择（高 28、圆角 8、右侧小箭头）；选中新项时返回 true。
+func (a *app) selectBox(c *ui.Context, key string, sel *int, labels []string) bool {
+	p := a.p
+	changed := false
+	b := ui.ButtonBase(c.Key(key)).Width(124).Height(28).Radius(radiusInput).PaddingX(10).AlignItems(ui.Center).Border(1, p.btnBorder).Background(p.surface)
+	b.PopoverMenuButton(func(m *ui.Menu) {
+		for i, l := range labels {
+			if m.Item(l).Checked(*sel == i).Chosen() {
+				i := i
+				a.later(func() { *sel = i })
+				changed = true
+			}
+		}
+	}).Children(func() {
+		txt(c, labels[min(max(*sel, 0), len(labels)-1)], fsBase, p.fg, 0)
+		ui.Spacer(c)
+		icon(c, "arrowDown", 9, p.muted)
+	})
+	return changed
+}
+
+// prefsGroup 画设置分组：小标题 + 一组无外框、行间细线的设置行。
+func (a *app) prefsGroup(c *ui.Context, title string, rows func()) {
+	ui.Column(c).FillWidth().Gap(2).Children(func() {
+		txt(c, title, fsSmall, a.p.fg2, 600).Margin(2, 0, 4, 0)
+		rows()
+	})
+}
+
+// resetGeneralSettings 把“通用”页的各项恢复为默认值（不动外观、布局和项目相关的设置）。
+func (a *app) resetGeneralSettings(s *prefsState) {
+	d := client.DefaultSettings()
+	set := &a.set
+	set.HTTPVersion, set.RequestTimeoutMs, set.MaxResponseSizeMB = d.HTTPVersion, d.RequestTimeoutMs, d.MaxResponseSizeMB
+	set.ResponseFormatDetection, set.SSLVerify, set.FollowRedirects = d.ResponseFormatDetection, d.SSLVerify, d.FollowRedirects
+	set.SSLTLSKeyLog, set.DisableCookies = d.SSLTLSKeyLog, d.DisableCookies
+	set.SendNoCacheHeader, set.SendPostmanTokenHeader = d.SendNoCacheHeader, d.SendPostmanTokenHeader
+	set.AlwaysSaveUnsaved, set.AlwaysDiscardUnsaved = d.AlwaysSaveUnsaved, d.AlwaysDiscardUnsaved
+	s.timeout, s.maxSize = strconv.Itoa(set.RequestTimeoutMs), strconv.Itoa(set.MaxResponseSizeMB)
+	logger.Info("已恢复通用设置默认值")
+}
+
 func (a *app) prefsGeneral(c *ui.Context, s *prefsState) bool {
 	changed := false
 	set := &a.set
-	a.settingsCard(c, 14, func() {
-		a.settingsRow(c, "http", a.t("HTTP 版本", "HTTP version"), a.t("设置发送请求时优先使用的 HTTP 版本。", "Preferred HTTP version when sending requests."), false, func() {
+	a.prefsGroup(c, a.t("请求", "Request"), func() {
+		a.settingsRow(c, "http", a.t("HTTP 版本", "HTTP version"), a.t("发送请求时优先使用的 HTTP 版本。", "Preferred HTTP version when sending requests."), false, func() {
 			i := indexOf(httpValues, set.HTTPVersion)
-			if a.segmented(c, "http-seg", &i, []string{"Auto", "HTTP/1.1", "HTTP/2"}) {
+			if a.selectBox(c, "http-sel", &i, []string{a.t("自动", "Auto"), "HTTP/1.1", "HTTP/2"}) {
 				set.HTTPVersion = httpValues[i]
 				changed = true
 			}
 		})
-		a.settingsRow(c, "timeout", a.t("请求超时", "Request timeout"), a.t("单位毫秒，设置为 0 表示不主动超时。", "In milliseconds. Set 0 to disable active timeout."), false, func() {
+		a.settingsRow(c, "timeout", a.t("请求超时", "Request timeout"), a.t("单位毫秒，0 表示不主动超时。", "In milliseconds. 0 disables active timeout."), false, func() {
 			if a.numberField(c, "timeout-in", &s.timeout, "ms", false) {
 				set.RequestTimeoutMs = atoiOr(s.timeout, 0)
 				changed = true
 			}
 		})
-		a.settingsRow(c, "maxsize", a.t("最大响应大小", "Max response size"), a.t("单位 MB，设置为 0 表示不限制。", "In MB. Set 0 for unlimited."), false, func() {
+		a.settingsRow(c, "maxsize", a.t("最大响应大小", "Max response size"), a.t("单位 MB，0 表示不限制。", "In MB. 0 means unlimited."), false, func() {
 			if a.numberField(c, "maxsize-in", &s.maxSize, "MB", false) {
 				set.MaxResponseSizeMB = atoiOr(s.maxSize, 0)
 				changed = true
 			}
 		})
-		sw := func(key string, on *bool, title, desc string, last bool, after func()) {
-			a.settingsRow(c, key, title, desc, last, func() {
-				if a.toggle(c, key+"-sw", on) {
-					changed = true
-					if after != nil {
-						after()
-					}
-				}
-			})
-		}
-		sw("ssl", &set.SSLVerify, a.t("SSL 证书校验", "SSL certificate verification"), a.t("关闭后将跳过证书校验（仅建议在调试环境使用）。", "If disabled, certificate verification is skipped (recommended for debugging only)."), false, nil)
-		sw("keylog", &set.SSLTLSKeyLog, "SSL/TLS Key Log", a.t("记录 TLS 会话密钥用于抓包调试。", "Log TLS session keys for packet-capture debugging."), false, nil)
-		sw("nocookie", &set.DisableCookies, a.t("禁用 Cookies", "Disable cookies"), a.t("关闭 Cookie Jar 读写，不自动注入或保存 Cookie。", "Disable Cookie Jar read/write, and stop auto injection/persistence."), false, nil)
-		sw("nocache", &set.SendNoCacheHeader, a.t("发送 no-cache 请求头", "Send no-cache header"), a.t("参考 Postman「Send no-cache header」：自动追加 Cache-Control: no-cache，强制服务端重新校验缓存。", "Similar to Postman \"Send no-cache header\": adds Cache-Control: no-cache to force revalidation."), false, nil)
-		sw("token", &set.SendPostmanTokenHeader, a.t("发送 MiniPost-Token 请求头", "Send MiniPost-Token header"), a.t("参考 Postman「Send Postman Token header」：开启后每次请求自动追加随机 Token（名称为 MiniPost-Token），便于区分请求并辅助排查（默认关闭）。", "Similar to Postman \"Send Postman Token header\": appends a random MiniPost-Token to each request for tracing (off by default)."), false, nil)
-		sw("redirect", &set.FollowRedirects, a.t("自动跟随重定向（301/302/307/308）", "Automatically follow redirects (301/302/307/308)"), a.t("对应 Postman：Settings > General > Request > Automatically follow redirects。", "Equivalent to Postman: Settings > General > Request > Automatically follow redirects."), false, nil)
-		a.settingsRow(c, "detect", a.t("响应格式检测", "Response format detection"), a.t("Auto 按 Content-Type 自动识别；JSON 会优先用 JSON 视图。", "Auto detects by Content-Type; JSON prefers JSON view."), false, func() {
+		a.settingsRow(c, "detect", a.t("响应格式检测", "Response format detection"), a.t("自动按 Content-Type 识别，JSON 优先使用 JSON 视图。", "Auto detects by Content-Type; JSON prefers the JSON view."), true, func() {
 			i := indexOf(detectValues, set.ResponseFormatDetection)
-			if a.segmented(c, "detect-seg", &i, []string{"Auto", "JSON"}) {
+			if a.selectBox(c, "detect-sel", &i, []string{a.t("自动", "Auto"), "JSON"}) {
 				set.ResponseFormatDetection = detectValues[i]
 				changed = true
 			}
 		})
-		sw("save", &set.AlwaysSaveUnsaved, a.t("关闭标签时默认保存未保存修改", "Save unsaved changes by default when closing tabs"), a.t("开启后，关闭标签页会自动保存再关闭。开启它会自动关闭“默认丢弃未保存修改”。", "When enabled, closing a tab saves before closing. It turns off default discard automatically."), false, func() {
+	})
+	sw := func(key string, on *bool, title, desc string, last bool, after func()) {
+		a.settingsRow(c, key, title, desc, last, func() {
+			if a.toggle(c, key+"-sw", on) {
+				changed = true
+				if after != nil {
+					after()
+				}
+			}
+		})
+	}
+	a.prefsGroup(c, a.t("安全与网络", "Security & network"), func() {
+		sw("ssl", &set.SSLVerify, a.t("SSL 证书校验", "SSL certificate verification"), a.t("关闭后会跳过证书校验，仅建议在调试环境使用。", "If disabled, certificate verification is skipped (debugging only)."), false, nil)
+		sw("redirect", &set.FollowRedirects, a.t("自动跟随重定向", "Follow redirects"), a.t("301 / 302 / 307 / 308，行为与 Postman 一致。", "301 / 302 / 307 / 308, same behavior as Postman."), false, nil)
+		sw("nocookie", &set.DisableCookies, a.t("禁用 Cookies", "Disable cookies"), a.t("不读写 Cookie Jar，不自动注入或保存。", "Do not read or write the Cookie Jar; nothing is injected or saved."), false, nil)
+		sw("nocache", &set.SendNoCacheHeader, a.t("发送 no-cache 请求头", "Send no-cache header"), a.t("自动追加 Cache-Control: no-cache。", "Adds Cache-Control: no-cache automatically."), false, nil)
+		sw("token", &set.SendPostmanTokenHeader, a.t("发送 MiniPost-Token 请求头", "Send MiniPost-Token header"), a.t("每次请求追加随机 Token（MiniPost-Token），便于区分和排查，默认关闭。", "Appends a random MiniPost-Token to each request for tracing; off by default."), false, nil)
+		sw("keylog", &set.SSLTLSKeyLog, "SSL/TLS Key Log", a.t("记录 TLS 会话密钥，用于抓包调试。", "Log TLS session keys for packet-capture debugging."), true, nil)
+	})
+	a.prefsGroup(c, a.t("标签页", "Tabs"), func() {
+		sw("save", &set.AlwaysSaveUnsaved, a.t("关闭标签时默认保存修改", "Save changes by default when closing tabs"), a.t("开启后关闭标签会先自动保存。会自动关闭“默认丢弃”。", "Closing a tab saves first. Turns off default discard."), false, func() {
 			if set.AlwaysSaveUnsaved {
 				set.AlwaysDiscardUnsaved = false
 			}
 		})
-		sw("discard", &set.AlwaysDiscardUnsaved, a.t("关闭标签时默认丢弃未保存修改", "Discard unsaved changes by default when closing tabs"), a.t("开启后，关闭标签页将不再询问“是否保存更改”，会直接关闭并丢弃未保存内容。你可随时在此处改回。", "When enabled, closing a tab won't ask to save changes. Unsaved changes will be discarded directly."), true, func() {
+		sw("discard", &set.AlwaysDiscardUnsaved, a.t("关闭标签时默认丢弃修改", "Discard changes by default when closing tabs"), a.t("开启后关闭标签不再询问，直接丢弃未保存内容。会自动关闭“默认保存”。", "Closing a tab no longer asks; unsaved changes are discarded. Turns off default save."), true, func() {
 			if set.AlwaysDiscardUnsaved {
 				set.AlwaysSaveUnsaved = false
 			}
@@ -238,37 +300,66 @@ func (a *app) prefsGeneral(c *ui.Context, s *prefsState) bool {
 	return changed
 }
 
-// optionCard 是外观页的一张卡片：标题 + 一排等宽选项按钮 + 可选的底部说明。
-func (a *app) optionCard(c *ui.Context, key, title, note string, labels []string, cols int, h, radius float32, mono bool, selected int, onPick func(i int)) {
-	p := a.p
-	ui.Column(c.Key(key)).FillWidth().Radius(11).Border(1, p.border).Padding(14).Gap(8).Children(func() {
-		txt(c, title, fsLarge, p.fg, 500)
-		ui.Row(c).FillWidth().Gap(8).Children(func() {
-			for i, l := range labels {
-				active := selected == i
-				b := ui.ButtonBase(c.Key(l)).Grow(1).Basis(0).Height(h).Radius(radius).AlignItems(ui.Center).Justify(ui.Center)
-				col, bg, bd := p.fg2, p.surface, p.btnBorder
-				switch {
-				case active:
-					col, bd = p.accent, p.accent
-					bg = ui.RGBA(p.accent.R, p.accent.G, p.accent.B, 0.12)
-				case b.Hovered():
-					bg = p.btnBg
-				}
-				b = b.Background(bg).Border(1, bd)
-				b.Children(func() {
-					t := txt(c, l, fsSmall, col, 500)
-					if mono {
-						t.Font(monoFont)
-					}
-				})
-				if b.Clicked() {
-					onPick(i)
-				}
-			}
+// miniWindow 画一个迷你窗口预览（设计稿外观页的缩略图）：左侧栏条 + 右侧内容（强调色条 + 两行灰线）。
+// half 为 1 时只画侧栏 + 左半内容，为 2 时只画右半内容（用于“跟随系统”的左浅右深拼接）。
+func miniWindow(c *ui.Context, t schemeTokens, half int) {
+	if half != 2 {
+		ui.Column(c).Width(48).Shrink(0).FillHeight().Padding(8, 6).Gap(4).Background(ui.Hex(t.side)).Children(func() {
+			ui.Box(c).Width(22).Height(4).Radius(2).Background(ui.Hex(t.bd2))
 		})
-		if note != "" {
-			txt(c, note, fsSmall, p.muted, 0)
+	}
+	ui.Column(c).Grow(1).Basis(0).FillHeight().Padding(8, 10).Gap(5).Background(ui.Hex(t.bg)).Children(func() {
+		ui.Box(c).Width(46).Height(5).Radius(2).Background(ui.Hex(t.ac))
+		ui.Box(c).FillWidth().Height(4).Radius(2).Background(ui.Hex(t.bd2))
+		ui.Box(c).Width(60).Height(4).Radius(2).Background(ui.Hex(t.bd2))
+	})
+}
+
+// previewCard 是外观页的缩略图选项卡：上方迷你窗口，下方名称（可带右侧色点）。选中时 2px 强调色边框。
+func (a *app) previewCard(c *ui.Context, key, label string, selected bool, preview func(), dots []ui.Color, labelLeft bool) bool {
+	p := a.p
+	b := ui.ButtonBase(c.Key(key)).Grow(1).Basis(0).Radius(10).Padding(2)
+	bd := p.border
+	if selected {
+		bd = p.accent
+	}
+	if b.Hovered() && !selected {
+		bd = p.btnBorder
+	}
+	b = b.Background(p.surface).Border(2, bd)
+	b.Children(func() {
+		ui.Column(c).FillWidth().Gap(0).Children(func() {
+			ui.Row(c).FillWidth().Height(78).Radius(8).Clip().Border(1, p.border).Children(preview)
+			ui.Row(c).FillWidth().Height(30).PaddingX(8).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+				if !labelLeft {
+					ui.Spacer(c)
+				}
+				txt(c, label, fsSmall, p.fg, 500)
+				if !labelLeft {
+					ui.Spacer(c)
+				}
+				if len(dots) > 0 {
+					ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+						for _, d := range dots {
+							ui.Box(c).Size(9, 9).Radius(5).Background(d).Border(1, p.border)
+						}
+					})
+				}
+			})
+		})
+	})
+	return b.Clicked()
+}
+
+// prefsSectionLabel 是外观页分组的小标题（11px 次要色），可带右侧“新增”小徽标。
+func (a *app) prefsSectionLabel(c *ui.Context, s, badge string) {
+	p := a.p
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(4, 0, 0, 0).Children(func() {
+		txt(c, s, fsSmall, p.fg2, 500)
+		if badge != "" {
+			ui.Row(c).Height(16).PaddingX(7).Radius(8).Background(p.selected).AlignItems(ui.Center).Children(func() {
+				txt(c, badge, 10, p.accent, 600)
+			})
 		}
 	})
 }
@@ -276,15 +367,57 @@ func (a *app) optionCard(c *ui.Context, key, title, note string, labels []string
 func (a *app) prefsAppearance(c *ui.Context, s *prefsState) bool {
 	changed := false
 	set := &a.set
-	a.optionCard(c, "theme", a.t("外观主题", "Theme"), "", []string{a.t("浅色", "Light"), a.t("深色", "Dark"), a.t("跟随系统", "System")}, 3, 34, 8, false, indexOf(themeValues, set.Theme), func(i int) {
-		set.Theme = themeValues[i]
-		changed = true
+	p := a.p
+	scheme := set.ColorScheme
+	if _, ok := colorSchemes[scheme]; !ok {
+		scheme = "mist"
+	}
+	light, dark := colorSchemes[scheme][0], colorSchemes[scheme][1]
+
+	// 外观主题：浅色 / 深色 / 跟随系统（左浅右深）
+	a.prefsSectionLabel(c, a.t("外观主题", "Theme"), "")
+	ui.Row(c.Key("theme")).FillWidth().Gap(12).Children(func() {
+		names := []string{a.t("浅色", "Light"), a.t("深色", "Dark"), a.t("跟随系统", "System")}
+		for i, v := range themeValues {
+			i, v := i, v
+			preview := func() {
+				switch v {
+				case "light":
+					miniWindow(c, light, 0)
+				case "dark":
+					miniWindow(c, dark, 0)
+				default:
+					miniWindow(c, light, 1)
+					miniWindow(c, dark, 2)
+				}
+			}
+			if a.previewCard(c, "theme-"+v, names[i], set.Theme == v, preview, nil, false) {
+				set.Theme = v
+				changed = true
+			}
+		}
 	})
-	a.optionCard(c, "scheme", a.t("配色方案", "Color scheme"), a.t("雾蓝、墨白、松石三套配色，各自适配浅色与深色。", "Mist, Ink and Jade palettes, each with light and dark variants."), []string{a.t("雾蓝", "Mist"), a.t("墨白", "Ink"), a.t("松石", "Jade")}, 3, 34, 8, false, indexOf(colorSchemeNames, set.ColorScheme), func(i int) {
-		set.ColorScheme = colorSchemeNames[i]
-		logger.Info("已切换配色方案", "scheme", set.ColorScheme)
-		changed = true
+	// 配色：雾蓝 / 墨白 / 松石
+	a.prefsSectionLabel(c, a.t("配色", "Color scheme"), a.t("新增", "New"))
+	ui.Row(c.Key("scheme")).FillWidth().Gap(12).Children(func() {
+		names := map[string]string{"mist": a.t("雾蓝", "Mist"), "ink": a.t("墨白", "Ink"), "jade": a.t("松石", "Jade")}
+		for _, name := range colorSchemeNames {
+			name := name
+			tk := colorSchemes[name][0]
+			if p.dark {
+				tk = colorSchemes[name][1]
+			}
+			dots := []ui.Color{ui.Hex(tk.ac), ui.Hex(tk.bg2), ui.Hex(tk.fg)}
+			if a.previewCard(c, "scheme-"+name, names[name], scheme == name, func() { miniWindow(c, tk, 0) }, dots, true) {
+				set.ColorScheme = name
+				logger.Info("已切换配色方案", "scheme", set.ColorScheme)
+				changed = true
+			}
+		}
 	})
+	txt(c, a.t("项目主题色仍然可用：它会覆盖这里的强调色，只影响选中态、高亮和发送按钮。", "Project theme colors still work: they override the accent here, affecting only selection, highlights and the send button."), fsSmall, p.muted, 0)
+	hline(c, p.border)
+
 	cur := indexOf(localeValues, set.Locale)
 	if set.Locale == "" {
 		cur = 0
@@ -292,28 +425,42 @@ func (a *app) prefsAppearance(c *ui.Context, s *prefsState) bool {
 			cur = 1
 		}
 	}
-	a.optionCard(c, "lang", a.t("语言", "Language"), a.t("立即生效，且会记住你的选择。", "Takes effect immediately and will be remembered."), []string{"中文", "English"}, 2, 34, 8, false, cur, func(i int) {
-		set.Locale = localeValues[i]
-		changed = true
-	})
-	labels := make([]string, len(fontSizes))
-	sel := -1
-	for i, f := range fontSizes {
-		labels[i] = strconv.Itoa(f) + "px"
-		if f == set.FontSize {
-			sel = i
+	a.settingsRow(c, "lang", a.t("语言", "Language"), a.t("立即生效，并记住你的选择。", "Takes effect immediately and will be remembered."), true, func() {
+		if a.segmented(c, "lang-seg", &cur, []string{"中文", "English"}) {
+			set.Locale = localeValues[cur]
+			changed = true
 		}
-	}
-	a.optionCard(c, "font", a.t("界面字体", "UI font size"), a.t("用于调整界面字号（菜单、标签、按钮与面板文本）。", "Adjusts text size for menus, tabs, buttons, and panels."), labels, 6, 28, 7, true, sel, func(i int) {
-		set.FontSize = fontSizes[i]
-		changed = true
 	})
-	a.settingsCard(c, 14, func() {
-		a.settingsRow(c, "scroll", a.t("滚动条自动隐藏", "Auto-hide scrollbar"), a.t("滚动时显示，静止后自动隐藏。", "Shows while scrolling and hides when idle."), true, func() {
-			if a.toggle(c, "scroll-sw", &set.ScrollbarAutoHide) {
-				changed = true
+	a.settingsRow(c, "font", a.t("界面字体", "UI font size"), a.t("调整菜单、标签、按钮和面板的文字大小。", "Adjusts text size for menus, tabs, buttons, and panels."), true, func() {
+		ui.Row(c).Gap(4).Children(func() {
+			for _, f := range fontSizes {
+				f := f
+				active := set.FontSize == f
+				b := ui.ButtonBase(c.Key("fs"+strconv.Itoa(f))).Size(30, 28).Radius(7).AlignItems(ui.Center).Justify(ui.Center)
+				col, bd, w := p.fg2, p.btnBorder, 500
+				switch {
+				case active:
+					col, bd, w = p.fg, p.accent, 600
+				case b.Hovered():
+					col = p.fg
+				}
+				bw := float32(1)
+				if active {
+					bw = 2
+				}
+				b = b.Background(p.surface).Border(bw, bd)
+				b.Children(func() { txt(c, strconv.Itoa(f), fsSmall, col, w) })
+				if b.Clicked() {
+					set.FontSize = f
+					changed = true
+				}
 			}
 		})
+	})
+	a.settingsRow(c, "scroll", a.t("滚动条自动隐藏", "Auto-hide scrollbar"), a.t("滚动时显示，静止后自动隐藏。", "Shows while scrolling and hides when idle."), true, func() {
+		if a.toggle(c, "scroll-sw", &set.ScrollbarAutoHide) {
+			changed = true
+		}
 	})
 	return changed
 }

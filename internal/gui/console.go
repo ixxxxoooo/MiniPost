@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -81,7 +80,7 @@ func (a *app) consolePanel(c *ui.Context) {
 			BorderWidth(0, 0, 1, 0).BorderColor(p.border)
 		head.Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				txt(c, "Console", fsSmall, p.fg, 500)
+				txt(c, a.t("控制台", "Console"), fsSmall, p.fg, 500)
 				if n := len(a.con.entries); n > 0 {
 					txt(c, a.t(itoa(n)+" 条", itoa(n)+" entries"), fsTiny, p.muted, 0)
 				}
@@ -153,7 +152,7 @@ func (a *app) consoleFilter(c *ui.Context, errCount int) {
 func (a *app) consoleRow(c *ui.Context, i int) {
 	p := a.p
 	e := &a.con.entries[i]
-	row := ui.Row(c.Key(i)).FillWidth().PaddingX(12).PaddingY(6).Gap(8).AlignItems(ui.Center).Shrink(0)
+	row := ui.Row(c.Key(i)).FillWidth().PaddingX(12).PaddingY(4).Gap(10).AlignItems(ui.Center).Shrink(0)
 	switch {
 	case e.err != "":
 		row = row.Background(p.danger.Alpha(0.1))
@@ -161,23 +160,30 @@ func (a *app) consoleRow(c *ui.Context, i int) {
 		row = row.Background(p.surface2)
 	}
 	row.Children(func() {
-		arrow := "arrowRight"
-		if e.open {
-			arrow = "arrowDown"
+		// 设计稿 13：时间 | 方向箭头 | 方法缩写 | 地址 | 状态（右对齐、加粗）| 耗时
+		txtMono(c, e.at.Format("15:04:05"), fsSmall, p.muted, 0).Width(58).Shrink(0)
+		dir := "←"
+		if !e.done {
+			dir = "→"
 		}
-		icon(c, arrow, 8, p.muted).Shrink(0)
-		txtMono(c, strings.ToUpper(e.method), fsSmall, p.method(e.method), 700).Width(44).Shrink(0)
+		txt(c, dir, fsSmall, p.muted, 0).Width(14).Shrink(0)
+		txtMono(c, methodAbbr(e.method), fsTiny, p.method(e.method), 600).Width(40).Shrink(0)
 		txtEMono(c, e.url, fsSmall, p.fg, 0).Grow(1).Basis(0).Selectable()
+		status, col := "", p.muted
 		switch {
 		case !e.done:
-			txtMono(c, "…", fsSmall, p.muted, 0)
+			status = "…"
 		case e.err != "":
-			txtMono(c, "Error", fsTiny, p.danger, 0)
+			status, col = "ERR", p.danger
 		default:
-			txtMono(c, itoa(e.status), fsSmall, a.statusTextColor(e.status), 700)
-			txtMono(c, formatDuration(e.ms), fsSmall, p.muted, 0)
+			status, col = itoa(e.status), a.statusTextColor(e.status)
 		}
-		txtMono(c, e.at.Format("15:04:05"), fsTiny, p.muted, 0).MarginStart(4)
+		ui.Row(c).Width(44).Shrink(0).Justify(ui.End).Children(func() { txtMono(c, status, fsSmall, col, 700) })
+		ms := ""
+		if e.done && (e.err == "" || e.ms > 0) {
+			ms = formatDuration(e.ms)
+		}
+		ui.Row(c).Width(64).Shrink(0).Justify(ui.End).Children(func() { txtMono(c, ms, fsSmall, p.muted, 0) })
 	})
 	if row.Clicked() {
 		idx := i

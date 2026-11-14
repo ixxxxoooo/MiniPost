@@ -273,7 +273,7 @@ func TestPrefsColorSchemePicker(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !tt.HasText("配色方案") {
+	if !tt.HasText("配色") {
 		t.Fatalf("外观页应显示配色方案卡片，实际 %q", tt.Texts())
 	}
 	if err := tt.Click("松石"); err != nil {

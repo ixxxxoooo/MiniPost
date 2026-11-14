@@ -129,10 +129,10 @@ func TestFontSizeSettingDoesNotScaleWholeUI(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	a.openRequest(a.coll.Requests[0].ID)
 	tt.Frame()
-	base, _ := tt.Find("Console")
+	base, _ := tt.Find("控制台")
 	a.set.FontSize = 16
 	tt.Frame()
-	big, _ := tt.Find("Console")
+	big, _ := tt.Find("控制台")
 	if base.W != big.W || base.H != big.H {
 		t.Fatalf("底栏文字不应随界面字体缩放：%+v → %+v", base, big)
 	}

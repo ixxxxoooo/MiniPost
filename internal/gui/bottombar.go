@@ -28,7 +28,7 @@ func (a *app) bottomBar(c *ui.Context) {
 	hline(c, p.border)
 	ui.Row(c).FillWidth().Height(sizeBottom - 1).Shrink(0).Background(p.bottom).PaddingX(12).AlignItems(ui.Center).Children(func() {
 		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-			if a.footLink(c, "commandLine", "Console", a.errorCount()) {
+			if a.footLink(c, "commandLine", a.t("控制台", "Console"), a.errorCount()) {
 				a.later(func() { a.setConsoleOpen(!a.set.ConsoleOpen) })
 			}
 			label := "Cookies"

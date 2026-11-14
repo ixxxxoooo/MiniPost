@@ -116,7 +116,8 @@ func (a *app) breadcrumb(c *ui.Context, t *tab) {
 				hv := p.sideHover
 				if a.button(c, btnOpts{h: 24, radius: 6, padX: 8, gap: 4, disabled: !dirty, hoverBg: &hv, tip: a.t("保存", "Save") + " (⌘S)", key: "bc-save"}, func(bool) {
 					icon(c, "save", 12, col)
-					txt(c, "Save", fsSmall, col, 500)
+					txt(c, a.t("保存", "Save"), fsSmall, col, 500)
+					a.kbdHint(c, "⌘S")
 				}) {
 					a.later(func() { a.saveTab(t) })
 				}

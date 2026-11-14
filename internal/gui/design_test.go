@@ -653,3 +653,60 @@ func TestBottomBarRequestSummary(t *testing.T) {
 		t.Error("环境选择已移到标题栏，底栏不应再有环境按钮")
 	}
 }
+
+// 设置·通用（设计稿 16）：分组小标题、下拉选择、页脚说明；“恢复默认”只重置通用项。
+func TestPrefsGeneralDesignAndReset(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.set.RequestTimeoutMs, a.set.MaxResponseSizeMB = 5000, 7
+	a.set.SSLVerify, a.set.DisableCookies = false, true
+	a.set.Theme, a.set.FontSize = "dark", 14 // 不属于通用页，不应被重置
+	a.openPrefs()
+	tt.Frame()
+	for _, want := range []string{"请求", "安全与网络", "标签页", "HTTP 版本", "自动", "修改会立即生效并自动保存", "恢复默认"} {
+		if !tt.HasText(want) {
+			t.Fatalf("设置通用页缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	snapshot(t, tt, "d_prefs_general")
+	if err := tt.Click("恢复默认"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	d := client.DefaultSettings()
+	if a.set.RequestTimeoutMs != d.RequestTimeoutMs || a.set.MaxResponseSizeMB != d.MaxResponseSizeMB || !a.set.SSLVerify || a.set.DisableCookies {
+		t.Fatalf("通用项应恢复默认，实际 %+v", a.set)
+	}
+	if a.set.Theme != "dark" || a.set.FontSize != 14 {
+		t.Fatalf("恢复默认不应动外观设置：theme=%q font=%d", a.set.Theme, a.set.FontSize)
+	}
+}
+
+// 设置·外观（设计稿 17）：主题与配色为缩略图卡片，字号 10–16 共 7 档；点卡片立即生效。
+func TestPrefsAppearanceCards(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openPrefs()
+	tt.Frame()
+	if err := tt.Click("外观"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	for _, want := range []string{"外观主题", "配色", "新增", "雾蓝", "墨白", "松石", "语言", "界面字体", "10", "15", "16"} {
+		if !tt.HasText(want) {
+			t.Fatalf("外观页缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	if err := tt.Click("15"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.set.FontSize != 15 {
+		t.Fatalf("点击 15 应切换字号，实际 %d", a.set.FontSize)
+	}
+	if err := tt.Click("墨白"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.set.ColorScheme != "ink" {
+		t.Fatalf("点击墨白应切换配色，实际 %q", a.set.ColorScheme)
+	}
+}

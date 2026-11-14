@@ -117,7 +117,7 @@ func TestConsoleShownHeightClampedButSettingKept(t *testing.T) {
 	if a.set.ConsoleHeight != 500 {
 		t.Fatalf("设置值应保留 500，实际 %v", a.set.ConsoleHeight)
 	}
-	if _, ok := tt.Find("Console"); !ok {
+	if _, ok := tt.Find("控制台"); !ok {
 		t.Fatalf("矮窗口里控制台仍应显示")
 	}
 	if hi >= 500 {
