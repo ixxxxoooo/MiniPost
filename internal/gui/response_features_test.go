@@ -239,8 +239,8 @@ func TestStreamEntriesOrderAndFilter(t *testing.T) {
 		{Kind: "message", Data: "beta", Sequence: 2},
 	}
 	got := streamEntries(chunks)
-	if len(got) != 2 || got[0].Sequence != 2 {
-		t.Fatalf("应去掉 response_start 并让新消息在前，实际 %+v", got)
+	if len(got) != 2 || got[0].Sequence != 1 || got[1].Sequence != 2 {
+		t.Fatalf("应去掉 response_start 并按时间先后排列（新消息在底部），实际 %+v", got)
 	}
 	if f := filterStreamEntries(got, " ALPHA "); len(f) != 1 || f[0].Sequence != 1 {
 		t.Fatalf("搜索应不区分大小写，实际 %+v", f)
@@ -249,7 +249,7 @@ func TestStreamEntriesOrderAndFilter(t *testing.T) {
 	for i := range many {
 		many[i] = model.StreamChunk{Kind: "message", Sequence: i + 1}
 	}
-	if got := streamEntries(many); len(got) != maxStreamRows || got[0].Sequence != maxStreamRows+50 {
+	if got := streamEntries(many); len(got) != maxStreamRows || got[0].Sequence != 51 || got[len(got)-1].Sequence != maxStreamRows+50 {
 		t.Fatalf("应只保留最近 %d 条，实际 %d", maxStreamRows, len(got))
 	}
 	if streamTimeLabel("bad") != "--:--:--.---" {
@@ -261,6 +261,13 @@ func TestStreamViewExpandAndCopy(t *testing.T) {
 	a, tt, rs := streamApp(t)
 	if !tt.HasText("连接已关闭") || !tt.HasText(`{"n":1}`) || !tt.HasText("hello world") {
 		t.Fatalf("应列出消息，实际 %q", tt.Texts())
+	}
+	// 关闭连接的消息不可展开（它在列表最底部，先点它，免得被展开的详情顶出窗口）
+	if err := tt.Click("连接已关闭"); err != nil {
+		t.Fatal(err)
+	}
+	if rs.stream.expanded[3] {
+		t.Fatalf("connection_closed 不应展开")
 	}
 	if err := tt.Click("hello world"); err != nil {
 		t.Fatal(err)
@@ -278,13 +285,6 @@ func TestStreamViewExpandAndCopy(t *testing.T) {
 	}
 	if a.clipboard != "hello world" {
 		t.Fatalf("应复制详情文本，实际 %q", a.clipboard)
-	}
-	// 关闭连接的消息不可展开
-	if err := tt.Click("连接已关闭"); err != nil {
-		t.Fatal(err)
-	}
-	if rs.stream.expanded[3] {
-		t.Fatalf("connection_closed 不应展开")
 	}
 	// 收起消息 2，让消息 1 回到可视区域；JSON 消息展开后缩进
 	if err := tt.Click("hello world"); err != nil {

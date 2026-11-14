@@ -28,6 +28,8 @@ type StreamChunk struct {
 	Kind       string `json:"kind"`
 	Data       string `json:"data"`
 	Raw        string `json:"raw,omitempty"`
+	Event      string `json:"event,omitempty"` // SSE 的 event: 字段（事件名）
+	ID         string `json:"id,omitempty"`    // SSE 的 id: 字段
 	Timestamp  string `json:"timestamp"`
 	Sequence   int    `json:"sequence"`
 	BytesTotal int64  `json:"bytesTotal,omitempty"`

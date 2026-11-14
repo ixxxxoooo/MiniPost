@@ -49,12 +49,14 @@ func (s *HttpService) readSSEStreamBody(body io.Reader, maxResponseBytes int64, 
 	eventLines := make([]string, 0, 8)
 	sequence := 0
 
-	emit := func(kind string, data string, raw string) {
+	emit := func(ev sseEvent) {
 		sequence++
 		onChunk(model.StreamChunk{
-			Kind:       kind,
-			Data:       data,
-			Raw:        raw,
+			Kind:       ev.kind,
+			Data:       ev.data,
+			Raw:        ev.raw,
+			Event:      ev.event,
+			ID:         ev.id,
 			Timestamp:  time.Now().Format(time.RFC3339Nano),
 			Sequence:   sequence,
 			BytesTotal: int64(buffer.Len()),
@@ -65,19 +67,7 @@ func (s *HttpService) readSSEStreamBody(body io.Reader, maxResponseBytes int64, 
 		if len(eventLines) == 0 {
 			return
 		}
-		raw := strings.Join(eventLines, "\n")
-		dataLines := make([]string, 0, len(eventLines))
-		for _, line := range eventLines {
-			trimmed := strings.TrimSpace(line)
-			if strings.HasPrefix(trimmed, "data:") {
-				dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(trimmed, "data:")))
-			}
-		}
-		if len(dataLines) > 0 {
-			emit("data", strings.Join(dataLines, "\n"), raw)
-		} else {
-			emit("event", raw, raw)
-		}
+		emit(parseSSEEvent(eventLines))
 		eventLines = eventLines[:0]
 	}
 
@@ -110,6 +100,48 @@ func (s *HttpService) readSSEStreamBody(body io.Reader, maxResponseBytes int64, 
 
 	flushEvent()
 	return buffer.Bytes(), nil
+}
+
+// sseEvent 是按 SSE 规范解析出的一个事件。
+type sseEvent struct {
+	kind  string // data：带数据；comment：只有注释（如心跳 ": ping"）；event：只有 event/id/retry 等字段
+	data  string
+	raw   string
+	event string
+	id    string
+}
+
+// parseSSEEvent 解析一个事件的所有行：data 多行以换行拼接，event/id 单独取出，以 ":" 开头的是注释。
+func parseSSEEvent(lines []string) sseEvent {
+	ev := sseEvent{raw: strings.Join(lines, "\n")}
+	var dataLines []string
+	comments := 0
+	for _, line := range lines {
+		if strings.HasPrefix(line, ":") {
+			comments++
+			continue
+		}
+		field, value, _ := strings.Cut(line, ":")
+		value = strings.TrimPrefix(value, " ")
+		switch strings.TrimSpace(field) {
+		case "data":
+			dataLines = append(dataLines, strings.TrimSpace(value))
+		case "event":
+			ev.event = strings.TrimSpace(value)
+		case "id":
+			ev.id = strings.TrimSpace(value)
+		}
+	}
+	switch {
+	case len(dataLines) > 0:
+		ev.kind, ev.data = "data", strings.Join(dataLines, "\n")
+	case comments == len(lines):
+		ev.kind = "comment"
+		ev.data = strings.TrimSpace(strings.TrimPrefix(strings.Join(lines, "\n"), ":"))
+	default:
+		ev.kind, ev.data = "event", ev.raw
+	}
+	return ev
 }
 
 func isSSEContentType(contentType string) bool {
