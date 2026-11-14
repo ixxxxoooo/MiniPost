@@ -2,6 +2,7 @@ package gui
 
 import (
 	"embed"
+	"fmt"
 	"sync"
 
 	"github.com/egoist/mygo/ui"
@@ -18,7 +19,7 @@ var assetFS embed.FS
 
 // 尺寸常量（单位 DIP，与旧版 CSS 像素一致）。
 const (
-	sizeToolbar  = 37  // 顶部自绘标题栏高度
+	sizeToolbar  = 38  // 顶部自绘标题栏高度（含 1px 底线）
 	sizeBottom   = 25  // 底栏高度
 	sizeTabStrip = 28  // 侧栏标签条与请求标签栏高度
 	sizeBtn      = 24  // 工具栏图标按钮
@@ -83,38 +84,69 @@ func (p *palette) shadowLg() ui.Color {
 	return ui.RGBA(0, 0, 0, 0.12)
 }
 
-func lightPalette() *palette {
-	return &palette{
-		accent: ui.Hex("#007aff"), accentHover: ui.Hex("#0066d6"), accentFg: ui.Hex("#ffffff"),
-		surface: ui.Hex("#ffffff"), surface2: ui.Hex("#f9f9f9"),
-		fg: ui.Hex("#1d1d1f"), fg2: ui.Hex("#6e6e73"), muted: ui.Hex("#aeaeb2"),
-		border: ui.Hex("#ededed"), btnBg: ui.RGB(237, 237, 237), btnBorder: ui.RGB(230, 230, 230), selected: ui.RGB(242, 242, 242),
-		toolbar: ui.RGB(250, 250, 250), sidebar: ui.RGB(249, 249, 249), tabStrip: ui.RGB(249, 249, 249), bottom: ui.RGB(249, 249, 249),
-		sideActive: ui.RGBA(0, 122, 255, 0.12), sideHover: ui.RGBA(0, 0, 0, 0.04), tabActive: ui.Hex("#ffffff"),
-		tabDivider: ui.Hex("#e6e6ea"), tabActiveBorder: ui.Hex("#007aff"),
-		success: ui.Hex("#34c759"), warning: ui.Hex("#ff9500"), danger: ui.Hex("#ff3b30"), info: ui.Hex("#5ac8fa"),
-		get: ui.Hex("#34c759"), post: ui.Hex("#007aff"), put: ui.Hex("#ff9500"), patch: ui.Hex("#af52de"),
-		del: ui.Hex("#ff3b30"), head: ui.Hex("#6e6e73"), options: ui.Hex("#5ac8fa"),
-		jsonKey: ui.Hex("#881391"), jsonString: ui.Hex("#1a7f37"), jsonNumber: ui.Hex("#0550ae"), jsonBool: ui.Hex("#cf222e"), jsonBracket: ui.Hex("#6e6e73"),
-		hover: ui.RGBA(0, 0, 0, 0.04),
-	}
+// schemeTokens 是设计稿中一套配色的基础令牌（chrome=标题栏/标签栏/状态栏，side=侧栏，bg=内容区，bg2=次级底，
+// bd/bd2=细/粗边框，fg/fg2/mu=主/次/弱文字，ac/ach/acf=强调色/悬停/其上文字）。
+type schemeTokens struct {
+	chrome, side, bg, bg2, bd, bd2, fg, fg2, mu, ac, ach, acf string
 }
 
-func darkPalette() *palette {
+// colorSchemes 按设计稿「令牌与通用组件」：mist 雾蓝 / ink 墨白 / jade 松石，各有 [亮, 暗] 两档。
+var colorSchemes = map[string][2]schemeTokens{
+	"mist": {
+		{"#f1f2f6", "#f5f6f9", "#ffffff", "#eef0f5", "#e2e5ec", "#cfd4de", "#1b1e29", "#4b5266", "#6a7287", "#4f52d9", "#4144c4", "#ffffff"},
+		{"#16171c", "#1a1b21", "#1f2027", "#282a32", "#2d2f38", "#3b3e4a", "#eceef4", "#a9adbb", "#8a8fa0", "#8c8fff", "#a3a5ff", "#0f1030"},
+	},
+	"ink": {
+		{"#f2f2f0", "#f6f6f4", "#ffffff", "#efefed", "#e4e4e1", "#d0d0cc", "#17171a", "#4d4d54", "#6c6c74", "#17171a", "#35353b", "#ffffff"},
+		{"#121212", "#161616", "#1b1b1c", "#252526", "#2a2a2c", "#3a3a3d", "#f0f0f0", "#a8a8ae", "#86868e", "#f0f0f0", "#ffffff", "#111111"},
+	},
+	"jade": {
+		{"#eff3f2", "#f4f7f6", "#ffffff", "#ebf0ee", "#dde5e2", "#c9d4d0", "#17201e", "#46524f", "#66726f", "#08806f", "#066b5c", "#ffffff"},
+		{"#0f1514", "#131a19", "#172020", "#1f2a29", "#243230", "#30403d", "#e8f0ee", "#a1b2ae", "#84968f", "#3fd0b8", "#62dcc7", "#04201b"},
+	},
+}
+
+// colorSchemeNames 是设置页里配色方案的顺序，与 colorSchemes 的键一致。
+var colorSchemeNames = []string{"mist", "ink", "jade"}
+
+// semanticTokens 是各配色共用的语义色（请求方法、状态、JSON 高亮），亮暗各一套。
+type semanticTokens struct {
+	get, post, put, pat, del, head, opt, ok, warn, err, k, s, n, b, p string
+}
+
+var (
+	semanticLight = semanticTokens{"#0a7d50", "#b8520a", "#2260c4", "#7e45cc", "#c93030", "#0a7f7f", "#626a7b", "#0a7d50", "#a05a00", "#c93030", "#3e4bc2", "#0a7d50", "#b8520a", "#c93030", "#8a91a2"}
+	semanticDark  = semanticTokens{"#4cd694", "#ffa05c", "#6aa6ff", "#c39bff", "#ff7070", "#4fd1d1", "#9aa1b2", "#4cd694", "#f2b84b", "#ff7a7a", "#9fb0ff", "#7fd9a8", "#ffb070", "#ff8a8a", "#7c8394"}
+)
+
+// schemePalette 返回指定配色方案的亮/暗调色板；未知方案按雾蓝处理。
+func schemePalette(scheme string, dark bool) *palette {
+	pair, ok := colorSchemes[scheme]
+	if !ok {
+		pair = colorSchemes["mist"]
+	}
+	i, sem := 0, semanticLight
+	if dark {
+		i, sem = 1, semanticDark
+	}
+	t := pair[i]
+	fg, bg, chrome := ui.Hex(t.fg), ui.Hex(t.bg), ui.Hex(t.chrome)
+	ac := ui.Hex(t.ac)
+	hov := fg.Alpha(0.05)
 	return &palette{
-		dark:   true,
-		accent: ui.Hex("#0a84ff"), accentHover: ui.Hex("#409cff"), accentFg: ui.Hex("#ffffff"),
-		surface: ui.RGB(33, 33, 33), surface2: ui.RGB(48, 48, 48),
-		fg: ui.Hex("#f5f5f7"), fg2: ui.Hex("#b8b8be"), muted: ui.Hex("#8a8a90"),
-		border: ui.RGB(48, 48, 48), btnBg: ui.RGB(59, 59, 59), btnBorder: ui.RGB(48, 48, 48), selected: ui.RGB(68, 68, 68),
-		toolbar: ui.RGB(28, 28, 28), sidebar: ui.RGB(28, 28, 28), tabStrip: ui.RGB(23, 23, 23), bottom: ui.RGB(28, 28, 28), // 外围（标题栏/侧栏/状态栏）比内容区深一档，标签栏最深，选中标签与内容区同色相连
-		sideActive: ui.RGBA(10, 132, 255, 0.18), sideHover: ui.RGB(48, 48, 48), tabActive: ui.RGB(33, 33, 33),
-		tabDivider: ui.RGBA(255, 255, 255, 0.1), tabActiveBorder: ui.Hex("#0a84ff"),
-		success: ui.Hex("#30d158"), warning: ui.Hex("#ff9f0a"), danger: ui.Hex("#ff453a"), info: ui.Hex("#64d2ff"),
-		get: ui.Hex("#30d158"), post: ui.Hex("#0a84ff"), put: ui.Hex("#ff9f0a"), patch: ui.Hex("#bf5af2"),
-		del: ui.Hex("#ff453a"), head: ui.Hex("#8a8a90"), options: ui.Hex("#64d2ff"),
-		jsonKey: ui.Hex("#79c0ff"), jsonString: ui.Hex("#a5d6ff"), jsonNumber: ui.Hex("#d2a8ff"), jsonBool: ui.Hex("#ff7b72"), jsonBracket: ui.Hex("#8a8a90"),
-		hover: ui.RGB(48, 48, 48),
+		dark:   dark,
+		accent: ac, accentHover: ui.Hex(t.ach), accentFg: ui.Hex(t.acf),
+		surface: bg, surface2: ui.Hex(t.bg2),
+		fg: fg, fg2: ui.Hex(t.fg2), muted: ui.Hex(t.mu),
+		border: ui.Hex(t.bd), btnBg: ui.Hex(t.bg2), btnBorder: ui.Hex(t.bd2), selected: bg.Mix(fg, 0.08),
+		toolbar: chrome, sidebar: ui.Hex(t.side), tabStrip: chrome, bottom: chrome,
+		sideActive: ac.Alpha(0.12), sideHover: hov, tabActive: bg,
+		tabDivider: ui.Hex(t.bd), tabActiveBorder: ac,
+		success: ui.Hex(sem.ok), warning: ui.Hex(sem.warn), danger: ui.Hex(sem.err), info: ui.Hex(sem.put),
+		get: ui.Hex(sem.get), post: ui.Hex(sem.post), put: ui.Hex(sem.put), patch: ui.Hex(sem.pat),
+		del: ui.Hex(sem.del), head: ui.Hex(sem.head), options: ui.Hex(sem.opt),
+		jsonKey: ui.Hex(sem.k), jsonString: ui.Hex(sem.s), jsonNumber: ui.Hex(sem.n), jsonBool: ui.Hex(sem.b), jsonBracket: ui.Hex(sem.p),
+		hover: hov,
 	}
 }
 
@@ -561,35 +593,33 @@ func (a *app) codeView(c *ui.Context, st *editor.State) ui.Element {
 	return editor.View(c, st)
 }
 
-var (
-	edThemeLight = &editor.Theme{}
-	edThemeDark  = &editor.Theme{}
-	edThemeOnce  sync.Once
-)
+var edThemes = map[string]*editor.Theme{}
 
-func initEdThemes() {
-	set := func(t *editor.Theme, bg, fg, ln, line, sel, key, str, num, kw string) {
-		t.Background, t.Text = ui.Hex(bg), ui.Hex(fg)
-		t.LineNumber, t.ActiveLineNumber = ui.Hex(ln), ui.Hex(fg)
-		t.ActiveLine, t.Selection = ui.Hex(line), ui.Hex(sel)
-		t.Cursor = ui.Hex(fg)
-		t.Tokens[editor.TokenProperty].Color = ui.Hex(key)
-		t.Tokens[editor.TokenString].Color = ui.Hex(str)
-		t.Tokens[editor.TokenNumber].Color = ui.Hex(num)
-		t.Tokens[editor.TokenConstant].Color = ui.Hex(kw)
-		t.Tokens[editor.TokenKeyword].Color = ui.Hex(kw)
-	}
-	set(edThemeLight, "#ffffff", "#2f2f33", "#a0a0a8", "#f3f8ff", "#d8e7ff", "#C02F1D", "#0A4FA8", "#0F7B45", "#8F2D56")
-	set(edThemeDark, "#212121", "#d3d7de", "#7d828a", "#212121", "#2d4f82", "#F28B82", "#80B7FF", "#8DDF99", "#F59CB5")
+// buildEdTheme 按调色板生成代码配色：背景与内容区一致，高亮色取自 JSON 令牌，当前行/选区由强调色淡化而来。
+func buildEdTheme(p *palette) *editor.Theme {
+	t := &editor.Theme{}
+	t.Background, t.Text = p.surface, p.fg
+	t.LineNumber, t.ActiveLineNumber = p.muted, p.fg
+	t.ActiveLine, t.Selection = p.surface.Mix(p.accent, 0.06), p.accent.Alpha(0.28)
+	t.Cursor = p.fg
+	t.Tokens[editor.TokenProperty].Color = p.jsonKey
+	t.Tokens[editor.TokenString].Color = p.jsonString
+	t.Tokens[editor.TokenNumber].Color = p.jsonNumber
+	t.Tokens[editor.TokenConstant].Color = p.jsonBool
+	t.Tokens[editor.TokenKeyword].Color = p.jsonBool
+	return t
 }
 
-// edTheme 返回当前亮/暗模式对应的代码配色。
+// edTheme 返回当前配色对应的代码配色（按键缓存，保证同一配色返回同一指针）。
 func (a *app) edTheme() *editor.Theme {
-	edThemeOnce.Do(initEdThemes)
-	if a.p.dark {
-		return edThemeDark
+	// 项目主题色会改变强调色，因此缓存键里要带上强调色与明暗（方案不同时调色板的令牌也不同）。
+	key := fmt.Sprintf("%s|%v|%v", a.set.ColorScheme, a.p.dark, a.p.accent)
+	if t, ok := edThemes[key]; ok {
+		return t
 	}
-	return edThemeLight
+	t := buildEdTheme(a.p)
+	edThemes[key] = t
+	return t
 }
 
 // dialog 绘制居中的对话框：半透明遮罩 + 固定宽高、圆角、细边框与大阴影的面板（同旧版弹窗）。

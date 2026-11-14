@@ -11,8 +11,9 @@ import (
 
 // Settings 用户设置，持久化在数据目录的 settings.json 中。
 type Settings struct {
-	Locale            string  `json:"locale"` // zh-CN | en-US，空表示跟随系统
-	Theme             string  `json:"theme"`  // light | dark | system
+	Locale            string  `json:"locale"`      // zh-CN | en-US，空表示跟随系统
+	Theme             string  `json:"theme"`       // light | dark | system
+	ColorScheme       string  `json:"colorScheme"` // mist（雾蓝）| ink（墨白）| jade（松石）
 	FontSize          int     `json:"fontSize"`
 	SidebarWidth      float32 `json:"sidebarWidth"`
 	SidebarCollapsed  bool    `json:"sidebarCollapsed"`
@@ -54,7 +55,7 @@ const (
 
 func DefaultSettings() Settings {
 	return Settings{
-		Theme: "system", FontSize: 12, SidebarWidth: 240, LayoutDirection: "vertical", ConsoleHeight: ConsoleDefaultHeight,
+		Theme: "system", ColorScheme: "mist", FontSize: 12, SidebarWidth: 240, LayoutDirection: "vertical", ConsoleHeight: ConsoleDefaultHeight,
 		FollowRedirects: true, HTTPVersion: "auto", MaxResponseSizeMB: 50, SSLVerify: true, ScrollbarAutoHide: true,
 		ResponseFormatDetection: "auto", AutoBackupIntervalMinutes: 30, EnvByProject: map[string]string{},
 	}
@@ -68,6 +69,11 @@ func (s *Settings) Normalize() {
 	case "light", "dark", "system":
 	default:
 		s.Theme = "system"
+	}
+	switch s.ColorScheme {
+	case "mist", "ink", "jade":
+	default:
+		s.ColorScheme = "mist"
 	}
 	switch s.HTTPVersion {
 	case "auto", "http1", "http2":

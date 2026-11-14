@@ -172,13 +172,13 @@ func TestProjectButtonWholeAreaToggles(t *testing.T) {
 	if !ok {
 		t.Fatal("找不到项目名")
 	}
-	// 按钮左边缘 = 名称左边 - 图标(15) - 间距(6) - 左内边距(8)；宽度见 projectButton（短名称取 92~98）。
-	left := name.X - 29
+	// 按钮左边缘 = 名称左边 - 圆点(8) - 间距(7) - 左内边距(8)；宽度见 projectButton（短名称取 92~98）。
+	left := name.X - 23
 	w := min(float32(180), max(float32(92), float32(54+11*4)))
 	cy := name.Y + name.H/2
 	for label, x := range map[string]float32{
 		"左内边距": left + 3,
-		"图标":   left + 8 + 7,
+		"圆点":   left + 8 + 4,
 		"名称":   name.X + 4,
 		"箭头":   left + w - 8 - 5,
 		"右内边距": left + w - 3,

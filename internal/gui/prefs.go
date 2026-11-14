@@ -280,6 +280,11 @@ func (a *app) prefsAppearance(c *ui.Context, s *prefsState) bool {
 		set.Theme = themeValues[i]
 		changed = true
 	})
+	a.optionCard(c, "scheme", a.t("配色方案", "Color scheme"), a.t("雾蓝、墨白、松石三套配色，各自适配浅色与深色。", "Mist, Ink and Jade palettes, each with light and dark variants."), []string{a.t("雾蓝", "Mist"), a.t("墨白", "Ink"), a.t("松石", "Jade")}, 3, 34, 8, false, indexOf(colorSchemeNames, set.ColorScheme), func(i int) {
+		set.ColorScheme = colorSchemeNames[i]
+		logger.Info("已切换配色方案", "scheme", set.ColorScheme)
+		changed = true
+	})
 	cur := indexOf(localeValues, set.Locale)
 	if set.Locale == "" {
 		cur = 0

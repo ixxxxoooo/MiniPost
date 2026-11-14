@@ -6,7 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// tabBar 绘制 28px 高的请求标签栏：左侧是各请求标签与“+”，右侧是标签列表与环境选择。
+// tabBar 绘制 28px 高的请求标签栏：左侧是各请求标签与“+”，右侧是标签列表。
 func (a *app) tabBar(c *ui.Context) {
 	p := a.p
 	ui.Row(c).FillWidth().Height(sizeTabStrip).Shrink(0).Background(p.tabStrip).AlignItems(ui.Stretch).Children(func() {
@@ -30,14 +30,13 @@ func (a *app) tabBar(c *ui.Context) {
 				}
 			})
 		})
-		vline(c, p.tabDivider)
-		ui.Row(c).PaddingX(6).Gap(2).AlignItems(ui.Center).Shrink(0).Children(func() {
-			if len(a.tabs) > 0 {
+		if len(a.tabs) > 0 {
+			// 环境选择已移到标题栏，这里只剩“显示所有标签”
+			vline(c, p.tabDivider)
+			ui.Row(c).PaddingX(6).AlignItems(ui.Center).Shrink(0).Children(func() {
 				a.tabListButton(c)
-				ui.Box(c).Width(1).Height(12).Background(p.tabDivider).MarginX(2)
-			}
-			a.envSelector(c)
-		})
+			})
+		}
 	})
 }
 
@@ -262,48 +261,6 @@ func (a *app) tabListButton(c *ui.Context) {
 			}
 		}).
 		Children(func() { icon(c, "arrowDown", 11, p.muted) })
-}
-
-// envSelector 是标签栏右侧的环境选择：当前环境名，点击弹出环境列表。
-func (a *app) envSelector(c *ui.Context) {
-	p := a.p
-	name := a.t("无环境", "No environment")
-	col := p.muted
-	if e := a.env(); e != nil {
-		name = e.Name
-		col = p.accent
-	}
-	btn := ui.ButtonBase(c.Key("envsel")).Height(22).Radius(6).PaddingX(8).Gap(4).AlignItems(ui.Center).Shrink(0).
-		Tooltip(a.t("切换环境", "Switch environment")).
-		PopoverMenuButton(func(m *ui.Menu) { a.envMenu(m) })
-	if btn.Hovered() {
-		btn = btn.Background(p.hover)
-		if a.env() == nil {
-			col = p.fg
-		}
-	}
-	btn.Children(func() {
-		icon(c, "globe", 11, col)
-		txtE(c, name, fsTiny, col, 0).MaxWidth(100)
-		icon(c, "arrowDown", 8, col)
-	})
-}
-
-// envMenu 列出全部环境，当前环境带勾选，末尾可进入环境管理。
-func (a *app) envMenu(m *ui.Menu) {
-	if m.Item(a.t("无环境", "No environment")).Checked(a.envID == "").Chosen() {
-		a.later(func() { a.setEnv("") })
-	}
-	for _, e := range a.envs {
-		id := e.ID
-		if m.Item(e.Name).Checked(a.envID == id).Chosen() {
-			a.later(func() { a.setEnv(id) })
-		}
-	}
-	m.Separator()
-	if m.Item(a.t("管理环境…", "Manage environments…")).Chosen() {
-		a.later(a.openEnvManager)
-	}
 }
 
 // tabIndex 返回标签当前的下标，找不到（已关闭）返回 -1。

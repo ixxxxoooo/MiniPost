@@ -3,25 +3,34 @@ package gui
 import (
 	"image/color"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func lum(c color.RGBA) int { return int(c.R) + int(c.G) + int(c.B) }
 
-// 深色调色板的层次：标签栏最深 < 侧栏/标题栏/状态栏 < 内容区；选中标签与内容区同色。
+func lumColor(c ui.Color) int { return int(c.R) + int(c.G) + int(c.B) }
+
+// 深色调色板的层次（设计稿）：标题栏/标签栏/状态栏（chrome）最深 < 侧栏 < 内容区；选中标签与内容区同色。
 func TestDarkPaletteLayers(t *testing.T) {
-	p := darkPalette()
-	if p.tabStrip == p.sidebar || p.sidebar == p.surface || p.tabStrip == p.surface {
-		t.Fatalf("标签栏、侧栏、内容区应是三种不同的灰度: tab=%v side=%v surface=%v", p.tabStrip, p.sidebar, p.surface)
-	}
-	if p.toolbar != p.sidebar || p.bottom != p.sidebar {
-		t.Fatalf("标题栏和状态栏应与侧栏同层")
-	}
-	if p.tabActive != p.surface {
-		t.Fatalf("选中标签应与内容区同色，才能连成一体")
-	}
-	// 分隔线/边框在比内容区更深的外围背景上要看得见
-	if p.border == p.sidebar || p.border == p.tabStrip {
-		t.Fatalf("边框色不应与外围背景相同（会隐形）: %v", p.border)
+	for _, scheme := range colorSchemeNames {
+		p := schemePalette(scheme, true)
+		if p.tabStrip == p.sidebar || p.sidebar == p.surface || p.tabStrip == p.surface {
+			t.Fatalf("[%s] 标签栏、侧栏、内容区应是三种不同的底色: tab=%v side=%v surface=%v", scheme, p.tabStrip, p.sidebar, p.surface)
+		}
+		if p.toolbar != p.tabStrip || p.bottom != p.tabStrip {
+			t.Fatalf("[%s] 标题栏、标签栏和状态栏应同属 chrome 层", scheme)
+		}
+		if lumColor(p.tabStrip) >= lumColor(p.sidebar) || lumColor(p.sidebar) >= lumColor(p.surface) {
+			t.Fatalf("[%s] 暗色亮度应为 chrome < 侧栏 < 内容区", scheme)
+		}
+		if p.tabActive != p.surface {
+			t.Fatalf("[%s] 选中标签应与内容区同色，才能连成一体", scheme)
+		}
+		// 分隔线/边框在外围背景上要看得见
+		if p.border == p.sidebar || p.border == p.tabStrip {
+			t.Fatalf("[%s] 边框色不应与外围背景相同（会隐形）: %v", scheme, p.border)
+		}
 	}
 }
 

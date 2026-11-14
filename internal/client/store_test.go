@@ -74,6 +74,32 @@ func TestSettingsStoreRoundTripAndNormalize(t *testing.T) {
 	}
 }
 
+// 配色方案：默认雾蓝；合法值原样保存；非法值（含旧版设置文件里缺失的字段）回落为雾蓝。
+func TestSettingsColorScheme(t *testing.T) {
+	store := NewSettingsStore(t.TempDir())
+	if got := store.Load(); got.ColorScheme != "mist" {
+		t.Fatalf("默认配色应为 mist，实际 %q", got.ColorScheme)
+	}
+	for _, want := range []string{"mist", "ink", "jade"} {
+		s := DefaultSettings()
+		s.ColorScheme = want
+		if err := store.Save(s); err != nil {
+			t.Fatal(err)
+		}
+		if got := store.Load(); got.ColorScheme != want {
+			t.Fatalf("配色 %q 保存后读回 %q", want, got.ColorScheme)
+		}
+	}
+	s := DefaultSettings()
+	s.ColorScheme = "neon"
+	if err := store.Save(s); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.Load(); got.ColorScheme != "mist" {
+		t.Fatalf("非法配色应回落为 mist，实际 %q", got.ColorScheme)
+	}
+}
+
 func TestSessionStoreRoundTrip(t *testing.T) {
 	store := NewSessionStore(t.TempDir())
 	if got := store.Load(); len(got.Projects) != 0 {
