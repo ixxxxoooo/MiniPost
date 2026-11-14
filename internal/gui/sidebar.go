@@ -601,18 +601,21 @@ func (a *app) envList(c *ui.Context) {
 			for _, e := range a.envs {
 				e := e
 				active := e.ID == a.envID
-				row := ui.ButtonBase(c.Key("e:" + e.ID)).FillWidth().Height(24).MarginX(4).PaddingX(12).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start).
+				row := ui.ButtonBase(c.Key("e:" + e.ID)).FillWidth().Height(26).MarginX(4).PaddingX(12).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start).
 					ContextMenu(func(m *ui.Menu) { a.sidebarEnvMenu(m, e.ID, e.Name) })
 				hover := row.Hovered()
-				if hover {
+				switch {
+				case a.envTabOpenActive(e.ID):
+					row = row.Background(p.sideActive)
+				case hover:
 					row = row.Background(p.sideHover)
 				}
 				row = a.tipIfLong(c, row, e.Name, fsV2xs, 0, a.sidebarShown()-100)
 				row.Children(func() {
-					// 圆点：激活时为强调色实心并带白色内点
+					// 圆点：激活时为成功色实心并带白色内点（设计稿里“当前”环境用绿点）
 					dot := ui.Row(c.Key("dot:"+e.ID)).Size(12, 12).Radius(6).Shrink(0).AlignItems(ui.Center).Justify(ui.Center)
 					if active {
-						dot = dot.Background(p.accent).Border(1, p.accent)
+						dot = dot.Background(p.success).Border(1, p.success)
 					} else {
 						dot = dot.Border(1, p.border)
 					}
@@ -631,19 +634,43 @@ func (a *app) envList(c *ui.Context) {
 						})
 					}
 					ui.Box(c).Width(8).Shrink(0)
-					txtE(c, e.Name, fsV2xs, p.fg, 0).Grow(1)
+					w := 0
+					if active {
+						w = 600
+					}
+					txtE(c, e.Name, fsV2xs, p.fg, w).Grow(1)
 					if hover {
 						if a.miniIcon(c, "delete", a.t("删除环境", "Delete environment")) {
 							a.later(func() { a.deleteEnvironment(e.ID, e.Name) })
 						}
+					} else {
+						if active {
+							ui.Row(c).Height(16).PaddingX(6).Radius(8).Background(p.success.Alpha(0.14)).AlignItems(ui.Center).Shrink(0).Children(func() {
+								txt(c, a.t("当前", "In use"), 9, p.success, 600)
+							})
+						}
+						txt(c, itoa(countEnvVars(e)), fsSmall, p.muted, 0).Shrink(0)
 					}
 				})
 				if row.Clicked() {
 					a.later(func() { a.openEnvManagerFor(e.ID) })
 				}
 			}
+			ui.Text(c, a.t("切换环境后，请求里的 {{变量名}} 会立即换成对应值。", "After switching, {{name}} in requests is replaced right away.")).
+				FontSize(fsSmall).TextColor(p.muted).Margin(10, 12, 0, 12)
 		})
 	})
+}
+
+// countEnvVars 返回环境里有名字的变量数（不含末尾空白行）。
+func countEnvVars(e model.Environment) int {
+	n := 0
+	for _, v := range e.Variables {
+		if strings.TrimSpace(v.Key) != "" {
+			n++
+		}
+	}
+	return n
 }
 
 // historyItem 是历史记录的别名，避免在多个文件重复引用 model 包。

@@ -9,13 +9,15 @@ import (
 
 	"minipost/internal/client"
 	"minipost/internal/model"
+	"minipost/internal/pkg/httputil"
 	"minipost/internal/pkg/logger"
 )
 
 // envEdit 是环境编辑页（以标签页形式打开）的状态：环境的可编辑副本，保存后才写回。
 type envEdit struct {
-	env  model.Environment
-	base string // 最近一次保存（或载入）时的内容指纹，用于判断是否有未保存修改
+	env     model.Environment
+	base    string   // 最近一次保存（或载入）时的内容指纹，用于判断是否有未保存修改
+	samples []string // 右侧“动态变量”面板里各变量的示例值（打开页面时求值一次，避免随机值逐帧跳动）
 }
 
 // fingerprint 生成忽略末尾空白行后的内容指纹。
@@ -46,6 +48,9 @@ func newEnvTab(e model.Environment) *tab {
 	ensureBlankVar(&e)
 	ed := &envEdit{env: e}
 	ed.base = ed.fingerprint()
+	for _, name := range httputil.DynamicVarNames {
+		ed.samples = append(ed.samples, httputil.ResolveDynamicVars("{{$"+name+"}}"))
+	}
 	d := &client.Draft{ID: "env:" + e.ID}
 	t := newTab(d, d.Clone())
 	t.env = ed
@@ -53,6 +58,12 @@ func newEnvTab(e model.Environment) *tab {
 }
 
 func (a *app) openEnvManager() { a.openEnvManagerFor(a.envID) }
+
+// envTabOpenActive 报告当前标签是否正是 id 对应环境的编辑页（侧栏里据此高亮该行）。
+func (a *app) envTabOpenActive(id string) bool {
+	t := a.activeTab()
+	return t != nil && t.env != nil && t.env.env.ID == id
+}
 
 // openEnvManagerFor 打开指定环境的编辑标签；id 为空时取当前或第一个环境，没有环境则先新建。
 func (a *app) openEnvManagerFor(id string) {
@@ -89,95 +100,189 @@ func ensureBlankVar(e *model.Environment) {
 	}
 }
 
-// envPage 绘制环境编辑页：44px 标题行（环境名输入、保存、关闭）+ 变量表。
+// envPage 绘制环境编辑页（设计稿）：左侧是标题（环境名 + 当前使用）、说明与操作按钮、变量表，
+// 右侧是“动态变量”面板。
 func (a *app) envPage(c *ui.Context, t *tab) {
 	p := a.p
 	ed := t.env
-	ui.Column(c).Grow(1).Basis(0).Background(p.surface).Children(func() {
-		ui.Row(c).Height(44).FillWidth().Shrink(0).PaddingX(16).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				icon(c, "globe", 14, p.accent)
-				bg := p.surface2
-				bdc := p.border
-				row := ui.Row(c).Height(28).MinWidth(220).MaxWidth(420).Radius(6).Background(bg).AlignItems(ui.Center)
-				if row.FocusWithin() {
-					bdc = p.accent
-				}
-				row.Border(1, bdc).Children(func() {
-					ui.TextInputBase(c, &ed.env.Name).Placeholder("Environment name").PlaceholderColor(p.muted).
-						FontSize(fsLarge).FontWeight(500).TextColor(p.fg).Grow(1).Basis(0).FillHeight().PaddingX(8)
+	ui.Row(c).Grow(1).Basis(0).Background(p.surface).Children(func() {
+		ui.Column(c).Grow(1).Basis(0).FillHeight().Children(func() {
+			a.envHeader(c, t)
+			ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
+				ui.Column(c).FillWidth().Children(func() {
+					a.envTable(c, ed)
 				})
 			})
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				dirty := ed.dirty()
-				col := p.muted
-				if dirty {
-					col = p.fg2
-				}
-				if a.button(c, btnOpts{h: sizeBtn, radius: radiusBtn, padX: 12, gap: 4, disabled: !dirty, key: "env-save", tip: a.t("保存", "Save") + " (⌘S)"}, func(bool) {
-					icon(c, "save", 12, col)
-					txt(c, a.t("保存", "Save"), fsTiny, col, 500)
-				}) {
-					a.later(func() { a.saveTab(t) })
-				}
-				if a.iconButton(c, "clear", a.t("关闭", "Close"), 14, p.muted) {
-					a.later(func() { a.closeTab(a.active) })
-				}
+			ui.Row(c).FillWidth().Height(30).Shrink(0).PaddingX(16).Gap(8).AlignItems(ui.Center).BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(func() {
+				icon(c, "info", 12, p.success)
+				txt(c, a.t("带锁的变量会在界面上遮罩，且不会写入日志。", "Locked variables are masked in the UI and never written to logs."), fsSmall, p.muted, 0)
 			})
 		})
+		a.envDynamicPanel(c, ed)
+	})
+}
+
+// envHeader 是环境页顶部：环境名（16/600，可直接改）、“当前使用”标记、说明，以及删除 / 设为当前 / 保存。
+func (a *app) envHeader(c *ui.Context, t *tab) {
+	p := a.p
+	ed := t.env
+	active := a.envID == ed.env.ID
+	ui.Row(c).FillWidth().Shrink(0).Padding(14, 16, 12, 20).Gap(12).AlignItems(ui.Center).Children(func() {
+		ui.Column(c).Grow(1).Basis(0).Gap(4).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				row := ui.Row(c.Key("env-name")).MinWidth(120).MaxWidth(360).Height(28).Radius(6).AlignItems(ui.Center)
+				bdc := ui.RGBA(0, 0, 0, 0)
+				switch {
+				case row.FocusWithin():
+					bdc = p.accent
+				case row.Hovered():
+					bdc = p.border
+				}
+				row.Border(1, bdc).Children(func() {
+					ui.TextInputBase(c, &ed.env.Name).Placeholder(a.t("环境名称", "Environment name")).PlaceholderColor(p.muted).
+						FontSize(16).FontWeight(600).TextColor(p.fg).Grow(1).Basis(0).FillHeight().PaddingX(6)
+				})
+				if active {
+					ui.Row(c).Height(18).PaddingX(7).Radius(9).Background(p.success.Alpha(0.14)).AlignItems(ui.Center).Shrink(0).Children(func() {
+						txt(c, a.t("当前使用", "In use"), fsTiny, p.success, 600)
+					})
+				}
+			})
+			ui.Text(c, a.t("变量可在请求的任意位置写成 {{变量名}} 使用，切换环境后自动替换。", "Use variables anywhere in a request as {{name}}; they are replaced when you switch environments.")).
+				FontSize(fsBase).TextColor(p.fg2).Margin(0, 0, 0, 6)
+		})
+		border := p.btnBorder
+		if a.button(c, btnOpts{w: 26, h: 26, radius: radiusBtn, border: &border, key: "env-del", tip: a.t("删除环境", "Delete environment")}, func(bool) {
+			icon(c, "delete", 12, p.danger)
+		}) {
+			id, name := ed.env.ID, ed.env.Name
+			a.later(func() { a.deleteEnvironment(id, name) })
+		}
+		if a.button(c, btnOpts{h: 26, radius: radiusBtn, padX: 10, border: &border, disabled: active, key: "env-use"}, func(bool) {
+			col := p.fg
+			if active {
+				col = p.muted
+			}
+			txt(c, a.t("设为当前环境", "Use this environment"), fsBase, col, 0)
+		}) {
+			id, name := ed.env.ID, ed.env.Name
+			a.later(func() {
+				a.setEnv(id)
+				a.toastOK(a.t("已切换到环境「"+name+"」", "Switched to environment “"+name+"”"))
+				logger.Info("已从环境页设为当前环境", "envID", id)
+			})
+		}
+		dirty := ed.dirty()
+		bg := p.accent
+		if a.button(c, btnOpts{h: 26, radius: radiusBtn, padX: 12, gap: 6, bg: &bg, hoverBg: &p.accentHover, disabled: !dirty, key: "env-save", tip: a.t("保存", "Save") + " (⌘S)"}, func(bool) {
+			fg := p.accentFg
+			if !dirty {
+				fg = fg.Alpha(0.6)
+			}
+			txt(c, a.t("保存", "Save"), fsBase, fg, 600)
+			txtMono(c, "⌘S", 9, fg.Alpha(0.8), 0)
+		}) {
+			a.later(func() { a.saveTab(t) })
+		}
+	})
+}
+
+// envDynamicPanel 是右侧的“动态变量”面板：列出内置动态变量、含义与一个示例值（打开页面时求值一次）。
+func (a *app) envDynamicPanel(c *ui.Context, ed *envEdit) {
+	p := a.p
+	desc := map[string][2]string{
+		"timestamp":    {"当前时间，秒", "Current time, seconds"},
+		"timestampMs":  {"当前时间，毫秒", "Current time, milliseconds"},
+		"isoTimestamp": {"ISO 8601 时间", "ISO 8601 time"},
+		"randomUUID":   {"随机 UUID v4", "Random UUID v4"},
+		"randomInt":    {"0–1000 的随机整数", "Random integer 0–1000"},
+	}
+	ui.Column(c.Key("env-dyn")).Width(240).FillHeight().Shrink(0).Background(p.sidebar).BorderWidth(0, 0, 0, 1).BorderColor(p.border).Children(func() {
+		ui.Row(c).FillWidth().Shrink(0).Padding(14, 14, 8, 14).Gap(6).AlignItems(ui.Center).Children(func() {
+			icon(c, "commandLine", 12, p.accent)
+			txt(c, a.t("动态变量", "Dynamic variables"), fsBase, p.fg, 600)
+			txt(c, a.t("发送时求值", "evaluated on send"), fsSmall, p.muted, 0)
+		})
 		ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
-			ui.Column(c).FillWidth().Padding(20, 16, 16, 16).Children(func() {
-				a.envTable(c, ed)
+			ui.Column(c).FillWidth().PaddingX(12).PaddingY(4).Gap(8).Children(func() {
+				for i, name := range httputil.DynamicVarNames {
+					d := desc[name]
+					ui.Column(c.Key("dyn"+name)).FillWidth().Padding(8, 10).Gap(2).Radius(radiusInput).Background(p.surface).Border(1, p.border).Children(func() {
+						txtMono(c, "{{$"+name+"}}", fsBase, p.accent, 600).Selectable()
+						txt(c, a.t(d[0], d[1]), fsSmall, p.fg2, 0)
+						if i < len(ed.samples) {
+							txtEMono(c, ed.samples[i], fsSmall, p.muted, 0)
+						}
+					})
+				}
 			})
 		})
 	})
 }
 
-// envTable 是变量表：表头 34px，行高 32px，两列等宽加 44px 操作列。
+// envTable 是变量表（设计稿）：启用勾选 | 变量名 | 值 | 密文锁 | 删除；行与行之间只有细横线，没有竖线。
 func (a *app) envTable(c *ui.Context, ed *envEdit) {
 	p := a.p
-	ui.Column(c).FillWidth().Border(1, p.border).Background(p.surface).Children(func() {
-		ui.Row(c).FillWidth().Height(34).Background(p.surface2).AlignItems(ui.Stretch).Children(func() {
-			for _, h := range []string{"Variable", "Value"} {
-				ui.Row(c.Key(h)).Grow(1).Basis(0).MinWidth(220).PaddingX(12).AlignItems(ui.Center).BorderWidth(0, 1, 0, 0).BorderColor(p.border).Children(func() {
-					txt(c, h, fsBase, p.fg2, 600)
-				})
-			}
-			ui.Row(c).Width(44).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Children(func() { icon(c, "more", 13, p.muted) })
+	const colEnable, colAct = 44, 32
+	ui.Column(c).FillWidth().Children(func() {
+		ui.Row(c).FillWidth().Height(28).AlignItems(ui.Center).BorderWidth(1, 0, 1, 0).BorderColor(p.border).Children(func() {
+			ui.Box(c).Width(colEnable).Shrink(0)
+			ui.Row(c.Key("h-key")).Grow(1).Basis(0).Children(func() { txt(c, a.t("变量名", "Variable"), fsSmall, p.muted, 600) })
+			ui.Row(c.Key("h-val")).Grow(1.4).Basis(0).Children(func() { txt(c, a.t("值", "Value"), fsSmall, p.muted, 600) })
+			ui.Box(c).Width(colAct * 2).Shrink(0)
 		})
-		hline(c, p.border)
 		remove := -1
 		vars := ed.env.Variables
 		for i := range vars {
 			v := &vars[i]
 			last := i == len(vars)-1 && v.Key == "" && v.Value == ""
-			row := ui.Row(c.Key(v.ID)).FillWidth().MinHeight(32).AlignItems(ui.Stretch)
+			row := ui.Row(c.Key(v.ID)).FillWidth().Height(32).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(p.border)
 			hover := row.Hovered() && !last
 			if hover {
 				row = row.Background(p.surface2)
 			}
 			row.Children(func() {
-				ph := "Variable"
+				ui.Row(c).Width(colEnable).Shrink(0).Justify(ui.Center).Children(func() {
+					if !last {
+						a.checkbox(c, "en", &v.Enabled, false)
+					}
+				})
+				ph := a.t("变量名", "Variable")
 				if last {
-					ph = "Add variable"
+					ph = a.t("添加变量", "Add variable")
 				}
-				ui.Row(c).Grow(1).Basis(0).MinWidth(220).BorderWidth(0, 1, 0, 0).BorderColor(p.border).Children(func() {
-					ui.TextInputBase(c.Key("k"), &v.Key).Placeholder(ph).PlaceholderColor(p.muted).FontSize(fsBase).TextColor(p.fg).Grow(1).Basis(0).Height(32).PaddingX(12)
-				})
-				ui.Row(c).Grow(1).Basis(0).MinWidth(220).BorderWidth(0, 1, 0, 0).BorderColor(p.border).Children(func() {
-					vp := "Value"
+				col := p.fg
+				if !v.Enabled && !last {
+					col = p.muted
+				}
+				ui.TextInputBase(c.Key("k"), &v.Key).Placeholder(ph).PlaceholderColor(p.muted).Font(monoFont).FontSize(fsBase).TextColor(col).Grow(1).Basis(0).Height(32).PaddingX(4)
+				vp := a.t("值", "Value")
+				if last {
+					vp = ""
+				}
+				in := ui.TextInputBase(c.Key("v"), &v.Value).Placeholder(vp).PlaceholderColor(p.muted).Font(monoFont).FontSize(fsBase).TextColor(col).Grow(1.4).Basis(0).Height(32).PaddingX(4)
+				if last {
+					in.Disabled(true).Opacity(0.5)
+				}
+				if v.IsSecret {
+					in.Password()
+				}
+				ui.Row(c).Width(colAct).Shrink(0).Justify(ui.Center).Children(func() {
 					if last {
-						vp = ""
+						return
 					}
-					in := ui.TextInputBase(c.Key("v"), &v.Value).Placeholder(vp).PlaceholderColor(p.muted).FontSize(fsBase).TextColor(p.fg).Grow(1).Basis(0).Height(32).PaddingX(12)
-					if last {
-						in.Disabled(true).Opacity(0.5)
-					}
+					tip := a.t("标为密文（遮罩显示）", "Mask this value")
+					lc := p.muted.Alpha(0.6)
 					if v.IsSecret {
-						in.Password()
+						tip, lc = a.t("已标为密文，点击取消", "Masked; click to unmask"), p.success
+					}
+					if a.button(c, btnOpts{w: sizeBtn, h: sizeBtn, radius: 6, key: "lock", tip: tip}, func(bool) {
+						icon(c, "lock", 12, lc)
+					}) {
+						v.IsSecret = !v.IsSecret
 					}
 				})
-				ui.Row(c).Width(44).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+				ui.Row(c).Width(colAct).Shrink(0).Justify(ui.Center).Children(func() {
 					if hover && a.button(c, btnOpts{w: sizeBtn, h: sizeBtn, radius: 6, key: "del", tip: a.t("删除变量", "Delete variable")}, func(h bool) {
 						col := p.muted
 						if h {
@@ -189,9 +294,6 @@ func (a *app) envTable(c *ui.Context, ed *envEdit) {
 					}
 				})
 			})
-			if i < len(vars)-1 {
-				hline(c, p.border)
-			}
 		}
 		if remove >= 0 {
 			ed.env.Variables = append(ed.env.Variables[:remove], ed.env.Variables[remove+1:]...)

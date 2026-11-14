@@ -421,3 +421,80 @@ func TestWelcomeRecentOpens(t *testing.T) {
 		t.Fatalf("点击最近打开应在标签里打开该请求，实际 %d 个标签", len(a.tabs))
 	}
 }
+
+// 设计稿：环境页有标题与说明、设为当前/保存按钮、变量表与右侧动态变量面板。
+func TestEnvPageMatchesDesign(t *testing.T) {
+	a, tt, _ := visualApp(t, false)
+	a.openEnvManagerFor("e1")
+	tt.Frame()
+	tt.Frame()
+	for _, want := range []string{
+		"设为当前环境", "保存", "变量名", "值", "动态变量", "发送时求值",
+		"{{$timestamp}}", "{{$randomUUID}}", "当前时间，秒", "随机 UUID v4",
+		"带锁的变量会在界面上遮罩，且不会写入日志。",
+	} {
+		if !tt.HasText(want) {
+			t.Errorf("环境页缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	if tt.HasText("当前使用") {
+		t.Fatal("未设为当前环境时不应显示“当前使用”")
+	}
+	snapshot(t, tt, "d_env")
+	if err := tt.Click("设为当前环境"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+	if a.envID != "e1" {
+		t.Fatalf("点击后应切换到 e1，实际 %q", a.envID)
+	}
+	if !tt.HasText("当前使用") {
+		t.Fatalf("设为当前后应显示“当前使用”：%q", tt.Texts())
+	}
+}
+
+// 环境页：改名后出现未保存状态；变量的密文锁可切换；保存后写回后端。
+func TestEnvPageSecretToggleAndSave(t *testing.T) {
+	a, tt, be := visualApp(t, false)
+	a.openEnvManagerFor("e1")
+	tt.Frame()
+	tab := a.activeTab()
+	if tab == nil || tab.env == nil {
+		t.Fatal("应打开环境页")
+	}
+	ed := tab.env
+	if ed.dirty() {
+		t.Fatal("刚打开的环境页不应有未保存修改")
+	}
+	if len(ed.samples) != 5 {
+		t.Fatalf("应有 5 个动态变量示例值，实际 %d", len(ed.samples))
+	}
+	ed.env.Variables[0].IsSecret = true
+	if !ed.dirty() {
+		t.Fatal("切换密文标记后应有未保存修改")
+	}
+	if !a.saveEnvTab(tab) {
+		t.Fatal("保存应成功")
+	}
+	got := be.envs[a.projectID][0]
+	if len(got.Variables) == 0 || !got.Variables[0].IsSecret {
+		t.Fatalf("保存后后端应记录密文标记：%+v", got.Variables)
+	}
+	if countEnvVars(got) != 1 {
+		t.Fatalf("countEnvVars 应为 1，实际 %d", countEnvVars(got))
+	}
+}
+
+// 环境侧栏：当前环境显示“当前”标记与变量数；底部有说明。
+func TestEnvSidebarListShowsActiveAndCount(t *testing.T) {
+	a, tt, _ := visualApp(t, false)
+	a.setEnv("e1")
+	a.side.tab = 2
+	tt.Frame()
+	for _, want := range []string{"开发环境", "当前", "1", "切换环境后，请求里的 {{变量名}} 会立即换成对应值。"} {
+		if !tt.HasText(want) {
+			t.Errorf("环境侧栏缺少 %q：%q", want, tt.Texts())
+		}
+	}
+}
