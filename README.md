@@ -61,7 +61,7 @@ go install github.com/egoist/mygo/cmd/mygo@latest
 ```bash
 ./scripts/dev.sh        # builds and launches "MiniPost Dev"
 go test ./...           # all tests, including headless UI tests (ui.Tester)
-go test -race ./...     # the same with the race detector (run locally before committing)
+scripts/check.sh        # gofmt + go vet + staticcheck + go test -race (run before committing)
 ```
 
 Code layout (see [docs/architecture.md](docs/architecture.md) for layering rules):
@@ -130,3 +130,7 @@ sudo spctl --add --label "MiniPost Local Trust" "build/darwin-arm64/MiniPost.app
 - The app checks for updates 10 seconds after launch and then hourly, downloads new versions automatically (switchable in Settings → About) and shows a prompt; one click restarts into the new version.
 - To release: bump `version` in `mygo.json`, add a `## x.y.z` section to `CHANGELOG.md` (it becomes the update notes), commit, then run `scripts/release.sh`. It runs the checks, builds a signed universal app locally, uploads a draft GitHub release and publishes it. Update signatures use the private key in `~/Library/Application Support/mygo/update-keys/mygo-update.key` (or `MYGO_UPDATER_PRIVATE_KEY`).
 - Development builds carry no update key, so updates only work end to end for released builds.
+
+## 8. License
+
+[MIT](LICENSE) © 2026 ixxxxoooo

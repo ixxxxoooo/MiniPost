@@ -59,7 +59,7 @@ go install github.com/egoist/mygo/cmd/mygo@latest
 ```bash
 ./scripts/dev.sh        # 构建并启动「MiniPost Dev」
 go test ./...           # 全部测试，包含无头界面测试（ui.Tester）
-go test -race ./...     # 同上并开启竞态检测（提交前在本地运行）
+scripts/check.sh        # gofmt + go vet + staticcheck + go test -race（提交前运行）
 ```
 
 代码结构（分层规则见 [docs/architecture.md](docs/architecture.md)）：
@@ -128,3 +128,7 @@ sudo spctl --add --label "MiniPost Local Trust" "build/darwin-arm64/MiniPost.app
 - 应用启动 10 秒后以及之后每小时检查一次更新，发现新版本自动下载（设置 → 关于里可关闭）并弹出提示，点一下就重启进入新版本。
 - 发版：修改 `mygo.json` 的 `version`，在 `CHANGELOG.md` 加一个 `## x.y.z` 小节（会作为更新说明），提交后运行 `scripts/release.sh`。脚本会跑检查、本地构建并签名通用包、上传到 GitHub 草稿 release 并发布。更新签名使用 `~/Library/Application Support/mygo/update-keys/mygo-update.key`（或环境变量 `MYGO_UPDATER_PRIVATE_KEY`）里的私钥。
 - 开发构建不带更新密钥，只有发布过的版本才能完整验证更新流程。
+
+## 8. 许可证
+
+[MIT](LICENSE) © 2026 ixxxxoooo
