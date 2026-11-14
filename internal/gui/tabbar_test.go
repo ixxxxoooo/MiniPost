@@ -210,3 +210,55 @@ func TestActiveTabScrollsIntoView(t *testing.T) {
 		t.Fatal("切回第一个标签后，它应滚入可视区")
 	}
 }
+
+// 标签栏里的“+”：有标签时点击新建请求并在新标签打开（曾经点了没有任何反应）。
+func TestTabBarPlusCreatesRequest(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openRequest(a.coll.Requests[0].ID)
+	tt.Frame()
+	before, reqs := len(a.tabs), len(a.coll.Requests)
+	if err := tt.Click("新建请求"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(a.tabs) != before+1 || len(a.coll.Requests) != reqs+1 {
+		t.Fatalf("点“+”应新增一个请求和标签: tabs %d→%d reqs %d→%d", before, len(a.tabs), reqs, len(a.coll.Requests))
+	}
+	if a.active != len(a.tabs)-1 {
+		t.Fatalf("新标签应被激活: active=%d", a.active)
+	}
+}
+
+// 没有任何标签时，标签栏左侧独占一格的“+”同样可以新建请求。
+func TestTabBarPlusWorksWithoutTabs(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	if len(a.tabs) != 0 {
+		t.Fatalf("前置条件：应没有标签，实际 %d", len(a.tabs))
+	}
+	reqs := len(a.coll.Requests)
+	if err := tt.Click("新建请求"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(a.tabs) != 1 || len(a.coll.Requests) != reqs+1 {
+		t.Fatalf("无标签时点“+”应新建并打开: tabs=%d reqs %d→%d", len(a.tabs), reqs, len(a.coll.Requests))
+	}
+}
+
+// “+”按钮常态就有淡底（不再是透明的灰色小图标）：像素颜色应与标签栏底色不同。
+func TestTabBarPlusHasVisibleBackground(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openRequest(a.coll.Requests[0].ID)
+	tt.Frame()
+	r, ok := tt.Find("新建请求")
+	if !ok {
+		t.Fatal("找不到“+”按钮")
+	}
+	img := tt.Image()
+	// 取按钮左上角内侧一点（避开图标本身）
+	px := img.RGBAAt(int(r.X)+3, int(r.Y)+3)
+	strip := img.RGBAAt(int(r.X)-3, int(r.Y)+3)
+	if px == strip {
+		t.Fatalf("“+”按钮常态应有可见底色，与标签栏背景不同: %v", px)
+	}
+}

@@ -11,8 +11,8 @@ func (a *app) tabBar(c *ui.Context) {
 		stripTopLine(c, p.border)
 		if len(a.tabs) == 0 {
 			// 无标签时“+”独占一格，右侧带分隔线
-			ui.Row(c).Width(35).PaddingX(6).AlignItems(ui.Center).Children(func() {
-				a.tabAction(c, "add", a.t("新建请求", "New request"), 13)
+			ui.Row(c).Width(40).PaddingX(6).AlignItems(ui.Center).Children(func() {
+				a.newTabButton(c)
 			})
 			vline(c, p.tabDivider)
 		}
@@ -22,8 +22,8 @@ func (a *app) tabBar(c *ui.Context) {
 					a.tabItem(c, i, t)
 				}
 				if len(a.tabs) > 0 {
-					ui.Row(c).Height(sizeTabStrip - 1).MarginStart(4).AlignItems(ui.Center).Children(func() {
-						a.tabAction(c, "add", a.t("新建请求", "New request"), 13)
+					ui.Row(c).Height(sizeTabStrip - 1).MarginX(6).AlignItems(ui.Center).Children(func() {
+						a.newTabButton(c)
 					})
 				}
 			})
@@ -39,21 +39,21 @@ func (a *app) tabBar(c *ui.Context) {
 	})
 }
 
+// newTabButton 是标签栏里的“+”新建请求按钮：常态就有淡底和前景色图标（不再是不起眼的灰色小图标），
+// 悬停时底色加深；点击在根目录新建一个请求并在新标签中打开（与 ⌘N 一致）。
+func (a *app) newTabButton(c *ui.Context) {
+	p := a.p
+	bg, hv := p.hover, p.selected
+	tip := a.t("新建请求", "New request")
+	if a.button(c, btnOpts{w: 26, h: 22, radius: radiusBtn - 1, tip: tip, bg: &bg, hoverBg: &hv, key: "ta:add"}, func(bool) {
+		icon(c, "add", 15, p.fg)
+	}) {
+		a.later(func() { a.newRequest("") })
+	}
+}
+
 // tabDrag 是拖动标签时携带的值。
 type tabDrag struct{ t *tab }
-
-// tabAction 是标签栏里 22×22 的图标按钮。
-func (a *app) tabAction(c *ui.Context, name, tip string, size float32) bool {
-	p := a.p
-	hv := p.hover
-	return a.button(c, btnOpts{w: 22, h: 22, radius: radiusBtn - 1, tip: tip, hoverBg: &hv, key: "ta:" + name + tip}, func(hover bool) {
-		col := p.muted
-		if hover {
-			col = p.fg
-		}
-		icon(c, name, size, col)
-	})
-}
 
 // tabWidth 是请求标签的固定宽度；tabAccentWidth 是选中标签顶部强调线的粗细（与旧版 2px 的强调线一致）。
 const (
