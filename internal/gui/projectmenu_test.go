@@ -163,3 +163,41 @@ func TestScrollbarAutoHideVisibility(t *testing.T) {
 		t.Fatal("关闭自动隐藏后滚动条应始终可显示")
 	}
 }
+
+// 项目按钮的整个区域（图标、名称、右侧箭头，含内边距）都能点开/收起下拉面板，
+// 而不只是名称文字本身；按钮之外（后面的空白标题栏）则不响应。
+func TestProjectButtonWholeAreaToggles(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	name, ok := tt.Find("Demo")
+	if !ok {
+		t.Fatal("找不到项目名")
+	}
+	// 按钮左边缘 = 名称左边 - 图标(15) - 间距(6) - 左内边距(8)；宽度见 projectButton（短名称取 92~98）。
+	left := name.X - 29
+	w := min(float32(180), max(float32(92), float32(54+11*4)))
+	cy := name.Y + name.H/2
+	for label, x := range map[string]float32{
+		"左内边距": left + 3,
+		"图标":   left + 8 + 7,
+		"名称":   name.X + 4,
+		"箭头":   left + w - 8 - 5,
+		"右内边距": left + w - 3,
+	} {
+		tt.ClickAt(x, cy)
+		tt.Frame()
+		if !a.projMenu.open {
+			t.Fatalf("点击%s（x=%.0f）应展开下拉面板", label, x)
+		}
+		tt.ClickAt(x, cy)
+		tt.Frame()
+		if a.projMenu.open {
+			t.Fatalf("再次点击%s应收起下拉面板", label)
+		}
+	}
+	// 按钮右侧空白处不应触发
+	tt.ClickAt(left+w+40, cy)
+	tt.Frame()
+	if a.projMenu.open {
+		t.Fatal("点按钮之外的标题栏空白不应展开面板")
+	}
+}
