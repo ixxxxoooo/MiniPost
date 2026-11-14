@@ -107,8 +107,8 @@ func darkPalette() *palette {
 		surface: ui.RGB(33, 33, 33), surface2: ui.RGB(48, 48, 48),
 		fg: ui.Hex("#f5f5f7"), fg2: ui.Hex("#b8b8be"), muted: ui.Hex("#8a8a90"),
 		border: ui.RGB(48, 48, 48), btnBg: ui.RGB(59, 59, 59), btnBorder: ui.RGB(48, 48, 48), selected: ui.RGB(68, 68, 68),
-		toolbar: ui.RGB(33, 33, 33), sidebar: ui.RGB(33, 33, 33), tabStrip: ui.RGB(48, 48, 48), bottom: ui.RGB(48, 48, 48),
-		sideActive: ui.RGBA(10, 132, 255, 0.18), sideHover: ui.RGB(48, 48, 48), tabActive: ui.RGB(48, 48, 48),
+		toolbar: ui.RGB(28, 28, 28), sidebar: ui.RGB(28, 28, 28), tabStrip: ui.RGB(23, 23, 23), bottom: ui.RGB(28, 28, 28), // 外围（标题栏/侧栏/状态栏）比内容区深一档，标签栏最深，选中标签与内容区同色相连
+		sideActive: ui.RGBA(10, 132, 255, 0.18), sideHover: ui.RGB(48, 48, 48), tabActive: ui.RGB(33, 33, 33),
 		tabDivider: ui.RGBA(255, 255, 255, 0.1), tabActiveBorder: ui.Hex("#0a84ff"),
 		success: ui.Hex("#30d158"), warning: ui.Hex("#ff9f0a"), danger: ui.Hex("#ff453a"), info: ui.Hex("#64d2ff"),
 		get: ui.Hex("#30d158"), post: ui.Hex("#0a84ff"), put: ui.Hex("#ff9f0a"), patch: ui.Hex("#bf5af2"),
