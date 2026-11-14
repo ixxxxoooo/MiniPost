@@ -8,6 +8,15 @@ import (
 	"minipost/internal/pkg/logger"
 )
 
+const (
+	// trafficLightX 是红绿灯关闭按钮左边缘到窗口左边缘的距离（px）。
+	trafficLightX = 20
+	// trafficLightY 是关闭按钮上边缘到窗口上边缘的距离（px）。
+	// 标题栏内容行高 sizeToolbar-1=36，图标行垂直中心在 18；系统红绿灯高 14，
+	// 上边缘取 11 使其中心同在 18，与侧栏开关等图标处于同一水平线。
+	trafficLightY = 11
+)
+
 // Open 创建主窗口并返回。
 func Open(be Backend) *mygo.Window {
 	a := newApp(be)
@@ -21,9 +30,9 @@ func Open(be Backend) *mygo.Window {
 		MinWidth:  900,
 		MinHeight: 600,
 		StateKey:  "main",
-		// 隐藏系统标题栏，由界面自绘 37px 标题栏；红绿灯位置对齐旧版（左上角 20,12）。
+		// 隐藏系统标题栏，由界面自绘 37px 标题栏；红绿灯垂直中心对齐标题栏图标行（见 trafficLightY）。
 		TitleBarStyle:        mygo.TitleBarHidden,
-		TrafficLightPosition: &mygo.Point{X: 20, Y: 12},
+		TrafficLightPosition: &mygo.Point{X: trafficLightX, Y: trafficLightY},
 		Content:              ui.View(a.view),
 	})
 	a.win = win
