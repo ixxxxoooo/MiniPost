@@ -20,6 +20,7 @@ MiniPost 是 macOS 专用的轻量 HTTP 调试工具，界面是纯 Go 的 MyGo 
 
 - `view` 在主线程运行；后台任务用 `a.async`/`a.post` 回到主线程，改变树结构的变更用 `a.later` 延后到帧末。
 - 周期性后台任务（自动备份、检查更新）统一用 `startPeriodic`（`internal/gui/periodic.go`），不要各自起 goroutine 加 ticker。
+- `a.async` 和 `startPeriodic` 的后台 goroutine 都带 `recover`，panic 只记日志不会让应用崩溃。
 - 原生全局调用（`mygo.Clipboard/Dialog/App` 等）必须经过 `a.native` 判断，无头测试里没有真实窗口。
 
 ## 数据与权限
@@ -33,7 +34,14 @@ MiniPost 是 macOS 专用的轻量 HTTP 调试工具，界面是纯 Go 的 MyGo 
 - 应用启动 10 秒后和之后每小时在后台检查；发现新版本自动下载（设置 → 关于里可关），下载好后提示「重启更新」。逻辑在 `internal/gui/updates.go`。
 - 开发构建（`mygo build -skip-dmg` 不带密钥）没有更新能力，`Updater.Enabled()` 为 false，只有发过 release 的版本才能端到端验证。
 
+## 快捷键与右键菜单
+
+- 菜单栏里的加速键走原生菜单（`menu.go`）；不在菜单里的全局键（⌘E/⌘D/⌫ 作用于侧栏选中节点、⌘F 响应体查找、标签切换）集中在 `internal/gui/shortcuts.go`，输入框有焦点或有对话框时不响应。
+- 侧栏的「选中节点」是 `a.side.sel`：点击/右键节点或切换标签时更新，快捷键与菜单都作用于它。
+- 右键菜单：请求/文件夹（`nodeMenu`）、标签（`tabMenu`）、历史与环境（`internal/gui/menus_extra.go`）、项目卡片（`projectCardMenu`）；编辑器自带编辑菜单。
+
 ## 测试
 
+- CI 跑 `go vet`、`staticcheck` 和 `go test -race`。
 - 界面行为用 `ui.NewTester` 加 `fakeBackend` 测试（`internal/gui/*_test.go`）；设置 `MINIPOST_SNAPSHOT_DIR` 可输出截图。
 - 后端用临时目录的 `FileStore` 做集成式单元测试；备份恢复的测试在根包（`backup_*_test.go`）。

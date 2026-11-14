@@ -1,13 +1,16 @@
 package gui
 
 import (
+	"fmt"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
 
 	"minipost/internal/client"
+	"minipost/internal/pkg/logger"
 )
 
 // 表格列权重：取自旧版 table-fixed 在 1280 宽窗口下的实测列宽，随容器宽度等比伸缩。
@@ -409,6 +412,12 @@ func (a *app) async(work func() func()) {
 		return
 	}
 	go func() {
+		// 后台任务出现 panic 时只记录日志，不让整个应用崩溃。
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error("后台任务异常", "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+			}
+		}()
 		if done := work(); done != nil {
 			a.win.Update(done)
 		}

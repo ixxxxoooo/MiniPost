@@ -263,3 +263,8 @@ func TestFormatJSONBody(t *testing.T) {
 		t.Fatalf("非法 JSON 应提示")
 	}
 }
+
+// push 用新内容整体替换编辑器内容，不进入撤销历史；草稿会在下一次 pull 时跟上（仅测试使用）。
+func (b *bodyEditor) push(text string) {
+	b.st.Buffer.Reset(text)
+}

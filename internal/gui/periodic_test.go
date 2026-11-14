@@ -37,3 +37,20 @@ func TestStartPeriodicStopBeforeFirst(t *testing.T) {
 		t.Fatalf("不应触发，实际 %d 次", n.Load())
 	}
 }
+
+// 周期任务 panic 后不会让进程退出，下一次仍会继续执行。
+func TestStartPeriodicSurvivesPanic(t *testing.T) {
+	var n atomic.Int32
+	stop := startPeriodic(5*time.Millisecond, 5*time.Millisecond, func() {
+		n.Add(1)
+		panic("boom")
+	})
+	defer stop()
+	deadline := time.Now().Add(2 * time.Second)
+	for n.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if n.Load() < 2 {
+		t.Fatalf("panic 之后周期任务应继续执行，只执行了 %d 次", n.Load())
+	}
+}
