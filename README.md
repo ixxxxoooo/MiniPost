@@ -18,7 +18,7 @@ MiniPost is a lightweight, macOS-only API debugging tool. Since 2.0 the UI is wr
 
 ## Features
 
-- **Requests**: all HTTP methods, query params, headers, JSON / raw / form-urlencoded / form-data bodies, Basic / Bearer / API Key auth, `{{variable}}` substitution from environments, cookie jar, auto headers.
+- **Requests**: all HTTP methods, query params, headers, JSON / raw / form-urlencoded / form-data bodies, Basic / Bearer / API Key auth, `{{variable}}` substitution from environments (plus built-in dynamic variables evaluated at send time: `{{$timestamp}}`, `{{$timestampMs}}`, `{{$isoTimestamp}}`, `{{$randomUUID}}`, `{{$randomInt}}`), cookie jar, auto headers.
 - **Projects and collections**: multiple projects with a per-project theme color, nested folders, move, duplicate, rename, search, history, import (Postman, OpenAPI, cURL) and export (Postman collection, cURL).
 - **Chrome-like tabs**: the active tab merges with the content area, middle-click to close, `⌃Tab` to cycle, right-click for save / copy cURL / close others / close to the right.
 - **Responses**: JSON / XML / JS / Hex / Base64 views, filter, JSON preview, copy and download, headers and cookies, request error diagnostics, live streaming (SSE / chunked).

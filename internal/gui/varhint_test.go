@@ -101,3 +101,15 @@ func TestURLOverlayDoesNotBlockClickAndTyping(t *testing.T) {
 		t.Fatalf("点击高亮层后应能在输入框末尾键入，实际 %q", tb.draft.URL)
 	}
 }
+
+// 地址里用了内置动态变量时，不应出现“未定义变量”提示。
+func TestDynamicVarsNotReportedUndefined(t *testing.T) {
+	a, tb, _ := varApp(t, "{{baseUrl}}/t/{{$timestamp}}?id={{$randomUUID}}")
+	if got := a.undefinedVars(tb); len(got) != 0 {
+		t.Fatalf("动态变量不应被当作未定义: %v", got)
+	}
+	tb.draft.URL = "{{baseUrl}}/{{$nope}}"
+	if got := a.undefinedVars(tb); !reflect.DeepEqual(got, []string{"$nope"}) {
+		t.Fatalf("未知的 $ 变量仍应提示: %v", got)
+	}
+}

@@ -3,6 +3,8 @@ package client
 import (
 	"regexp"
 	"strings"
+
+	"minipost/internal/pkg/httputil"
 )
 
 // Var 环境变量键值，仅包含已启用的变量。
@@ -55,7 +57,7 @@ func EnsureProtocol(input string) string {
 type TemplateRef struct {
 	Start, End int
 	Name       string // 去掉首尾空白后的变量名
-	Defined    bool   // 当前环境中是否定义了该变量
+	Defined    bool   // 当前环境中是否定义了该变量，或是内置动态变量（{{$timestamp}} 等）
 }
 
 // FindTemplateRefs 按出现顺序返回 input 中所有 {{name}} 引用，并标注是否已在 vars 中定义。
@@ -76,7 +78,7 @@ func FindTemplateRefs(input string, vars []Var) []TemplateRef {
 		if name == "" {
 			continue
 		}
-		out = append(out, TemplateRef{Start: m[0], End: m[1], Name: name, Defined: known[name]})
+		out = append(out, TemplateRef{Start: m[0], End: m[1], Name: name, Defined: known[name] || httputil.IsDynamicVar(name)})
 	}
 	return out
 }

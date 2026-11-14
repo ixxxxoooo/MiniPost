@@ -89,18 +89,21 @@ func (a *App) sendRequestWithEnv(input model.SendRequestInput, projectID, envID 
 		"streaming", onChunk != nil,
 	)
 
+	// 未选环境时也要解析：内置动态变量（{{$timestamp}} 等）不依赖环境。
+	var envVars []model.Variable
 	if envID != "" && projectID != "" {
 		envs, err := a.envSvc.ListEnvironments(projectID)
 		if err == nil {
 			for _, env := range envs {
 				if env.ID == envID {
-					input = httputil.ResolveRequestInput(input, env.Variables)
+					envVars = env.Variables
 					logger.Debug("环境变量已解析", "envName", env.Name, "varCount", len(env.Variables))
 					break
 				}
 			}
 		}
 	}
+	input = httputil.ResolveRequestInput(input, envVars)
 
 	var resp *model.HttpResponse
 	if onChunk != nil {

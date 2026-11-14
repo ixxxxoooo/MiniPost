@@ -6,7 +6,8 @@ import (
 	"minipost/internal/model"
 )
 
-// ResolveVariables 在字符串中替换 {{variableName}} 为对应变量值
+// ResolveVariables 在字符串中替换 {{variableName}} 为对应变量值，
+// 并求出内置动态变量（{{$timestamp}} 等）；环境变量优先，之后才处理动态变量。
 func ResolveVariables(input string, variables []model.Variable) string {
 	result := input
 	for _, v := range variables {
@@ -15,7 +16,7 @@ func ResolveVariables(input string, variables []model.Variable) string {
 			result = strings.ReplaceAll(result, placeholder, v.Value)
 		}
 	}
-	return result
+	return resolveDynamicVars(result)
 }
 
 // ResolveKeyValues 解析 KeyValue 列表中的变量

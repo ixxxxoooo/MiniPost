@@ -16,7 +16,7 @@ MiniPost 是一个轻量的、仅支持 macOS 的 API 调试工具。2.0 起界�
 
 ## 功能
 
-- **请求**：全部 HTTP 方法，查询参数、请求头，JSON / 文本 / 表单 / 文件表单请求体，Basic / Bearer / API Key 认证，环境变量 `{{变量}}` 替换，Cookie 罐，自动请求头。
+- **请求**：全部 HTTP 方法，查询参数、请求头，JSON / 文本 / 表单 / 文件表单请求体，Basic / Bearer / API Key 认证，环境变量 `{{变量}}` 替换（另有发送前现场求值的内置变量 `{{$timestamp}}` `{{$timestampMs}}` `{{$isoTimestamp}}` `{{$randomUUID}}` `{{$randomInt}}`），Cookie 罐，自动请求头。
 - **项目与集合**：多项目并可单独设置主题色，多级文件夹，移动、复制、重命名、搜索，历史记录，导入（Postman、OpenAPI、cURL）与导出（Postman 集合、cURL）。
 - **浏览器式标签**：选中标签与内容区融为一体，鼠标中键关闭，`⌃Tab` 切换，右键可保存、复制 cURL、关闭其他、关闭右侧。
 - **响应**：JSON / XML / JS / Hex / Base64 格式切换，过滤，JSON 预览，复制与下载，响应头与 Cookie，请求错误诊断，流式响应（SSE / 分块）实时显示。

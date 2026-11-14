@@ -53,3 +53,15 @@ func TestDraftTemplateTexts(t *testing.T) {
 		t.Fatalf("只应统计启用项与当前类型: got %v want %v", got, want)
 	}
 }
+
+// 内置动态变量（{{$timestamp}} 等）无需在环境中定义，不算“未定义”。
+func TestDynamicVarsCountAsDefined(t *testing.T) {
+	in := "{{$timestamp}}/{{$randomUUID}}/{{$bogus}}"
+	refs := FindTemplateRefs(in, nil)
+	if len(refs) != 3 || !refs[0].Defined || !refs[1].Defined || refs[2].Defined {
+		t.Fatalf("前两个动态变量应为已定义，$bogus 应为未定义: %+v", refs)
+	}
+	if got := UndefinedVarNames(nil, in); !reflect.DeepEqual(got, []string{"$bogus"}) {
+		t.Fatalf("只应报告 $bogus: %v", got)
+	}
+}
