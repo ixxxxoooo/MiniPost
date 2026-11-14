@@ -34,8 +34,10 @@ type app struct {
 	envID     string
 	history   []model.HistoryEntry
 
-	tabs   []*tab
-	active int
+	tabs []*tab
+	// closeQueue 是批量关闭时尚待处理的标签（逐个确认未保存修改）。
+	closeQueue []*tab
+	active     int
 
 	homeName   string            // 项目主页“新建项目”输入框
 	themePick  string            // 正在选择主题色的项目 ID

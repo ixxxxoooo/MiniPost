@@ -162,7 +162,7 @@ func TestVisualHomeDialogs(t *testing.T) {
 	tt.Frame()
 	snapshot(t, tt, "v_confirm")
 	a.overlays.confirm.open = false
-	a.overlays.askClose(0, "获取用户列表")
+	a.overlays.askClose(newTab(&client.Draft{Name: "获取用户列表"}, &client.Draft{}))
 	tt.Frame()
 	snapshot(t, tt, "v_close")
 }

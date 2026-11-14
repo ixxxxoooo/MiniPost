@@ -169,27 +169,24 @@ func (a *app) tabMenu(m *ui.Menu, i int) {
 	}
 	if m.Item(a.t("关闭右侧", "Close to the right")).Disabled(i >= len(a.tabs)-1).Chosen() {
 		a.later(func() {
-			for j := len(a.tabs) - 1; j > a.tabIndex(t); j-- {
-				a.closeTab(j)
+			if k := a.tabIndex(t); k >= 0 {
+				a.closeTabs(append([]*tab(nil), a.tabs[k+1:]...))
 			}
 		})
 	}
 	if m.Item(a.t("关闭其他", "Close others")).Disabled(len(a.tabs) <= 1).Chosen() {
 		a.later(func() {
-			keep := a.tabs[i]
-			for j := len(a.tabs) - 1; j >= 0; j-- {
-				if a.tabs[j] != keep {
-					a.closeTab(j)
+			var rest []*tab
+			for _, x := range a.tabs {
+				if x != t {
+					rest = append(rest, x)
 				}
 			}
+			a.closeTabs(rest)
 		})
 	}
 	if m.Item(a.t("关闭全部", "Close all")).Chosen() {
-		a.later(func() {
-			for j := len(a.tabs) - 1; j >= 0; j-- {
-				a.closeTab(j)
-			}
-		})
+		a.later(func() { a.closeTabs(append([]*tab(nil), a.tabs...)) })
 	}
 }
 

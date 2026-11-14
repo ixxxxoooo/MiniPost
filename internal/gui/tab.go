@@ -178,17 +178,42 @@ func (a *app) closeTab(i int) {
 	if i < 0 || i >= len(a.tabs) {
 		return
 	}
-	t := a.tabs[i]
-	t.refreshDirty()
-	switch {
-	case !t.dirty || a.set.AlwaysDiscardUnsaved:
-		a.removeTab(i)
-	case a.set.AlwaysSaveUnsaved:
-		if a.saveTab(t) {
-			a.removeTab(i)
+	a.closeTabs([]*tab{a.tabs[i]})
+}
+
+// closeTabs 依次关闭一组标签；遇到有未保存修改的标签时逐个弹出确认，
+// 用户处理完一个再继续下一个，点“取消”则放弃剩余全部。
+func (a *app) closeTabs(ts []*tab) {
+	a.closeQueue = append([]*tab(nil), ts...)
+	logger.Info("开始批量关闭标签", "count", len(ts))
+	a.drainCloseQueue()
+}
+
+// drainCloseQueue 处理关闭队列，直到队列为空或需要等待用户确认。
+func (a *app) drainCloseQueue() {
+	for len(a.closeQueue) > 0 {
+		t := a.closeQueue[0]
+		a.closeQueue = a.closeQueue[1:]
+		i := a.tabIndex(t)
+		if i < 0 {
+			continue
 		}
-	default:
-		a.overlays.askClose(i, t.title())
+		t.refreshDirty()
+		switch {
+		case !t.dirty || a.set.AlwaysDiscardUnsaved:
+			a.removeTab(i)
+		case a.set.AlwaysSaveUnsaved:
+			if a.saveTab(t) {
+				a.removeTab(i)
+			} else {
+				a.closeQueue = nil // 保存失败，放弃剩余关闭
+				return
+			}
+		default:
+			a.activate(i) // 让用户看到正在询问的是哪个标签
+			a.overlays.askClose(t)
+			return
+		}
 	}
 }
 

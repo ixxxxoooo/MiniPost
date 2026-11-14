@@ -37,9 +37,9 @@ type confirmState struct {
 
 // closeState 是关闭未保存标签时的三选一提示。
 type closeState struct {
-	open  bool
-	index int
-	name  string
+	open bool
+	tab  *tab
+	name string
 }
 
 func (o *overlays) askText(title, label, initial, ok string, onOK func(string)) {
@@ -50,8 +50,8 @@ func (o *overlays) askConfirm(title, message, ok string, onOK func()) {
 	o.confirm = confirmState{open: true, title: title, message: message, ok: ok, onOK: onOK}
 }
 
-func (o *overlays) askClose(index int, name string) {
-	o.closing = closeState{open: true, index: index, name: name}
+func (o *overlays) askClose(t *tab) {
+	o.closing = closeState{open: true, tab: t, name: t.title()}
 }
 
 // promptView 绘制文本输入对话框。
@@ -134,9 +134,8 @@ func (a *app) closeView(c *ui.Context) {
 		return
 	}
 	p := a.p
-	idx := cl.index
 	kind := a.t("请求", "Request")
-	if idx >= 0 && idx < len(a.tabs) && a.tabs[idx].env != nil {
+	if cl.tab != nil && cl.tab.env != nil {
 		kind = a.t("环境", "Environment")
 	}
 	changed := false
@@ -165,6 +164,7 @@ func (a *app) closeView(c *ui.Context) {
 		}
 		if a.dlgButton(c, "close-cancel", a.t("取消", "Cancel"), dlgNormal, false) {
 			cl.open = false
+			a.closeQueue = nil // 取消会放弃批量关闭中剩余的标签
 		}
 		if a.dlgButton(c, "close-save", a.t("保存并关闭", "Save and close"), dlgPrimary, false) {
 			action = 2
@@ -184,13 +184,25 @@ func (a *app) closeView(c *ui.Context) {
 	switch action {
 	case 1:
 		cl.open = false
-		a.later(func() { a.removeTab(idx) })
+		t := cl.tab
+		a.later(func() {
+			if i := a.tabIndex(t); i >= 0 {
+				a.removeTab(i)
+			}
+			a.drainCloseQueue()
+		})
 	case 2:
 		cl.open = false
+		t := cl.tab
 		a.later(func() {
-			if idx < len(a.tabs) && a.saveTab(a.tabs[idx]) {
-				a.removeTab(idx)
+			if i := a.tabIndex(t); i >= 0 {
+				if !a.saveTab(t) {
+					a.closeQueue = nil
+					return
+				}
+				a.removeTab(i)
 			}
+			a.drainCloseQueue()
 		})
 	}
 }
