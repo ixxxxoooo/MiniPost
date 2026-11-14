@@ -209,6 +209,7 @@ func (a *app) treeNode(c *ui.Context, id string, depth int) {
 		row = a.revealRow(row)
 	}
 	hover := row.Hovered()
+	row = a.tipIfLong(c, row, n.name, fsV2xs, 0, a.sideNameRoom(sideFolderChrome, depth, hover))
 	switch {
 	case over:
 		row = row.Background(p.sideActive) // 拖动经过文件夹：高亮表示将放入其中
@@ -278,6 +279,7 @@ func (a *app) requestRow(c *ui.Context, id string, depth int) {
 		row = a.revealRow(row)
 	}
 	hover := row.Hovered()
+	row = a.tipIfLong(c, row, n.name, fsV2xs, 0, a.sideNameRoom(sideRequestChrome, depth, hover))
 	switch {
 	case active:
 		row = row.Background(p.sideActive)
@@ -491,6 +493,9 @@ func (a *app) historyRow(c *ui.Context, e historyItem) {
 	if hover {
 		row = row.Background(p.sideHover)
 	}
+	if full := firstNonEmpty(e.URL, e.Name); full != "" {
+		row = a.tipIfLong(c, row, full, fsSmall, 0, a.set.SidebarWidth-sideHistoryChrome)
+	}
 	row.Children(func() {
 		method := e.Method
 		if method == "" {
@@ -574,6 +579,7 @@ func (a *app) envList(c *ui.Context) {
 				if hover {
 					row = row.Background(p.sideHover)
 				}
+				row = a.tipIfLong(c, row, e.Name, fsV2xs, 0, a.set.SidebarWidth-100)
 				row.Children(func() {
 					// 圆点：激活时为强调色实心并带白色内点
 					dot := ui.Row(c.Key("dot:"+e.ID)).Size(12, 12).Radius(6).Shrink(0).AlignItems(ui.Center).Justify(ui.Center)

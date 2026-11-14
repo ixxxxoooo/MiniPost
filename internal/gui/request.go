@@ -88,6 +88,9 @@ func (a *app) breadcrumb(c *ui.Context, t *tab) {
 				if seg.folderID == "" {
 					tip = a.t("切换项目", "Switch project")
 				}
+				if a.textOverflows(c, seg.name, fsBase, 0, 208) {
+					tip = seg.name + "\n" + tip // 名称被截断时，提示里带上全名
+				}
 				sb := ui.ButtonBase(c.Key("seg" + itoa(i))).Height(24).PaddingX(6).Radius(6).AlignItems(ui.Center).Shrink(0).Tooltip(tip)
 				if sb.Hovered() {
 					sb = sb.Background(p.selected)

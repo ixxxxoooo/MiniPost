@@ -106,6 +106,12 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 		dropHere = true
 	}
 	hover := cell.Hovered()
+	// 标题可用宽度 = 标签宽 - 左右内边距 16 - 方法标签（约 6 个等宽字符加间距）- 未保存圆点 - 关闭按钮
+	titleRoom := float32(tabWidth) - 16 - 40 - 20
+	if t.dirty {
+		titleRoom -= 10
+	}
+	cell = a.tipIfLong(c, cell, t.title(), fsV2xs, 500, titleRoom)
 	switch {
 	case active:
 		cell = cell.Background(p.surface).BorderWidth(tabAccentWidth, 0, 0, 0).BorderColor(p.tabActiveBorder)
