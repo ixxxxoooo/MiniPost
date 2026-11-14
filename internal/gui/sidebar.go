@@ -211,6 +211,10 @@ func (a *app) treeNode(c *ui.Context, id string, depth int) {
 	}
 	d, over := ui.DragOver[nodeDrag](row)
 	over = over && d.id != id
+	if a.side.reveal == id {
+		a.side.reveal = ""
+		row = row.ScrollIntoView().Focus()
+	}
 	hover := row.Hovered()
 	switch {
 	case over:
@@ -277,6 +281,10 @@ func (a *app) requestRow(c *ui.Context, id string, depth int) {
 	}
 	d, over := ui.DragOver[nodeDrag](row)
 	over = over && d.id != id
+	if a.side.reveal == id {
+		a.side.reveal = ""
+		row = row.ScrollIntoView().Focus()
+	}
 	hover := row.Hovered()
 	switch {
 	case active:
