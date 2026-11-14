@@ -63,10 +63,15 @@ func (a *app) workspace(c *ui.Context) {
 			return
 		}
 		// 旧版侧栏宽度（含 1px 右边框）为 SidebarWidth；这里的分隔线就是那条边框，所以窗格宽度减 1。
-		sw := a.set.SidebarWidth - 1
+		// 窗口较窄时侧栏不能把右侧请求区挤得太窄：显示宽度按窗口宽度夹紧，
+		// 用户设定的宽度原样保留，窗口变宽后自动恢复。
+		winW, _ := c.Size()
+		lo, hi := sidebarLimits(winW)
+		sw := min(max(a.set.SidebarWidth, lo), hi) - 1
+		a.side.shown = sw + 1
 		split := ui.Split(c, &sw, func() { a.sidebar(c) }, right).SplitReset(239).Fill()
 		if split.Changed() {
-			a.set.SidebarWidth = sw + 1
+			a.set.SidebarWidth = min(max(sw+1, lo), hi)
 			a.saveSettings()
 		}
 	})
@@ -86,4 +91,18 @@ func (a *app) mainPane(c *ui.Context) {
 		}
 		a.emptyState(c)
 	})
+}
+
+// 侧栏宽度范围与请求区的最小宽度（窗口最小 900 宽时，侧栏最多约 340）。
+const (
+	sidebarMinWidth = 180
+	sidebarMaxWidth = 500
+	mainMinWidth    = 560
+)
+
+// sidebarLimits 返回在宽度为 winW 的窗口里侧栏宽度的允许范围：保证右侧请求区至少 mainMinWidth。
+func sidebarLimits(winW float32) (lo, hi float32) {
+	lo = sidebarMinWidth
+	hi = min(sidebarMaxWidth, winW-mainMinWidth)
+	return lo, max(lo, hi)
 }

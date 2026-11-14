@@ -494,7 +494,7 @@ func (a *app) historyRow(c *ui.Context, e historyItem) {
 		row = row.Background(p.sideHover)
 	}
 	if full := firstNonEmpty(e.URL, e.Name); full != "" {
-		row = a.tipIfLong(c, row, full, fsSmall, 0, a.set.SidebarWidth-sideHistoryChrome)
+		row = a.tipIfLong(c, row, full, fsSmall, 0, a.sidebarShown()-sideHistoryChrome)
 	}
 	row.Children(func() {
 		method := e.Method
@@ -579,7 +579,7 @@ func (a *app) envList(c *ui.Context) {
 				if hover {
 					row = row.Background(p.sideHover)
 				}
-				row = a.tipIfLong(c, row, e.Name, fsV2xs, 0, a.set.SidebarWidth-100)
+				row = a.tipIfLong(c, row, e.Name, fsV2xs, 0, a.sidebarShown()-100)
 				row.Children(func() {
 					// 圆点：激活时为强调色实心并带白色内点
 					dot := ui.Row(c.Key("dot:"+e.ID)).Size(12, 12).Radius(6).Shrink(0).AlignItems(ui.Center).Justify(ui.Center)

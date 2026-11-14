@@ -100,6 +100,7 @@ type consoleState struct {
 
 // sideState 是左侧栏的状态：当前页签、搜索词、请求树与历史列表。
 type sideState struct {
+	shown         float32         // 当前实际显示的侧栏宽度（按窗口宽度夹紧后），0 表示还没画过
 	tab           int             // 0 请求，1 历史，2 环境
 	query         string          // 侧栏搜索词
 	histQuery     string          // 历史搜索词（匹配方法、地址、名称、状态码，或 2xx/4xx 这样的状态段）

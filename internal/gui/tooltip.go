@@ -31,7 +31,7 @@ const (
 
 // sideNameRoom 返回侧栏行里名称可用的宽度。
 func (a *app) sideNameRoom(chrome float32, depth int, hover bool) float32 {
-	room := a.set.SidebarWidth - chrome - float32(depth)*sideDepthIndent
+	room := a.sidebarShown() - chrome - float32(depth)*sideDepthIndent
 	if hover {
 		room -= sideRowHoverIcons
 	}
@@ -46,4 +46,12 @@ func firstNonEmpty(ss ...string) string {
 		}
 	}
 	return ""
+}
+
+// sidebarShown 是侧栏当前实际显示的宽度（窗口很窄时比设置值小）。
+func (a *app) sidebarShown() float32 {
+	if a.side.shown > 0 {
+		return a.side.shown
+	}
+	return a.set.SidebarWidth
 }
