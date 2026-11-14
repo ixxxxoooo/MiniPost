@@ -3,6 +3,7 @@ package httputil
 import (
 	"errors"
 	"minipost/internal/model"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -155,9 +156,14 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 					appendLiteralCookieHeader(value)
 				}
 				continue
-			case "--data", "--data-raw", "--data-binary", "--data-urlencode":
+			case "--data", "--data-raw", "--data-binary":
 				if value, ok := consumeOptionValue(parts, &i, inlineValue, hasInlineValue); ok {
 					appendData(value)
+				}
+				continue
+			case "--data-urlencode":
+				if value, ok := consumeOptionValue(parts, &i, inlineValue, hasInlineValue); ok {
+					appendData(encodeDataURLEncode(value))
 				}
 				continue
 			case "--form":
@@ -222,6 +228,26 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 	}
 
 	return input, nil
+}
+
+// encodeDataURLEncode 按 curl 的 --data-urlencode 规则编码：name=content 只编码 content，
+// =content 与不含 = 的 content 整体编码；@文件 形式无法在这里读取，原样保留。空格编码为 %20。
+func encodeDataURLEncode(value string) string {
+	enc := func(s string) string { return strings.ReplaceAll(url.QueryEscape(s), "+", "%20") }
+	if strings.HasPrefix(value, "@") {
+		return value
+	}
+	name, content, hasEq := strings.Cut(value, "=")
+	switch {
+	case !hasEq:
+		if strings.Contains(name, "@") {
+			return value
+		}
+		return enc(value)
+	case name == "":
+		return enc(content)
+	}
+	return name + "=" + enc(content)
 }
 
 func looksLikeJSONBody(data string) bool {

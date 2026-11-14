@@ -178,11 +178,11 @@ func TestBuildSendInputPipeline(t *testing.T) {
 	if in.SourceID != d.ID || in.RequestID != "rid" {
 		t.Fatalf("SourceID 应为草稿 ID、RequestID 为发送 ID: %q %q", in.SourceID, in.RequestID)
 	}
-	if in.URL != "https://example.com/items?a=1" || info.ResolvedURL != in.URL {
-		t.Fatalf("url: %s", in.URL)
+	if in.URL != "https://example.com/items?a=1&b=2" || info.ResolvedURL != in.URL {
+		t.Fatalf("url should merge the table params once, in order: %s", in.URL)
 	}
-	if len(in.Params) != 1 || in.Params[0].Key != "b" {
-		t.Fatalf("params should only keep b: %+v", in.Params)
+	if len(in.Params) != 0 {
+		t.Fatalf("params are merged into the URL, payload Params must stay empty: %+v", in.Params)
 	}
 	if strings.Contains(in.Body.JSON, "// c") || !strings.Contains(in.Body.JSON, "https://example.com") {
 		t.Fatalf("json: %s", in.Body.JSON)

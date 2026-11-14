@@ -240,7 +240,17 @@ func (s *HttpService) sendRequest(input model.SendRequestInput, onChunk func(mod
 
 	// 设置自定义 headers
 	for _, h := range input.Headers {
-		req.Header.Set(h.Key, h.Value)
+		key, value := strings.TrimSpace(h.Key), strings.TrimSpace(h.Value)
+		switch {
+		case key == "":
+			continue
+		case strings.EqualFold(key, "Host"):
+			// Go 会忽略 Header 里的 Host，必须设置在 req.Host 上才会真正发出。
+			req.Host = value
+			logger.Debug("已改写 Host 请求头", "requestID", requestID, "host", value)
+		default:
+			req.Header.Set(key, value)
+		}
 	}
 
 	// 设置认证
@@ -496,7 +506,8 @@ func newHTTPRequestLogID() string {
 }
 
 func (s *HttpService) buildURL(rawURL string, params []model.KeyValue) (string, error) {
-	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+	rawURL = strings.TrimSpace(rawURL)
+	if lower := strings.ToLower(rawURL); !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
 		rawURL = "http://" + rawURL
 	}
 
@@ -505,11 +516,8 @@ func (s *HttpService) buildURL(rawURL string, params []model.KeyValue) (string, 
 		return "", err
 	}
 
-	q := u.Query()
-	for _, p := range params {
-		q.Add(p.Key, p.Value)
-	}
-	u.RawQuery = q.Encode()
+	// 地址里已有的查询串原样保留（不排序、不重新编码），Params 按顺序追加在后面。
+	u.RawQuery = appendQuery(u.RawQuery, params)
 
 	return u.String(), nil
 }
@@ -532,11 +540,8 @@ func (s *HttpService) buildBody(body model.RequestBody) (io.Reader, string, erro
 		return strings.NewReader(body.Raw), "text/plain", nil
 
 	case "form-urlencoded":
-		form := url.Values{}
-		for _, kv := range body.FormUrlEncoded {
-			form.Add(kv.Key, kv.Value)
-		}
-		return strings.NewReader(form.Encode()), "application/x-www-form-urlencoded", nil
+		// 按行顺序编码，不排序；没有键名的行跳过。
+		return strings.NewReader(encodePairs(body.FormUrlEncoded)), "application/x-www-form-urlencoded", nil
 
 	case "form-data":
 		var buf bytes.Buffer
@@ -719,9 +724,7 @@ func (s *HttpService) applyAuth(req *http.Request, auth model.AuthConfig) {
 	case "api-key":
 		if auth.APIKey.Key != "" && auth.APIKey.Value != "" {
 			if auth.APIKey.AddTo == "query" {
-				q := req.URL.Query()
-				q.Set(auth.APIKey.Key, auth.APIKey.Value)
-				req.URL.RawQuery = q.Encode()
+				req.URL.RawQuery = setQueryParam(req.URL.RawQuery, auth.APIKey.Key, auth.APIKey.Value)
 			} else {
 				req.Header.Set(auth.APIKey.Key, auth.APIKey.Value)
 			}

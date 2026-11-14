@@ -250,3 +250,20 @@ func TestParseCurlCommand_WindowsCmdLineContinuations(t *testing.T) {
 		t.Fatalf("unexpected headers: %+v", input.Headers)
 	}
 }
+
+func TestParseCurlDataURLEncode(t *testing.T) {
+	cases := map[string]string{
+		`curl http://x.test --data-urlencode 'k=v w&x'`: "k=v%20w%26x",
+		`curl http://x.test --data-urlencode '=a b'`:    "a%20b",
+		`curl http://x.test --data-urlencode 'a b'`:     "a%20b",
+		`curl http://x.test --data-urlencode 'f@/p/q'`:  "f@/p/q",
+		`curl http://x.test --data-urlencode '@/p/q'`:   "@/p/q",
+		`curl http://x.test --data-urlencode='中=文 字'`:   "中=%E6%96%87%20%E5%AD%97",
+	}
+	for cmd, want := range cases {
+		in, err := ParseCurlCommand(cmd)
+		if err != nil || in.Body.Raw != want || in.Method != "POST" {
+			t.Errorf("%s\n got body=%q method=%q err=%v\nwant body=%q", cmd, in.Body.Raw, in.Method, err, want)
+		}
+	}
+}

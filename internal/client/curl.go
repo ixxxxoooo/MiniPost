@@ -47,15 +47,7 @@ func BuildCurlCommand(d *Draft, vars []Var, cookieHeader string) string {
 		parts = append(parts, "-X "+method)
 	}
 
-	full := ResolveCurlURL(d, vars)
-	for _, p := range d.Params {
-		if !p.Enabled {
-			continue
-		}
-		if key := res(p.Key); key != "" {
-			full = appendQuery(full, key, res(p.Value))
-		}
-	}
+	full := EnsureProtocol(buildURLWithQuery(d, vars, encodeURIComponent))
 	if d.Auth.Type == AuthAPIKey && d.Auth.APIKeyLocation == "query" {
 		if key := res(d.Auth.APIKeyName); key != "" {
 			full = appendQuery(full, key, res(d.Auth.APIKeyValue))

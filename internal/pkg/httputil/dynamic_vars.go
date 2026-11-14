@@ -53,6 +53,9 @@ func dynamicValue(name string) (string, bool) {
 	return "", false
 }
 
+// ResolveDynamicVars 把 input 里的 {{$name}} 替换成当前值（对外导出，供发送前解析参数等场景使用）。
+func ResolveDynamicVars(input string) string { return resolveDynamicVars(input) }
+
 // resolveDynamicVars 把 input 里的 {{$name}} 替换成当前值；不认识的 $ 变量原样保留。
 // 同一个变量出现多次时每次单独求值（例如两个 randomUUID 互不相同）。
 func resolveDynamicVars(input string) string {

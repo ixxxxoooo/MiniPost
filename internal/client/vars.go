@@ -45,7 +45,7 @@ func ResolveTemplate(input string, vars []Var) string {
 func EnsureProtocol(input string) string {
 	value := strings.TrimSpace(input)
 	switch {
-	case value == "", strings.Contains(value, "{{"), schemePattern.MatchString(value):
+	case value == "", strings.Contains(value, "{{"), schemePattern.MatchString(value), IsCurlCommand(value):
 		return input
 	case strings.HasPrefix(value, "//"):
 		return "http:" + value

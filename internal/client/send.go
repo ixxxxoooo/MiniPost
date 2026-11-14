@@ -58,7 +58,8 @@ func hasHeader(headers []model.KeyValue, name string) bool {
 func enabledKV(rows []*Row) []model.KeyValue {
 	var out []model.KeyValue
 	for _, r := range rows {
-		if r.Enabled && r.Key != "" {
+		// 关闭自动 Header 的标记行只是开关，绝不能当成真实 Header 发出（旧数据里它可能处于启用状态）。
+		if r.Enabled && r.Key != "" && !IsAutoHeaderMarker(r.Key) {
 			out = append(out, model.KeyValue{Key: r.Key, Value: r.Value})
 		}
 	}
@@ -76,8 +77,10 @@ func resolveKV(items []model.KeyValue, vars []Var) []model.KeyValue {
 // buildPayload 把草稿转换为发送载荷（仅保留启用行，并解析环境变量）。
 func buildPayload(d *Draft, requestID string, vars []Var) model.SendRequestInput {
 	in := model.SendRequestInput{
-		RequestID: requestID, SourceID: d.ID, Method: d.Method, URL: ResolveTemplate(d.URL, vars),
-		Params:  resolveKV(enabledKV(d.Params), vars),
+		RequestID: requestID, SourceID: d.ID, Method: d.Method,
+		// 查询参数已全部合并进地址（见 buildURLWithQuery），Params 留空，避免后端重复追加。
+		URL:     buildURLWithQuery(d, vars, formEscape),
+		Params:  []model.KeyValue{},
 		Headers: dedupeHeaders(resolveKV(enabledKV(d.Headers), vars)),
 	}
 	in.Body = model.RequestBody{
@@ -112,8 +115,6 @@ func buildPayload(d *Draft, requestID string, vars []Var) model.SendRequestInput
 func BuildSendInput(d *Draft, requestID string, env SendEnv) (model.SendRequestInput, SendInfo) {
 	in := buildPayload(d, requestID, env.Vars)
 	in.URL = EnsureProtocol(in.URL)
-	// 后端会把 Params 追加到 URL，先剔除已在 URL 查询串中的同名参数，避免重复发送
-	in.Params = ParamsNotInURL(in.URL, in.Params)
 
 	set := env.Settings
 	suppressed := SuppressedAutoHeaders(d.Headers)
