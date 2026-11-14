@@ -27,6 +27,8 @@ type KeyValue struct {
 	Key         string `json:"key"`
 	Value       string `json:"value"`
 	Description string `json:"description,omitempty"`
+	// Disabled 为 true 表示该行被用户临时禁用；零值（启用）与旧数据格式兼容。
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 type RequestBody struct {
@@ -41,6 +43,7 @@ type FormData struct {
 	Key         string `json:"key"`
 	Value       string `json:"value"`
 	Description string `json:"description,omitempty"`
+	Disabled    bool   `json:"disabled,omitempty"`
 	Type        string `json:"type"` // text | file
 	FilePath    string `json:"filePath,omitempty"`
 	FileName    string `json:"fileName,omitempty"`
