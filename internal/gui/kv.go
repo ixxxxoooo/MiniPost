@@ -173,7 +173,7 @@ func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {
 				a.tableCell(c, colCheck, 25, func() {
 					// 旧版原生复选框距单元格顶部约 4px，而不是垂直居中
 					ui.Row(c).FillWidth().Height(24).Padding(3, 0, 0, 0).Justify(ui.Center).AlignItems(ui.Start).Children(func() {
-						changed = a.checkbox(c, "chk:"+r.ID, &r.Enabled, last) || changed
+						changed = a.kvCheck(c, r.ID, &r.Enabled, last) || changed
 					})
 				})
 				dim := !r.Enabled && !last
@@ -315,7 +315,7 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 				a.tableCell(c, 28, 25, func() {
 					// 旧版原生复选框距单元格顶部约 4px，而不是垂直居中
 					ui.Row(c).FillWidth().Height(24).Padding(3, 0, 0, 0).Justify(ui.Center).AlignItems(ui.Start).Children(func() {
-						changed = a.checkbox(c, "chk:"+r.ID, &r.Enabled, last) || changed
+						changed = a.kvCheck(c, r.ID, &r.Enabled, last) || changed
 					})
 				})
 				dim := !r.Enabled && !last
@@ -425,3 +425,15 @@ func (a *app) async(work func() func()) {
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// kvCheck 绘制键值表每行的“启用”复选框。末尾的空占位行还不是一条真实数据，
+// 画成空心、半透明且不可点的框（而不是一个发灰的“已勾选”框，看起来像被禁用的勾选项）；
+// 一旦在占位行里输入内容，它就变成真实行，复选框以勾选态正常显示。
+func (a *app) kvCheck(c *ui.Context, id string, on *bool, placeholder bool) bool {
+	if placeholder {
+		off := false
+		a.checkbox(c, "chk:"+id, &off, true)
+		return false
+	}
+	return a.checkbox(c, "chk:"+id, on, false)
+}
