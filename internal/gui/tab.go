@@ -140,13 +140,23 @@ func (a *app) openRequest(id string) {
 func (a *app) activate(i int) {
 	a.active = i
 	a.revealTab = true // 下一帧把选中的标签滚进标签栏可视区
-	a.side.syncSel = true
 	if a.tabs[i].env != nil {
 		return
 	}
-	a.side.sel = a.tabs[i].draft.ID
+	a.locateInSidebar(a.tabs[i])
 	a.navRecord(a.tabs[i].draft.ID)
-	for p := a.tree.nodes[a.tabs[i].draft.ID].parent; p != ""; p = a.tree.nodes[p].parent {
+}
+
+// locateInSidebar 让侧栏定位到标签对应的请求：选中它、展开所有上级文件夹，
+// 并在下一帧把它滚进可视区（不抢走输入焦点）。
+func (a *app) locateInSidebar(t *tab) {
+	if t == nil || t.env != nil {
+		return
+	}
+	id := t.draft.ID
+	a.side.sel = id
+	a.side.reveal, a.side.revealFocus = id, false
+	for p := a.tree.nodes[id].parent; p != ""; p = a.tree.nodes[p].parent {
 		a.side.outline.Open.Add(p)
 	}
 }
@@ -227,7 +237,6 @@ func (a *app) removeTab(i int) {
 	case a.active > i, a.active >= len(a.tabs):
 		a.active = max(0, a.active-1)
 	}
-	a.side.syncSel = true
 }
 
 // closeTabsFor 关闭属于给定请求集合的所有标签（请求被删除时使用，不再询问）。
@@ -301,6 +310,9 @@ func (a *app) restoreSession() {
 		a.active = ps.Active
 	}
 	a.revealTab = true
+	// 恢复上次会话后，侧栏也要展开并定位到当前标签对应的请求
+	a.locateInSidebar(a.activeTab())
+	logger.Info("已恢复会话标签", "count", len(a.tabs), "active", a.active)
 }
 
 // moveTab 把标签 t 移到下标 to 处（其余标签顺延），选中状态跟随原来选中的标签。

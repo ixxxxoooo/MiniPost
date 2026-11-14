@@ -159,3 +159,46 @@ func TestSidebarEnterAfterClickActsOnNewSelection(t *testing.T) {
 		t.Fatal("回车不应折叠旧文件夹")
 	}
 }
+
+// 恢复会话后，侧栏要展开活动标签所在的文件夹、选中它并安排滚动定位。
+func TestRestoreSessionLocatesActiveTabInSidebar(t *testing.T) {
+	a, tt, dir, child := navApp(t)
+	a.openRequest(child)
+	a.persistSession()
+
+	// 模拟重新打开应用：标签、展开状态、选中项全部清空后只靠会话恢复
+	a.tabs, a.active = nil, 0
+	a.side.outline = ui.OutlineState[string]{}
+	a.side.sel, a.side.reveal = "", ""
+	a.restoreSession()
+
+	if len(a.tabs) != 1 || a.activeTab().draft.ID != child {
+		t.Fatalf("会话应恢复出 child 标签: %d", len(a.tabs))
+	}
+	if !a.side.outline.Open.Has(dir) {
+		t.Fatal("恢复会话后应展开 child 所在文件夹")
+	}
+	if a.side.sel != child {
+		t.Fatalf("恢复会话后应选中 child: %q", a.side.sel)
+	}
+	if a.side.reveal != child {
+		t.Fatal("应安排侧栏滚动到 child")
+	}
+	tt.Frame()
+	if a.side.reveal != "" {
+		t.Fatal("渲染一帧后 reveal 应被消费")
+	}
+}
+
+// 切换标签同样会定位侧栏，但不能抢走键盘焦点（revealFocus 只属于键盘导航）。
+func TestActivateTabLocatesWithoutStealingFocus(t *testing.T) {
+	a, tt, _, child := navApp(t)
+	a.openRequest(child)
+	if a.side.revealFocus {
+		t.Fatal("标签激活不应请求侧栏行获取焦点")
+	}
+	tt.Frame()
+	if a.side.reveal != "" {
+		t.Fatal("渲染后 reveal 应被消费")
+	}
+}

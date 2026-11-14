@@ -141,6 +141,7 @@ func (a *app) visibleNodeIDs() []string {
 func (a *app) selectAndReveal(id string) {
 	a.selectNode(id)
 	a.side.reveal = id
+	a.side.revealFocus = true
 }
 
 // moveSelection 把选中项向下（1）或向上（-1）移动一行；没有选中项时从首/末行开始。
@@ -211,4 +212,14 @@ func (a *app) selectionEnter() {
 	}
 	a.showHome = false
 	a.openRequest(id)
+}
+
+// revealRow 在侧栏行构建时消费一次 reveal 请求：滚进可视区，键盘导航时再给它焦点。
+func (a *app) revealRow(row ui.Element) ui.Element {
+	row = row.ScrollIntoView()
+	if a.side.revealFocus {
+		row = row.Focus()
+	}
+	a.side.reveal, a.side.revealFocus = "", false
+	return row
 }
