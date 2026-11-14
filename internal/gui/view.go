@@ -74,24 +74,6 @@ func (a *app) workspace(c *ui.Context) {
 	})
 }
 
-// selectIndex 是按下标选择的下拉框：labels 为选项文案，*idx 为当前选中项。
-func selectIndex(c *ui.Context, idx *int, labels []string) ui.Element {
-	cur := ""
-	if *idx >= 0 && *idx < len(labels) {
-		cur = labels[*idx]
-	}
-	el := ui.Select(c, &cur, labels)
-	if el.Changed() {
-		for i, l := range labels {
-			if l == cur {
-				*idx = i
-				break
-			}
-		}
-	}
-	return el
-}
-
 // mainPane 是右侧主区域：标签栏与当前请求的编辑器。
 func (a *app) mainPane(c *ui.Context) {
 	ui.Column(c).Grow(1).Basis(0).Children(func() {

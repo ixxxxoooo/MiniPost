@@ -104,21 +104,3 @@ func (a *app) respEmpty(c *ui.Context, s string) {
 		txt(c, s, 10.4, a.p.muted, 0)
 	})
 }
-
-// streamView 列出流式（SSE）收到的数据块。
-func (a *app) streamView(c *ui.Context, rs *respState) {
-	if len(rs.chunks) == 0 {
-		a.respEmpty(c, a.t("等待数据…", "Waiting for data…"))
-		return
-	}
-	p := a.p
-	rs.chunkList.FollowEnd = true
-	ui.List(c, &rs.chunkList, len(rs.chunks), func(i int) {
-		ch := rs.chunks[i]
-		ui.Row(c).Gap(10).PaddingX(12).Children(func() {
-			txtMono(c, "#"+itoa(int(ch.Sequence)), fsSmall, p.muted, 0).Width(48).Shrink(0)
-			txtMono(c, ch.Kind, fsSmall, p.muted, 0).Width(110).Shrink(0)
-			ui.Text(c, ch.Data).FontSize(fsSmall).Font(monoFont).TextColor(p.fg).Grow(1).Basis(0).Selectable()
-		})
-	}).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible())
-}

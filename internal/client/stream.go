@@ -28,11 +28,6 @@ func ParseStreamStart(data string) (StreamStart, bool) {
 	return s, true
 }
 
-// IsEventStream 判断 Content-Type 是否为 SSE。
-func IsEventStream(contentType string) bool {
-	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
-}
-
 // WantsStreaming 判断请求是否应走流式通道：Accept 含 text/event-stream，或 JSON/raw 请求体含 "stream": true。
 func WantsStreaming(d *Draft) bool {
 	for _, h := range d.Headers {

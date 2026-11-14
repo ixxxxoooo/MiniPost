@@ -123,16 +123,6 @@ func Close() {
 	}
 }
 
-// SetLevel 设置日志级别
-func SetLevel(level Level) {
-	currentLevel = level
-}
-
-// CurrentLogPath 返回当前日志文件路径，日志系统未初始化时返回空字符串。
-func CurrentLogPath() string {
-	return logPath
-}
-
 func levelFromEnv(value string, fallback Level) Level {
 	switch strings.ToUpper(strings.TrimSpace(value)) {
 	case "":

@@ -75,11 +75,6 @@ func (a *app) kvHeaderCell(c *ui.Context, grow float32, label string, extra func
 	})
 }
 
-// kvTable 绘制可增删的键值表（Params / Headers / x-www-form-urlencoded），不含说明列的变体由 kvTableOpts 指定。
-func (a *app) kvTable(c *ui.Context, rows *[]*client.Row, keyPH, valPH string) bool {
-	return a.kvTableOpts(c, rows, kvOpts{id: keyPH, keyPH: keyPH, valPH: valPH})
-}
-
 // kvTableOpts 绘制键值表；末尾始终保留一行空白占位行；返回本帧内容是否被修改。
 // 处于“批量编辑”模式时改为文本框，退出时把文本解析回行。
 func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {

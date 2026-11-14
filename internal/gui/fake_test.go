@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
 
 	"minipost/internal/model"
 	"minipost/internal/service"
@@ -29,7 +28,12 @@ type fakeBackend struct {
 	canceled []string
 
 	importedStrategy string
+	saved            []savedFile // SaveResponseToFile 收到的保存请求
+	sampleNames      []string    // InstallSampleProjects 的返回值
 }
+
+// savedFile 记录一次响应保存：默认文件名与内容。
+type savedFile struct{ name, content string }
 
 func newFakeBackend(t *testing.T) *fakeBackend {
 	return &fakeBackend{
@@ -255,6 +259,14 @@ func (f *fakeBackend) ImportCollectionWithStrategy(pid, format, content, u, stra
 	f.importedStrategy = strategy
 	return nil
 }
+
+// InstallSampleProjects 模拟安装示例：为每个名称创建一个空项目。
+func (f *fakeBackend) InstallSampleProjects() ([]string, error) {
+	for _, n := range f.sampleNames {
+		f.seedProject(n)
+	}
+	return f.sampleNames, nil
+}
 func (f *fakeBackend) CreateBackup() (string, error)   { return "/tmp/backup", nil }
 func (f *fakeBackend) RestoreBackup(path string) error { return nil }
 func (f *fakeBackend) OpenFileDialogJSON(*mygo.Window) (string, error) {
@@ -264,13 +276,8 @@ func (f *fakeBackend) OpenFileDialogAny(*mygo.Window) (string, error) { return "
 func (f *fakeBackend) SaveFileDialogJSON(*mygo.Window, string, string) error {
 	return nil
 }
-func (f *fakeBackend) SaveTextFile(*mygo.Window, string, string) error       { return nil }
-func (f *fakeBackend) SaveResponseToFile(*mygo.Window, string, string) error { return nil }
-
-// newTestApp 创建测试用的应用状态与 UI 测试器（不创建真实窗口）。
-func newTestApp(t *testing.T, be *fakeBackend) (*app, *ui.Tester) {
-	t.Helper()
-	a := newApp(be)
-	tt := ui.NewTester(a.view, 1200, 760)
-	return a, tt
+func (f *fakeBackend) SaveTextFile(*mygo.Window, string, string) error { return nil }
+func (f *fakeBackend) SaveResponseToFile(_ *mygo.Window, name, content string) error {
+	f.saved = append(f.saved, savedFile{name, content})
+	return nil
 }

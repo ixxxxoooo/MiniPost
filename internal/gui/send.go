@@ -78,36 +78,8 @@ func (a *app) finishSend(t *tab, method, url string, resp *model.HttpResponse, e
 	a.reloadHistory()
 	if t.downloadAfter {
 		t.downloadAfter = false
-		a.saveResponse(resp)
+		a.saveResponse(resp, a.responseFilename(resp, t.draft.URL))
 	}
-}
-
-// copyResponse 复制响应体文本到剪贴板。
-func (a *app) copyResponse(resp *model.HttpResponse) {
-	text := resp.Body
-	if resp.BodyIsBinary {
-		a.toast(a.t("二进制内容无法复制，请保存到文件", "Binary content can't be copied; save it to a file"))
-		return
-	}
-	a.writeClipboard(text)
-	a.toast(a.t("已复制响应体", "Response body copied"))
-}
-
-// saveResponse 保存响应体到文件（二进制内容以 base64 前缀传递给后端）。
-func (a *app) saveResponse(resp *model.HttpResponse) {
-	content, name := resp.Body, "response.txt"
-	switch {
-	case resp.BodyIsBinary:
-		content, name = model.BinarySavePrefix+resp.BodyBase64, "response.bin"
-	case strings.Contains(strings.ToLower(resp.ContentType), "json"):
-		name = "response.json"
-	case strings.Contains(strings.ToLower(resp.ContentType), "html"):
-		name = "response.html"
-	}
-	a.async(func() func() {
-		err := a.be.SaveResponseToFile(a.win, name, content)
-		return func() { a.fail(a.t("保存响应", "Save response"), err) }
-	})
 }
 
 // copyCurl 把当前请求（含环境变量与 Cookie）复制为 cURL 命令。

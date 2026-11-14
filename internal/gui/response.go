@@ -1,9 +1,6 @@
 package gui
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -21,35 +18,28 @@ type respState struct {
 	err  string
 	sub  int // 响应区子标签下标
 
-	bodyMode int // 0 Pretty，1 Raw，2 Preview（图片）
-	bodyEd   *editor.State
-
-	loadedResp *model.HttpResponse // 已载入编辑器的响应与模式，用于判断是否需要重新载入
-	loadedMode int
-	image      ui.ImageSource
+	bodyEd *editor.State
+	view   bodyViewState // 响应体展示状态（格式、预览、过滤、下载卡片等）
 
 	streamed  bool
 	streaming bool
 	start     *client.StreamStart
 	chunks    []model.StreamChunk
-	chunkList ui.ListState
-	chunkRow  int
-	hdrList   ui.ListState
+	stream    streamViewState // Stream 标签的搜索、展开与详情编辑器状态
 }
 
 func newRespState() *respState {
 	return &respState{
-		bodyEd:   &editor.State{Buffer: editor.NewBuffer(""), ReadOnly: true, SoftWrap: true},
-		chunkRow: -1,
+		bodyEd: &editor.State{Buffer: editor.NewBuffer(""), ReadOnly: true, SoftWrap: true},
 	}
 }
 
 // reset 清空上一次响应，准备发送新的请求。
 func (rs *respState) reset() {
 	rs.resp, rs.err, rs.start, rs.chunks = nil, "", nil, nil
-	rs.streamed, rs.streaming, rs.image = false, false, nil
-	rs.loadedResp = nil
-	rs.chunkRow = -1
+	rs.streamed, rs.streaming = false, false
+	rs.view = bodyViewState{}
+	rs.stream = streamViewState{}
 }
 
 // onChunk 处理一个流式数据块。
@@ -62,78 +52,6 @@ func (rs *respState) onChunk(ch model.StreamChunk) {
 		return
 	}
 	rs.chunks = append(rs.chunks, ch)
-}
-
-// isJSONBody 判断响应体是否应作为 JSON 展示。
-func isJSONBody(resp *model.HttpResponse, detect string) bool {
-	ct := strings.ToLower(resp.ContentType)
-	if strings.Contains(ct, "json") {
-		return true
-	}
-	if detect == "json" {
-		return json.Valid([]byte(resp.Body))
-	}
-	t := strings.TrimSpace(resp.Body)
-	return (strings.HasPrefix(t, "{") || strings.HasPrefix(t, "[")) && json.Valid([]byte(t))
-}
-
-// prettyBody 返回响应体的展示文本：JSON 缩进，其余原样。
-func prettyBody(resp *model.HttpResponse, detect string) string {
-	if isJSONBody(resp, detect) {
-		var out bytes.Buffer
-		if err := json.Indent(&out, []byte(resp.Body), "", "  "); err == nil {
-			return out.String()
-		}
-	}
-	return resp.Body
-}
-
-// languageFile 按内容类型选择编辑器的高亮语言。
-func languageFile(resp *model.HttpResponse, json bool) string {
-	ct := strings.ToLower(resp.ContentType)
-	switch {
-	case json:
-		return "x.json"
-	case strings.Contains(ct, "html"):
-		return "x.html"
-	case strings.Contains(ct, "xml"):
-		return "x.xml"
-	case strings.Contains(ct, "javascript"):
-		return "x.js"
-	case strings.Contains(ct, "css"):
-		return "x.css"
-	}
-	return "x.txt"
-}
-
-// loadBody 在响应或展示模式变化时，把文本载入只读编辑器。
-func (rs *respState) loadBody(detect string) {
-	resp := rs.resp
-	if resp == nil || (rs.loadedResp == resp && rs.loadedMode == rs.bodyMode) {
-		return
-	}
-	rs.loadedResp, rs.loadedMode = resp, rs.bodyMode
-	if resp.BodyIsBinary {
-		rs.bodyEd.Buffer.Reset("")
-		rs.image = nil
-		if rs.bodyMode == 2 || strings.HasPrefix(strings.ToLower(resp.ContentType), "image/") {
-			if data, err := base64.StdEncoding.DecodeString(resp.BodyBase64); err == nil {
-				if img, err := ui.DecodeImage(data); err == nil {
-					rs.image = img
-				}
-			}
-		}
-		return
-	}
-	text := resp.Body
-	isJSON := isJSONBody(resp, detect)
-	if rs.bodyMode == 0 {
-		text = prettyBody(resp, detect)
-	}
-	rs.bodyEd.Buffer.Reset(text)
-	if lang := editor.LanguageFor(languageFile(resp, isJSON && rs.bodyMode == 0)); lang != nil {
-		rs.bodyEd.Buffer.SetLanguage(lang)
-	}
 }
 
 // responsePane 绘制响应区：空态、发送中、失败与成功四种状态。
@@ -211,10 +129,35 @@ func (a *app) respError(c *ui.Context, t *tab) {
 			})
 			ui.Row(c).Gap(8).Children(func() {
 				txtMono(c, t.draft.Method, fsBase, p.method(t.draft.Method), 600)
-				txtMono(c, t.draft.URL, fsBase, p.fg, 0).Selectable()
+				url := client.EnsureProtocol(client.ResolveTemplate(t.draft.URL, a.vars()))
+				if strings.TrimSpace(t.draft.URL) == "" {
+					url = ""
+				}
+				txtMono(c, url, fsBase, p.fg, 0).Selectable()
 			})
-			ui.Row(c).FillWidth().Padding(8, 10).Radius(9).Background(ui.RGBA(255, 59, 48, 0.08)).Border(1, p.danger.Alpha(0.2)).Children(func() {
-				ui.Text(c, a.t("错误: ", "Error: ")+strings.TrimPrefix(rs.err, "Error: ")).FontSize(fsBase).TextColor(p.danger).Selectable()
+			parsed := client.ParseRequestError(strings.TrimPrefix(rs.err, "Error: "))
+			info := client.DescribeRequestError(parsed)
+			fg, bg := ui.Hex("#b44840"), ui.Hex("#fbeceb")
+			if info.Tone == client.ToneWarning {
+				fg, bg = ui.Hex("#a56412"), ui.Hex("#fbf2e6")
+			}
+			ui.Row(c).FillWidth().Padding(8, 10).Radius(9).Background(bg).Border(1, fg.Alpha(0.2)).Children(func() {
+				ui.Text(c, a.t("错误: ", "Error: ")+info.Detail).FontSize(fsBase).TextColor(fg).Selectable()
+			})
+			ui.Text(c, a.t(info.DescZH+" "+info.SuggestZH, info.DescEN+" "+info.SuggestEN)).FontSize(fsBase).TextColor(p.fg2).Selectable().FillWidth()
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				if a.button(c, btnOpts{h: 24, radius: 7, padX: 8, gap: 6, key: "err-console"}, func(hover bool) {
+					col := p.muted
+					if hover {
+						col = p.fg2
+					}
+					icon(c, "commandLine", 12, col)
+					txt(c, a.t("在控制台查看", "View in console"), fsSmall, col, 0)
+				}) {
+					a.later(func() { a.setConsoleOpen(true) })
+				}
+				txt(c, "•", fsSmall, p.muted, 0)
+				txt(c, a.t("错误码", "Code")+": "+parsed.Code, fsSmall, p.muted, 0)
 			})
 		})
 	})
@@ -305,7 +248,7 @@ func (a *app) responseBody(c *ui.Context, t *tab) {
 		case rs.sub == 3 && rs.streamed:
 			a.streamView(c, rs)
 		default:
-			a.bodyView(c, rs)
+			a.bodyView(c, t, rs)
 		}
 	})
 	_ = p
@@ -572,130 +515,4 @@ func formatSize(n int64) string {
 		return fmt.Sprintf("%.2f KB", float64(n)/(1<<10))
 	}
 	return fmt.Sprintf("%d B", n)
-}
-
-// bodyView 绘制响应体：工具栏（格式、预览、换行、折叠、搜索、复制）与只读代码视图。
-func (a *app) bodyView(c *ui.Context, rs *respState) {
-	p := a.p
-	if rs.resp == nil {
-		ui.Row(c).FillWidth().Padding(24, 0).Justify(ui.Center).Children(func() {
-			txt(c, a.t("响应尚未结束，请查看 Stream 标签", "Response is still streaming — see the Stream tab"), 10.4, p.muted, 0)
-		})
-		return
-	}
-	resp := rs.resp
-	isImage := resp.BodyIsBinary
-	ui.Column(c).Grow(1).Basis(0).Padding(8).Children(func() {
-		a.bodyToolbar(c, rs, isImage)
-		if resp.BodyIsBinary {
-			ui.Column(c).Grow(1).Basis(0).Gap(10).Padding(8, 12).Children(func() {
-				txt(c, a.t("二进制内容", "Binary content")+" · "+formatSize(resp.Size), fsBase, p.muted, 0)
-				rs.loadBody(a.set.ResponseFormatDetection)
-				if rs.image != nil {
-					ui.Scroll(c).Grow(1).Scrollbars(a.scrollbarsVisible()).Children(func() { ui.Image(c, rs.image).Fit(ui.Contain) })
-				}
-			})
-			return
-		}
-		rs.loadBody(a.set.ResponseFormatDetection)
-		a.codeView(c, rs.bodyEd).Grow(1).Basis(0).FillWidth()
-	})
-}
-
-// bodyToolbar 是响应体上方 24px 的工具栏。
-func (a *app) bodyToolbar(c *ui.Context, rs *respState, isImage bool) {
-	p := a.p
-	resp := rs.resp
-	isJSON := !resp.BodyIsBinary && isJSONBody(resp, a.set.ResponseFormatDetection)
-	label := "Text"
-	switch {
-	case isImage:
-		label = "Image"
-	case isJSON:
-		label = "JSON"
-	case strings.Contains(strings.ToLower(resp.ContentType), "html"):
-		label = "HTML"
-	case strings.Contains(strings.ToLower(resp.ContentType), "xml"):
-		label = "XML"
-	}
-	sep := func() { ui.Box(c).Width(1).Height(14).Background(p.border).Shrink(0) }
-	ui.Row(c).FillWidth().Shrink(0).Padding(5, 12).Gap(8).AlignItems(ui.Center).Children(func() {
-		// 左侧：格式与预览
-		ui.ButtonBase(c.Key("fmt")).Height(24).Radius(8).PaddingX(6).Gap(4).AlignItems(ui.Center).Background(p.selected).Shrink(0).
-			PopoverMenuButton(func(m *ui.Menu) {
-				if m.Item(label + " (Pretty)").Checked(rs.bodyMode == 0).Chosen() {
-					a.later(func() { rs.bodyMode = 0 })
-				}
-				if m.Item(a.t("原始 (Raw)", "Raw")).Checked(rs.bodyMode == 1).Chosen() {
-					a.later(func() { rs.bodyMode = 1 })
-				}
-			}).Children(func() {
-			txtMono(c, "{}", fsTiny, p.fg2, 0)
-			txt(c, label, fsTiny, p.fg, 0)
-			icon(c, "arrowDown", 8, p.muted)
-		})
-		prevOn := rs.bodyMode == 2
-		prevCol := p.fg2
-		if prevOn {
-			prevCol = p.accent
-		}
-		if a.button(c, btnOpts{h: 24, radius: 8, padX: 6, gap: 4, active: prevOn, tip: a.t("响应预览", "Response Preview"), key: "preview"}, func(bool) {
-			icon(c, "arrowRight", 10, prevCol)
-			txt(c, a.t("预览", "Preview"), fsTiny, prevCol, 0)
-		}) {
-			if !isImage {
-				a.toast(a.t("当前内容不支持预览", "Preview isn't available for this content"))
-			} else if rs.bodyMode == 2 {
-				rs.bodyMode = 0
-			} else {
-				rs.bodyMode = 2
-			}
-		}
-		ui.Spacer(c)
-		// 右侧：换行 | 格式/搜索 | 折叠/展开 | 复制
-		tb := func(name, tip string, active bool, key string) bool {
-			col := p.fg2
-			if active {
-				col = p.accent
-			}
-			return a.button(c, btnOpts{w: 24, h: 24, radius: 8, active: active, tip: tip, key: key}, func(bool) { icon(c, name, 12, col) })
-		}
-		if tb("wrapText", a.t("自动换行", "Soft wrap"), rs.bodyEd.SoftWrap, "tb-wrap") {
-			rs.bodyEd.SoftWrap = !rs.bodyEd.SoftWrap
-		}
-		sep()
-		if tb("formatList", a.t("美化/原始", "Pretty / Raw"), false, "tb-fmt") {
-			if rs.bodyMode == 0 {
-				rs.bodyMode = 1
-			} else {
-				rs.bodyMode = 0
-			}
-		}
-		if tb("search", a.t("搜索", "Search"), false, "tb-find") {
-			rs.bodyEd.Find("")
-		}
-		sep()
-		if tb("arrowRight", a.t("折叠全部", "Collapse all"), false, "tb-fold") {
-			n := rs.bodyEd.Buffer.LineCount()
-			for i := 0; i < min(n, 2000); i++ {
-				rs.bodyEd.Fold(i)
-			}
-		}
-		if tb("arrowDown", a.t("展开全部", "Expand all"), false, "tb-unfold") {
-			for _, l := range rs.bodyEd.Folded() {
-				rs.bodyEd.Unfold(l)
-			}
-		}
-		sep()
-		ui.ButtonBase(c.Key("tb-copy")).Width(26).Height(24).Radius(8).PaddingX(6).AlignItems(ui.Center).Justify(ui.Center).Shrink(0).
-			Tooltip(a.t("复制 / 保存", "Copy / Save")).
-			PopoverMenuButton(func(m *ui.Menu) {
-				if m.Item(a.t("复制响应体", "Copy body")).Chosen() {
-					a.later(func() { a.copyResponse(resp) })
-				}
-				if m.Item(a.t("保存到文件…", "Save to file…")).Chosen() {
-					a.later(func() { a.saveResponse(resp) })
-				}
-			}).Children(func() { icon(c, "copy", 12, p.fg2) })
-	})
 }

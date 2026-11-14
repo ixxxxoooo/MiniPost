@@ -57,20 +57,6 @@ func readQueryPairs(query string) [][2]string {
 
 func meaningful(rows []*Row) []*Row { return TrimTrailingPlaceholders(rows) }
 
-// AreParamsEquivalent 比较两组 Params 在忽略空占位行后是否等价。
-func AreParamsEquivalent(a, b []*Row) bool {
-	a, b = meaningful(a), meaningful(b)
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i].Key != b[i].Key || a[i].Value != b[i].Value || a[i].Enabled != b[i].Enabled {
-			return false
-		}
-	}
-	return true
-}
-
 // SyncParamsWithURL 以 URL 查询串为准更新 Params：能复用的行（含描述、ID）保留，其余新建。
 func SyncParamsWithURL(rawURL string, current []*Row) []*Row {
 	_, query, _ := splitURL(rawURL)

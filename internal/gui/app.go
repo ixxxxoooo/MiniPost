@@ -35,7 +35,6 @@ type app struct {
 	envs      []model.Environment
 	envID     string
 	history   []model.HistoryEntry
-	histList  ui.ListState
 	histRow   int
 
 	console     []consoleEntry

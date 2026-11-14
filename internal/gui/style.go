@@ -301,20 +301,18 @@ func vline(c *ui.Context, col ui.Color) ui.Element {
 
 // btnOpts 描述一个图标/文字按钮的外观。
 type btnOpts struct {
-	w, h       float32 // 0 表示按内容
-	radius     float32
-	active     bool      // 选中态（背景加深）
-	bg         *ui.Color // 常态背景，nil 为透明
-	border     *ui.Color
-	tip        string
-	disabled   bool
-	padX       float32
-	gap        float32
-	key        any
-	hoverBg    *ui.Color
-	noHover    bool
-	hoverCol   *ui.Color
-	ghostHover bool
+	w, h     float32 // 0 表示按内容
+	radius   float32
+	active   bool      // 选中态（背景加深）
+	bg       *ui.Color // 常态背景，nil 为透明
+	border   *ui.Color
+	tip      string
+	disabled bool
+	padX     float32
+	gap      float32
+	key      any
+	hoverBg  *ui.Color
+	noHover  bool
 }
 
 // button 绘制一个自定义外观的按钮，content 绘制其内容，返回是否被点击。
@@ -367,13 +365,6 @@ func (a *app) iconButton(c *ui.Context, name, tip string, isize float32, col ui.
 	})
 }
 
-// pill 是带底色的圆角小标签（状态码、HTTP 徽标等）。
-func (a *app) pill(c *ui.Context, text string, size float32, fg, bg ui.Color, radius, padX, h float32) {
-	ui.Row(c).Height(h).PaddingX(padX).Radius(radius).Background(bg).AlignItems(ui.Center).Shrink(0).Children(func() {
-		txt(c, text, size, fg, 600)
-	})
-}
-
 // kbd 是快捷键小方块（⌘ N）。
 func (a *app) kbd(c *ui.Context, s string) {
 	p := a.p
@@ -392,7 +383,6 @@ type fieldOpts struct {
 	key    any
 	bg     *ui.Color
 	flat   bool // 无边框（用于表格单元格）
-	mono   bool
 	focus  bool // 出现时自动获得焦点
 	// bd 非 nil 时覆盖默认边框色（弹窗内的输入框用 btnBorder）。
 	bd *ui.Color

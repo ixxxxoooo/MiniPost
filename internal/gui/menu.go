@@ -30,6 +30,7 @@ func (a *app) installMenu() {
 			{Label: a.t("导入集合…", "Import Collection…"), Accelerator: "CmdOrCtrl+Shift+I", Click: act(true, a.importFromFile)},
 			{Label: a.t("从 URL 导入…", "Import from URL…"), Click: act(true, a.importFromURL)},
 			{Label: a.t("导出项目…", "Export Project…"), Accelerator: "CmdOrCtrl+Shift+E", Click: act(true, a.exportProject)},
+			{Label: a.t("添加示例项目", "Add Sample Projects"), Click: act(false, a.installSamples)},
 			mygo.Separator(),
 			{Label: a.t("保存", "Save"), Accelerator: "CmdOrCtrl+S", Click: act(true, func() {
 				if t := a.activeTab(); t != nil {

@@ -13,7 +13,7 @@ import (
 	"minipost/internal/pkg/logger"
 )
 
-// 文件对话框过滤器，文案与原 Wails 版本保持一致。
+// 文件对话框过滤器，文案与旧版保持一致。
 var (
 	filterJSONYAML = []mygo.FileFilter{
 		{Name: "JSON 文件 (*.json)", Extensions: []string{"json"}},

@@ -31,7 +31,7 @@ func (a *App) SendRequestWithEnv(input model.SendRequestInput, projectID, envID 
 	return a.sendRequestWithEnv(input, projectID, envID, nil)
 }
 
-// SendRequestWithEnvStream 以流式方式发送请求，每个数据块通过 emit 回调交给调用方（原先为 Wails 事件）。
+// SendRequestWithEnvStream 以流式方式发送请求，每个数据块通过 emit 回调交给调用方（由界面层转为主线程更新）。
 // 出错或连接关闭时，若已收到过数据块，会补发一条 error / connection_closed 终止块。
 func (a *App) SendRequestWithEnvStream(input model.SendRequestInput, projectID, envID string, emit func(model.StreamChunk)) (*model.HttpResponse, error) {
 	lastSequence := 0

@@ -53,14 +53,3 @@ func (s *EnvironmentService) ResolveVariables(input string, variables []model.Va
 	}
 	return result
 }
-
-// CreateVariable 创建新变量
-func CreateVariable(key, value string) model.Variable {
-	return model.Variable{
-		ID:       uuid.New().String(),
-		Key:      key,
-		Value:    value,
-		Enabled:  true,
-		IsSecret: false,
-	}
-}

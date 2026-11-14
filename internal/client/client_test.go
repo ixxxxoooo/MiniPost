@@ -249,7 +249,7 @@ func TestWantsStreaming(t *testing.T) {
 
 func TestParseStreamStart(t *testing.T) {
 	s, ok := ParseStreamStart(`{"statusCode":200,"statusText":"OK","headers":{"A":["b"]},"contentType":"text/event-stream","headerBytes":12}`)
-	if !ok || s.StatusCode != 200 || !IsEventStream(s.ContentType) || s.HeaderBytes != 12 {
+	if !ok || s.StatusCode != 200 || s.HeaderBytes != 12 {
 		t.Fatalf("parse: %+v %v", s, ok)
 	}
 	if _, ok := ParseStreamStart("not json"); ok {

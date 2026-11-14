@@ -45,14 +45,6 @@ func buildTree(d model.CollectionData) treeIndex {
 
 func (t treeIndex) roots() []string { return t.kids[""] }
 
-// children 返回文件夹的子节点；请求没有子节点。
-func (t treeIndex) children(id string) []string {
-	if n, ok := t.nodes[id]; ok && n.folder {
-		return t.kids[id]
-	}
-	return nil
-}
-
 // descendants 返回节点自身及其全部后代的 ID。
 func (t treeIndex) descendants(id string) []string {
 	out := []string{id}

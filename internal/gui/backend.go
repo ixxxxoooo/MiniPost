@@ -54,6 +54,7 @@ type Backend interface {
 	PreviewImportFromFile(projectID, format, content string) (*service.ImportPreview, error)
 	PreviewImportFromURL(projectID, format, sourceURL string) (*service.ImportPreview, error)
 	ImportCollectionWithStrategy(projectID, format, content, sourceURL, strategy string) error
+	InstallSampleProjects() ([]string, error)
 	CreateBackup() (string, error)
 	RestoreBackup(backupPath string) error
 

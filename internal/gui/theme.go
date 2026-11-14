@@ -54,24 +54,3 @@ func (a *app) applyTheme(c *ui.Context) {
 	c.SetTheme(a.th)
 	a.applied = appliedTheme{source: a.set.Theme, dark: dark, accent: accent, ready: true}
 }
-
-// methodColor 返回 HTTP 方法对应的颜色（供尚未迁移到调色板的界面使用）。
-func methodColor(method string, dark bool) ui.Color {
-	if dark {
-		return darkPalette().method(method)
-	}
-	return lightPalette().method(method)
-}
-
-// statusColor 按状态码区间返回颜色。
-func statusColor(code int, t *ui.Theme) ui.Color {
-	switch {
-	case code >= 500:
-		return t.Danger
-	case code >= 400:
-		return t.Warning
-	case code >= 200 && code < 400:
-		return t.Success
-	}
-	return t.TextMuted
-}

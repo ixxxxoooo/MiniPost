@@ -277,17 +277,6 @@ func (a *app) requestRow(c *ui.Context, id string, depth int) {
 	}
 }
 
-// shortMethod 把方法名缩成适合窄列的短标签（兼容旧调用）。
-func shortMethod(m string) string {
-	switch m {
-	case "DELETE":
-		return "DEL"
-	case "OPTIONS":
-		return "OPT"
-	}
-	return m
-}
-
 func (a *app) nodeMenu(m *ui.Menu, id string) {
 	n, ok := a.tree.nodes[id]
 	if !ok {
@@ -567,15 +556,6 @@ func historyClock(ts string) string {
 		return ts
 	}
 	return t.Local().Format("15:04")
-}
-
-// formatTimestamp 把 RFC3339 时间格式化为本地短时间，解析失败时原样返回。
-func formatTimestamp(s string) string {
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return s
-	}
-	return t.Local().Format("01-02 15:04:05")
 }
 
 // openFromHistory 点击历史记录：请求仍存在则打开，否则提示。

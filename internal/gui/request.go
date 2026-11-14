@@ -245,11 +245,3 @@ func (a *app) requestPane(c *ui.Context, t *tab) {
 		})
 	})
 }
-
-// withCount 在标签名后附加数量（旧调用兼容）。
-func withCount(label string, n int) string {
-	if n == 0 {
-		return label
-	}
-	return label + " (" + itoa(n) + ")"
-}
