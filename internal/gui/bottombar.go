@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -36,6 +37,7 @@ func (a *app) bottomBar(c *ui.Context) {
 			if a.footLink(c, "cookie", label, 0) {
 				a.later(a.openCookies)
 			}
+			a.statusInfo(c)
 		})
 		ui.Spacer(c)
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
@@ -79,6 +81,56 @@ func (a *app) bottomBar(c *ui.Context) {
 			}
 		})
 	})
+}
+
+// envLabel 是底栏里显示的当前环境名；未选择环境时提示“无环境”。
+func (a *app) envLabel() string {
+	if e := a.env(); e != nil {
+		return e.Name
+	}
+	return a.t("无环境", "No environment")
+}
+
+// lastRequestSummary 返回最近一次请求的摘要（状态码与耗时、失败或进行中）与对应颜色；没有请求时 ok 为 false。
+func (a *app) lastRequestSummary() (text string, col ui.Color, ok bool) {
+	n := len(a.con.entries)
+	if n == 0 {
+		return "", ui.Color{}, false
+	}
+	e := a.con.entries[n-1]
+	switch {
+	case !e.done:
+		return a.t("请求中…", "Sending…"), a.p.muted, true
+	case e.err != "":
+		return a.t("请求失败", "Request failed"), a.p.danger, true
+	}
+	return fmt.Sprintf("%d · %dms", e.status, int(math.Round(e.ms))), a.statusTextColor(e.status), true
+}
+
+// statusInfo 在底栏左侧 Console/Cookies 之后显示只读状态：当前环境、最近一次请求的状态与耗时。
+// 点击环境名切到侧栏的“环境”页。
+func (a *app) statusInfo(c *ui.Context) {
+	p := a.p
+	ui.Box(c).Width(1).Height(12).Background(p.tabDivider).Shrink(0)
+	envTip := a.t("当前环境（点击管理环境）", "Active environment (click to manage)")
+	if a.button(c, btnOpts{gap: 4, noHover: true, tip: envTip, key: "foot:env"}, func(hover bool) {
+		col := p.fg2
+		if hover {
+			col = p.fg
+		}
+		icon(c, "globe", 11, col)
+		txtE(c, a.envLabel(), fsSmall, col, 0).MaxWidth(160)
+	}) {
+		a.later(func() {
+			a.set.SidebarCollapsed = false
+			a.side.tab = 2
+			a.saveSettings()
+		})
+	}
+	if text, col, ok := a.lastRequestSummary(); ok {
+		ui.Box(c).Width(1).Height(12).Background(p.tabDivider).Shrink(0)
+		txtMono(c, text, fsSmall, col, 0).Tooltip(a.t("最近一次请求", "Last request"))
+	}
 }
 
 // layoutGlyph 绘制底栏里 13×11 的小窗口示意图：圆角边框，内部放一条线或一个色块。
