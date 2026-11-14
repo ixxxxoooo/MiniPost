@@ -39,6 +39,8 @@ type app struct {
 	closeQueue []*tab
 	// revealTab 为真时，下一帧把选中的标签滚进标签栏的可视区域。
 	revealTab bool
+	// undoStack 是可撤销的删除记录（最新的在末尾）。
+	undoStack []*undoEntry
 	active    int
 
 	homeName   string            // 项目主页“新建项目”输入框

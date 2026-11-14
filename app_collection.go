@@ -86,6 +86,16 @@ func (a *App) MoveCollectionNode(projectID, nodeID string, nodeType model.Collec
 	return nil
 }
 
+// RestoreCollectionSubtree 撤销删除：把文件夹/请求子树按原样放回项目。
+func (a *App) RestoreCollectionSubtree(projectID string, sub model.CollectionData) error {
+	if err := a.requestSvc.RestoreCollectionSubtree(projectID, sub); err != nil {
+		logger.Error("恢复集合子树失败", "projectID", projectID, "error", err.Error())
+		return err
+	}
+	logger.Info("恢复集合子树成功", "projectID", projectID, "folders", len(sub.Folders), "requests", len(sub.Requests))
+	return nil
+}
+
 // ---- 文件夹管理 ----
 
 func (a *App) ListFolders(projectID string) ([]model.Folder, error) {

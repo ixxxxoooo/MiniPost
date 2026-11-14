@@ -623,3 +623,35 @@ func (fs *FileStore) GetCollectionData(projectID string) (*model.CollectionData,
 	}
 	return data, nil
 }
+
+// RestoreCollectionSubtree 把之前删除的一段子树按原 ID、原父级与原排序号放回项目；已存在的 ID 会被跳过。
+func (fs *FileStore) RestoreCollectionSubtree(projectID string, sub model.CollectionData) error {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	data, err := fs.getCollectionDataUnlocked(projectID)
+	if err != nil {
+		return err
+	}
+	have := map[string]bool{}
+	for _, n := range data.TreeNodes {
+		have[n.NodeID] = true
+	}
+	for _, f := range sub.Folders {
+		if !have[f.ID] {
+			data.Folders = append(data.Folders, f)
+		}
+	}
+	for _, r := range sub.Requests {
+		if !have[r.ID] {
+			data.Requests = append(data.Requests, r)
+		}
+	}
+	for _, n := range sub.TreeNodes {
+		if !have[n.NodeID] {
+			data.TreeNodes = append(data.TreeNodes, n)
+		}
+	}
+	data.TreeNodes = sortNodesByOrder(data.TreeNodes)
+	return fs.saveCollectionDataUnlocked(projectID, data)
+}

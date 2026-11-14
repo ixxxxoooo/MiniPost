@@ -25,6 +25,8 @@ type CollectionStore interface {
 
 	GetCollectionData(projectID string) (*model.CollectionData, error)
 	MoveCollectionNode(projectID, nodeID string, nodeType model.CollectionNodeType, targetParentFolderID string, targetIndex int) error
+	// RestoreCollectionSubtree 把之前删除的一段子树（文件夹、请求及其树节点）按原 ID、原位置放回；已存在的 ID 会被跳过。
+	RestoreCollectionSubtree(projectID string, sub model.CollectionData) error
 }
 
 // EnvironmentStore 环境变量存储接口

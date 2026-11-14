@@ -47,6 +47,9 @@ func (a *app) handleShortcuts(c *ui.Context) {
 	case c.Shortcut(ui.Ctrl|ui.Shift, ui.KeyTab), c.Shortcut(ui.Cmd|ui.Shift, ui.KeyBracketLeft):
 		a.later(func() { a.cycleTab(-1) })
 	}
+	if !c.FocusTakesText() && c.Shortcut(ui.Cmd, ui.KeyZ) {
+		a.later(a.undoLast) // 输入框有焦点时 ⌘Z 留给输入框自己撤销文字
+	}
 	if c.FocusTakesText() || a.side.tab != 0 {
 		return
 	}

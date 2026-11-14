@@ -308,3 +308,67 @@ func TestAddHistory_TruncatesToMaxSize(t *testing.T) {
 		t.Fatalf("历史条数应为 %d，实际 %d", maxHistorySize, len(entries))
 	}
 }
+
+// 删除文件夹后用快照恢复：文件夹、子请求、原排序位置都应还原，重复恢复不会产生重复数据。
+func TestRestoreCollectionSubtree_RestoresDeletedFolder(t *testing.T) {
+	store := newTestFileStore(t)
+	projectID := uuid.New().String()
+	if err := store.SaveProject(&model.Project{ID: projectID, Name: "撤销项目", CreatedAt: "2026-06-13T00:00:00Z", UpdatedAt: "2026-06-13T00:00:00Z"}); err != nil {
+		t.Fatal(err)
+	}
+	mkReq := func(id, folder string) *model.RequestItem {
+		return &model.RequestItem{ID: id, Name: id, Method: "GET", URL: "https://example.com/" + id, ProjectID: projectID, FolderID: folder,
+			Body: model.RequestBody{Type: "none"}, Auth: model.AuthConfig{Type: "none"}}
+	}
+	_ = store.SaveRequest(mkReq("first", ""))
+	_ = store.SaveFolder(&model.Folder{ID: "dir", Name: "dir", ProjectID: projectID})
+	_ = store.SaveRequest(mkReq("inside", "dir"))
+	_ = store.SaveRequest(mkReq("last", ""))
+
+	before, _ := store.GetCollectionData(projectID)
+	snap := model.CollectionData{}
+	for _, f := range before.Folders {
+		if f.ID == "dir" {
+			snap.Folders = append(snap.Folders, f)
+		}
+	}
+	for _, r := range before.Requests {
+		if r.ID == "inside" {
+			snap.Requests = append(snap.Requests, r)
+		}
+	}
+	for _, n := range before.TreeNodes {
+		if n.NodeID == "dir" || n.NodeID == "inside" {
+			snap.TreeNodes = append(snap.TreeNodes, n)
+		}
+	}
+
+	if err := store.DeleteFolder(projectID, "dir"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RestoreCollectionSubtree(projectID, snap); err != nil {
+		t.Fatalf("恢复失败: %v", err)
+	}
+	if err := store.RestoreCollectionSubtree(projectID, snap); err != nil { // 重复恢复应被忽略
+		t.Fatalf("重复恢复失败: %v", err)
+	}
+
+	after, _ := store.GetCollectionData(projectID)
+	if len(after.Folders) != 1 || len(after.Requests) != 3 || len(after.TreeNodes) != 4 {
+		t.Fatalf("恢复后数量不对: folders=%d requests=%d nodes=%d", len(after.Folders), len(after.Requests), len(after.TreeNodes))
+	}
+	var root []string
+	for _, n := range after.TreeNodes {
+		if n.ParentFolderID == "" {
+			root = append(root, n.NodeID)
+		}
+	}
+	if len(root) != 3 || root[0] != "first" || root[1] != "dir" || root[2] != "last" {
+		t.Fatalf("根下顺序应还原为 first, dir, last: %v", root)
+	}
+	for _, n := range after.TreeNodes {
+		if n.NodeID == "inside" && n.ParentFolderID != "dir" {
+			t.Fatalf("inside 应回到 dir 里: %q", n.ParentFolderID)
+		}
+	}
+}

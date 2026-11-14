@@ -81,12 +81,13 @@ func (a *app) deleteNode(id string) {
 		return
 	}
 	title := a.t("删除“", "Delete “") + n.name + a.t("”？", "”?")
-	msg := a.t("此操作无法撤销。", "This can't be undone.")
+	msg := a.t("删除后可立即撤销（⌘Z）。", "You can undo right after deleting (⌘Z).")
 	if n.folder {
-		msg = a.t("文件夹内的所有请求也会被删除，此操作无法撤销。", "All requests inside will be deleted too. This can't be undone.")
+		msg = a.t("文件夹内的所有请求也会被删除，删除后可立即撤销（⌘Z）。", "All requests inside will be deleted too. You can undo right after deleting (⌘Z).")
 	}
 	a.overlays.askConfirm(title, msg, a.t("删除", "Delete"), func() {
 		ids := a.tree.descendants(id)
+		sub, pid, name := a.snapshotSubtree(id), a.projectID, n.name
 		var err error
 		if n.folder {
 			err = a.be.DeleteFolder(a.projectID, id)
@@ -100,6 +101,7 @@ func (a *app) deleteNode(id string) {
 		a.closeTabsFor(ids)
 		a.side.outRow = -1
 		a.reloadCollection()
+		a.pushUndo("“"+name+"”", func() { a.restoreSubtree(pid, sub) })
 		logger.Info("已删除节点", "nodeID", id)
 	})
 }

@@ -189,6 +189,11 @@ func (s *RequestService) MoveCollectionNode(projectID, nodeID string, nodeType m
 	return s.store.MoveCollectionNode(projectID, nodeID, nodeType, targetParentID, targetIndex)
 }
 
+// RestoreCollectionSubtree 把删除的文件夹/请求子树放回项目（撤销删除）。
+func (s *RequestService) RestoreCollectionSubtree(projectID string, sub model.CollectionData) error {
+	return s.store.RestoreCollectionSubtree(projectID, sub)
+}
+
 func (s *RequestService) MoveFolder(projectID, folderID, targetParentID string, targetIndex int) error {
 	return s.store.MoveFolder(projectID, folderID, targetParentID, targetIndex)
 }

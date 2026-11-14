@@ -23,6 +23,7 @@ type Backend interface {
 	// 集合
 	GetCollectionData(projectID string) (*model.CollectionData, error)
 	MoveCollectionNode(projectID, nodeID string, nodeType model.CollectionNodeType, targetParentFolderID string, targetIndex int) error
+	RestoreCollectionSubtree(projectID string, sub model.CollectionData) error
 	CreateFolder(projectID, parentID, name string) (*model.Folder, error)
 	RenameFolder(projectID, folderID, name string) error
 	DeleteFolder(projectID, folderID string) error

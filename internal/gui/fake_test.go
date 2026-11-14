@@ -148,6 +148,29 @@ func (f *fakeBackend) MoveCollectionNode(pid, nodeID string, kind model.Collecti
 	cd.TreeNodes = append(rest, sibs...)
 	return nil
 }
+func (f *fakeBackend) RestoreCollectionSubtree(pid string, sub model.CollectionData) error {
+	cd := f.colls[pid]
+	have := map[string]bool{}
+	for _, n := range cd.TreeNodes {
+		have[n.NodeID] = true
+	}
+	for _, x := range sub.Folders {
+		if !have[x.ID] {
+			cd.Folders = append(cd.Folders, x)
+		}
+	}
+	for _, x := range sub.Requests {
+		if !have[x.ID] {
+			cd.Requests = append(cd.Requests, x)
+		}
+	}
+	for _, x := range sub.TreeNodes {
+		if !have[x.NodeID] {
+			cd.TreeNodes = append(cd.TreeNodes, x)
+		}
+	}
+	return nil
+}
 func (f *fakeBackend) CreateFolder(pid, parent, name string) (*model.Folder, error) {
 	cd := f.colls[pid]
 	fo := model.Folder{ID: f.id("f"), Name: name, ProjectID: pid, ParentID: parent}
@@ -232,8 +255,10 @@ func (f *fakeBackend) SaveEnvironment(env model.Environment) error {
 	for i := range f.envs[env.ProjectID] {
 		if f.envs[env.ProjectID][i].ID == env.ID {
 			f.envs[env.ProjectID][i] = env
+			return nil
 		}
 	}
+	f.envs[env.ProjectID] = append(f.envs[env.ProjectID], env) // 与真实实现一致：不存在则新增
 	return nil
 }
 func (f *fakeBackend) DeleteEnvironment(pid, id string) error {

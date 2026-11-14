@@ -244,7 +244,15 @@ func (a *app) newEnvironment() {
 }
 
 func (a *app) deleteEnvironment(id, name string) {
-	a.overlays.askConfirm(a.t("删除环境“", "Delete environment “")+name+a.t("”？", "”?"), a.t("此操作无法撤销。", "This can't be undone."), a.t("删除", "Delete"), func() {
+	a.overlays.askConfirm(a.t("删除环境“", "Delete environment “")+name+a.t("”？", "”?"), a.t("删除后可立即撤销。", "You can undo right after deleting."), a.t("删除", "Delete"), func() {
+		var saved *model.Environment
+		for i := range a.envs {
+			if a.envs[i].ID == id {
+				e := a.envs[i]
+				saved = &e
+			}
+		}
+		pid := a.projectID
 		if err := a.be.DeleteEnvironment(a.projectID, id); err != nil {
 			a.fail(a.t("删除环境", "Delete environment"), err)
 			return
@@ -258,5 +266,16 @@ func (a *app) deleteEnvironment(id, name string) {
 			}
 		}
 		a.reloadEnvs()
+		if saved != nil {
+			a.pushUndo(a.t("环境“", "Environment “")+name+"”", func() {
+				if err := a.be.SaveEnvironment(*saved); err != nil {
+					a.fail(a.t("撤销删除", "Undo delete"), err)
+					return
+				}
+				if pid == a.projectID {
+					a.reloadEnvs()
+				}
+			})
+		}
 	})
 }
