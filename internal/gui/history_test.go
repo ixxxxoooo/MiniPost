@@ -33,17 +33,17 @@ func TestHistorySearchFilters(t *testing.T) {
 	a, tt, be := zhApp(t)
 	seedHistory(a, be)
 	tt.Frame()
-	for _, u := range []string{"https://example.com/ok", "https://example.com/missing", "https://example.com/boom"} {
+	for _, u := range []string{"/ok", "/missing", "/boom"} {
 		if _, ok := tt.Find(u); !ok {
 			t.Fatalf("初始应显示 %s", u)
 		}
 	}
 	a.side.histQuery = "5xx"
 	tt.Frame()
-	if _, ok := tt.Find("https://example.com/boom"); !ok {
+	if _, ok := tt.Find("/boom"); !ok {
 		t.Fatal("5xx 应保留 503 那条")
 	}
-	if _, ok := tt.Find("https://example.com/ok"); ok {
+	if _, ok := tt.Find("/ok"); ok {
 		t.Fatal("5xx 不应显示 200 那条")
 	}
 	a.side.histQuery = "nothing-matches"
@@ -53,7 +53,7 @@ func TestHistorySearchFilters(t *testing.T) {
 	}
 	a.side.histQuery = ""
 	tt.Frame()
-	if _, ok := tt.Find("https://example.com/ok"); !ok {
+	if _, ok := tt.Find("/ok"); !ok {
 		t.Fatal("清空搜索后应恢复全部记录")
 	}
 }
@@ -63,7 +63,7 @@ func TestHistoryDeleteSingleEntry(t *testing.T) {
 	a, tt, be := zhApp(t)
 	seedHistory(a, be)
 	tt.Frame()
-	if err := tt.RightClick("https://example.com/missing"); err != nil {
+	if err := tt.RightClick("/missing"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tt.ChooseMenuItem("删除此记录"); err != nil {
@@ -89,7 +89,7 @@ func TestHistoryHoverDeleteButton(t *testing.T) {
 	a, tt, be := zhApp(t)
 	seedHistory(a, be)
 	tt.Frame()
-	r, ok := tt.Find("https://example.com/missing")
+	r, ok := tt.Find("/missing")
 	if !ok {
 		t.Fatal("找不到历史行")
 	}

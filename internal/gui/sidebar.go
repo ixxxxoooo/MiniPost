@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -512,6 +513,27 @@ func (a *app) textIconButton(c *ui.Context, iconName, label string, col, hoverCo
 	})
 }
 
+// urlPathQuery 返回地址里的“路径 + 查询”部分（设计稿历史行只显示 /post、/get?page=1）；
+// 含 {{变量}} 或无法解析的地址原样返回，没有路径时返回 /。
+func urlPathQuery(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || strings.Contains(raw, "{{") {
+		return raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return raw
+	}
+	out := u.EscapedPath()
+	if out == "" {
+		out = "/"
+	}
+	if u.RawQuery != "" {
+		out += "?" + u.RawQuery
+	}
+	return out
+}
+
 // historyRow 绘制一条历史记录：方法、地址、状态码与时间。
 func (a *app) historyRow(c *ui.Context, e historyItem) {
 	p := a.p
@@ -533,7 +555,7 @@ func (a *app) historyRow(c *ui.Context, e historyItem) {
 			txtMono(c, methodAbbr(method), 9, p.method(method), 700)
 		})
 		ui.Box(c).Width(6).Shrink(0)
-		u := e.URL
+		u := urlPathQuery(e.URL)
 		if u == "" {
 			u = e.Name
 		}

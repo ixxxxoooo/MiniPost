@@ -100,6 +100,7 @@ func newApp(be Backend) *app {
 type consoleState struct {
 	entries []consoleEntry
 	list    ui.ListState
+	filter  int     // 日志筛选：conAll / conOK / conErr
 	pct     float32 // 控制台高度占比
 	// 拖动上边缘调整高度时的状态：resizing 为拖动中；over 是指针越过高度上下限的距离，
 	// 指针折返时要先抵消它，面板才重新跟着指针走。

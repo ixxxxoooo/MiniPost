@@ -498,3 +498,61 @@ func TestEnvSidebarListShowsActiveAndCount(t *testing.T) {
 		}
 	}
 }
+
+// 历史行只显示路径和查询（设计稿：/post、/get?page=1）；带变量或无法解析的地址原样显示。
+func TestURLPathQuery(t *testing.T) {
+	cases := map[string]string{
+		"https://httpbin.org/post":           "/post",
+		"https://httpbin.org/get?page=1&x=2": "/get?page=1&x=2",
+		"https://httpbin.org":                "/",
+		"{{baseUrl}}/post":                   "{{baseUrl}}/post",
+		"not a url":                          "not a url",
+		"":                                   "",
+		"http://localhost:8080/a/b%20c?q=中文": "/a/b%20c?q=中文",
+	}
+	for in, want := range cases {
+		if got := urlPathQuery(in); got != want {
+			t.Errorf("urlPathQuery(%q)=%q，应为 %q", in, got, want)
+		}
+	}
+}
+
+// 控制台筛选：全部 / 成功 / 错误；错误包含请求失败与 ≥400 的响应，并显示错误条数。
+func TestConsoleFilter(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.con.entries = []consoleEntry{
+		{method: "GET", url: "https://x/ok", status: 200, ms: 10, done: true},
+		{method: "GET", url: "https://x/401", status: 401, ms: 10, done: true},
+		{method: "GET", url: "https://x/dns", err: "no such host", done: true},
+		{method: "POST", url: "https://x/pending"},
+	}
+	a.setConsoleOpen(true)
+	tt.Frame()
+	if idx, errs := a.conVisible(); len(idx) != 4 || errs != 2 {
+		t.Fatalf("全部应 4 条且 2 条错误，实际 %d/%d", len(idx), errs)
+	}
+	for _, want := range []string{"全部", "成功", "错误", "4 条"} {
+		if !tt.HasText(want) {
+			t.Errorf("控制台缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	if err := tt.Click("成功"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if idx, _ := a.conVisible(); len(idx) != 1 || a.con.entries[idx[0]].url != "https://x/ok" {
+		t.Fatalf("成功只应剩 /ok，实际 %v", idx)
+	}
+	if err := tt.Click("错误"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if idx, _ := a.conVisible(); len(idx) != 2 {
+		t.Fatalf("错误应有 2 条，实际 %v", idx)
+	}
+	a.con.entries = a.con.entries[:1]
+	tt.Frame()
+	if !tt.HasText("没有符合筛选的日志") {
+		t.Fatalf("筛选后无结果时应提示：%q", tt.Texts())
+	}
+}

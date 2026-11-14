@@ -40,9 +40,42 @@ func (a *app) logResponse(method, url string, status int, ms float64, errMsg str
 	}
 }
 
+// 控制台的日志筛选。
+const (
+	conAll = iota
+	conOK
+	conErr
+)
+
+// isErr 报告这条日志是否算“错误”：请求失败，或响应状态码 ≥ 400。
+func (e *consoleEntry) isErr() bool { return e.err != "" || (e.done && e.status >= 400) }
+
+// conVisible 返回符合筛选的日志下标（保持原有顺序）以及错误条数。
+func (a *app) conVisible() (idx []int, errs int) {
+	for i := range a.con.entries {
+		e := &a.con.entries[i]
+		if e.isErr() {
+			errs++
+		}
+		switch a.con.filter {
+		case conOK:
+			if !e.done || e.isErr() {
+				continue
+			}
+		case conErr:
+			if !e.isErr() {
+				continue
+			}
+		}
+		idx = append(idx, i)
+	}
+	return idx, errs
+}
+
 // consolePanel 绘制底部控制台：25px 标题行（Console、数量、清空、关闭）+ 请求日志列表。
 func (a *app) consolePanel(c *ui.Context) {
 	p := a.p
+	visible, errCount := a.conVisible()
 	ui.Column(c).Grow(1).Basis(0).Children(func() {
 		head := ui.Row(c).FillWidth().Height(sizeBottom).Shrink(0).PaddingX(12).Background(p.surface2).AlignItems(ui.Center).Justify(ui.SpaceBetween).
 			BorderWidth(0, 0, 1, 0).BorderColor(p.border)
@@ -50,8 +83,9 @@ func (a *app) consolePanel(c *ui.Context) {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				txt(c, "Console", fsSmall, p.fg, 500)
 				if n := len(a.con.entries); n > 0 {
-					txt(c, itoa(n), fsTiny, p.muted, 0)
+					txt(c, a.t(itoa(n)+" 条", itoa(n)+" entries"), fsTiny, p.muted, 0)
 				}
+				a.consoleFilter(c, errCount)
 			})
 			ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
 				if a.button(c, btnOpts{h: 20, radius: 4, padX: 6, key: "console-clear", tip: a.t("清空", "Clear")}, func(bool) {
@@ -72,8 +106,46 @@ func (a *app) consolePanel(c *ui.Context) {
 			})
 			return
 		}
+		if len(visible) == 0 {
+			ui.Row(c).Grow(1).Basis(0).FillWidth().Justify(ui.Center).Padding(32, 0, 0, 0).Children(func() {
+				txt(c, a.t("没有符合筛选的日志", "No logs match the filter"), fsSmall, p.muted, 0)
+			})
+			return
+		}
 		a.con.list.FollowEnd = true
-		ui.List(c, &a.con.list, len(a.con.entries), func(i int) { a.consoleRow(c, i) }).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible())
+		ui.List(c, &a.con.list, len(visible), func(i int) { a.consoleRow(c, visible[i]) }).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible())
+	})
+}
+
+// consoleFilter 是控制台标题行里的筛选分段：全部 / 成功 / 错误（带错误条数）。
+func (a *app) consoleFilter(c *ui.Context, errCount int) {
+	p := a.p
+	labels := []string{a.t("全部", "All"), a.t("成功", "OK"), a.t("错误", "Errors")}
+	ui.Row(c.Key("con-filter")).Height(20).Padding(1).Gap(1).Radius(6).Background(p.hover).AlignItems(ui.Stretch).Margin(0, 0, 0, 6).Children(func() {
+		for i, l := range labels {
+			on := a.con.filter == i
+			b := ui.ButtonBase(c.Key("conf" + itoa(i))).PaddingX(10).Gap(4).Radius(5).AlignItems(ui.Center).Justify(ui.Center)
+			switch {
+			case on:
+				b = b.Background(p.surface)
+			case b.Hovered():
+				b = b.Background(p.hover)
+			}
+			b.Children(func() {
+				col, w := p.fg2, 0
+				if on {
+					col, w = p.fg, 600
+				}
+				txt(c, l, fsTiny, col, w)
+				if i == conErr && errCount > 0 {
+					txt(c, itoa(errCount), fsTiny, p.danger, 600)
+				}
+			})
+			if b.Clicked() {
+				idx := i
+				a.later(func() { a.con.filter = idx })
+			}
+		}
 	})
 }
 
