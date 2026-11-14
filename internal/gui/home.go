@@ -218,6 +218,9 @@ func (a *app) projectCardMenu(m *ui.Menu, pr model.Project) {
 			})
 		})
 	}
+	if m.Item(a.t("导出…", "Export…")).Chosen() {
+		a.later(func() { a.exportProjectByID(pr.ID, pr.Name) })
+	}
 	m.Separator()
 	if m.Item(a.t("删除", "Delete")).Danger().Chosen() {
 		a.later(func() { a.deleteProject(pr.ID, pr.Name) })

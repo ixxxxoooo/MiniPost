@@ -148,6 +148,7 @@ func (a *app) activate(i int) {
 	if a.tabs[i].env != nil {
 		return
 	}
+	a.side.sel = a.tabs[i].draft.ID
 	a.navRecord(a.tabs[i].draft.ID)
 	for p := a.tree.nodes[a.tabs[i].draft.ID].parent; p != ""; p = a.tree.nodes[p].parent {
 		a.side.outline.Open.Add(p)

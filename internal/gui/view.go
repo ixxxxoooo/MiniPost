@@ -12,6 +12,7 @@ func (a *app) view(c *ui.Context) {
 		a.installMenu()
 	}
 	a.showToasts(c)
+	a.handleShortcuts(c)
 
 	if t := a.activeTab(); t != nil {
 		t.refreshDirty() // 标签栏先于编辑区绘制，需要先算出本帧的未保存状态

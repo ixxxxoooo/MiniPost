@@ -7,7 +7,7 @@ import (
 // tabBar 绘制 28px 高的请求标签栏：左侧是各请求标签与“+”，右侧是标签列表与环境选择。
 func (a *app) tabBar(c *ui.Context) {
 	p := a.p
-	ui.Row(c).FillWidth().Height(sizeTabStrip - 1).Shrink(0).Background(p.tabStrip).AlignItems(ui.Stretch).Children(func() {
+	ui.Row(c).FillWidth().Height(sizeTabStrip).Shrink(0).Background(p.tabStrip).AlignItems(ui.Stretch).Children(func() {
 		if len(a.tabs) == 0 {
 			// 无标签时“+”独占一格，右侧带分隔线
 			ui.Row(c).Width(35).PaddingX(6).AlignItems(ui.Center).Children(func() {
@@ -21,7 +21,7 @@ func (a *app) tabBar(c *ui.Context) {
 					a.tabItem(c, i, t)
 				}
 				if len(a.tabs) > 0 {
-					ui.Row(c).Height(sizeTabStrip - 1).MarginStart(4).AlignItems(ui.Center).Children(func() {
+					ui.Row(c).Height(sizeTabStrip).MarginStart(4).AlignItems(ui.Center).Children(func() {
 						a.tabAction(c, "add", a.t("新建请求", "New request"), 13)
 					})
 				}
@@ -36,7 +36,6 @@ func (a *app) tabBar(c *ui.Context) {
 			a.envSelector(c)
 		})
 	})
-	hline(c, p.tabDivider)
 }
 
 // tabAction 是标签栏里 22×22 的图标按钮。
@@ -52,70 +51,117 @@ func (a *app) tabAction(c *ui.Context, name, tip string, size float32) bool {
 	})
 }
 
-// tabItem 绘制一个请求标签：方法、标题、未保存圆点与悬停时出现的关闭按钮，底部有 2px 下划线。
+// tabBleed 是选中标签向下多出并被裁掉的高度。
+const tabBleed = 8
+
+// tabHeight 是标签本身的高度（标签栏顶部留 2px 空隙）。
+const tabHeight = sizeTabStrip - 2
+
+// tabItem 绘制一个请求标签：方法、标题、未保存圆点与悬停时出现的关闭按钮。
+// 选中的标签只在左、上、右画一圈强调色边框，下边不画线，背景和下方内容区一致，看起来与内容区连成一体；
+// 为此标签比外层多出一截并被裁掉，底部的圆角和边线就不会露出来。鼠标中键点击标签可关闭它。
 func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 	p := a.p
 	active := i == a.active && !a.showHome
-	cell := ui.Row(c.Key("tab:" + t.draft.ID)).Height(sizeTabStrip - 2).MinWidth(148).MaxWidth(230).Shrink(0).
-		ContextMenu(func(m *ui.Menu) { a.tabMenu(m, i) })
-	hover := cell.Hovered()
-	switch {
-	case active:
-		cell = cell.Background(p.tabActive)
-	case hover:
-		cell = cell.Background(p.hover)
-	}
-	cell.Children(func() {
-		ui.Column(c).Grow(1).Basis(0).FillHeight().Children(func() {
-			ui.Row(c).Grow(1).Basis(0).FillWidth().PaddingX(8).Gap(4).AlignItems(ui.Center).Children(func() {
-				if t.env != nil {
-					icon(c, "globe", 11, p.accent).Shrink(0)
-				} else {
-					txtMono(c, t.draft.Method, 9, p.method(t.draft.Method), 700).Shrink(0)
+	ui.Column(c.Key("tabw:" + t.draft.ID)).Height(tabHeight).Shrink(0).Clip().Children(func() {
+		cell := ui.Row(c.Key("tab:" + t.draft.ID)).Height(tabHeight + tabBleed).MinWidth(148).MaxWidth(230).Shrink(0).
+			ContextMenu(func(m *ui.Menu) { a.tabMenu(m, i) }).
+			HandleInput(func(ev ui.InputEvent) bool {
+				// 中键按下时接管这次点按，抬起时关闭（和浏览器标签页的习惯一致）。
+				switch {
+				case ev.Kind == ui.InputPointerDown && ev.Button == 2:
+					return true
+				case ev.Kind == ui.InputPointerUp && ev.Button == 2 && !ev.Canceled:
+					a.later(func() { a.closeTab(a.tabIndex(t)) })
+					return true
 				}
-				col, w := p.fg2, 0
-				if active {
-					col, w = p.fg, 500
-				}
-				txtE(c, t.title(), fsV2xs, col, w).Grow(1).Basis(0)
-				if t.dirty {
-					ui.Box(c).Size(6, 6).Radius(3).Background(p.accent).Shrink(0)
-				}
-				closeCol := p.muted
-				cb := ui.ButtonBase(c.Key("tc:"+t.draft.ID)).Size(16, 16).Radius(4).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
-					Tooltip(a.t("关闭 (⌘W)", "Close (⌘W)")).Label(a.t("关闭 (⌘W)", "Close (⌘W)"))
-				if cb.Hovered() {
-					cb = cb.Background(p.hover)
-					closeCol = p.fg
-				}
-				cb.Children(func() {
-					if hover {
-						icon(c, "clear", 10, closeCol)
+				return false
+			})
+		hover := cell.Hovered()
+		switch {
+		case active:
+			cell = cell.Background(p.surface).Radius(7).BorderWidth(1, 1, 0, 1).BorderColor(p.tabActiveBorder)
+		case hover:
+			cell = cell.Background(p.hover).Radius(5)
+		}
+		cell.Children(func() {
+			ui.Column(c).Grow(1).Basis(0).Height(tabHeight).Children(func() {
+				ui.Row(c).Grow(1).Basis(0).FillWidth().PaddingX(8).Gap(4).AlignItems(ui.Center).Children(func() {
+					if t.env != nil {
+						icon(c, "globe", 11, p.accent).Shrink(0)
+					} else {
+						txtMono(c, t.draft.Method, 9, p.method(t.draft.Method), 700).Shrink(0)
+					}
+					col, w := p.fg2, 0
+					if active {
+						col, w = p.fg, 500
+					}
+					txtE(c, t.title(), fsV2xs, col, w).Grow(1).Basis(0)
+					if t.dirty {
+						ui.Box(c).Size(6, 6).Radius(3).Background(p.accent).Shrink(0)
+					}
+					closeCol := p.muted
+					cb := ui.ButtonBase(c.Key("tc:"+t.draft.ID)).Size(16, 16).Radius(4).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
+						Tooltip(a.t("关闭 (⌘W)", "Close (⌘W)")).Label(a.t("关闭 (⌘W)", "Close (⌘W)"))
+					if cb.Hovered() {
+						cb = cb.Background(p.hover)
+						closeCol = p.fg
+					}
+					cb.Children(func() {
+						if hover || active {
+							icon(c, "clear", 10, closeCol)
+						}
+					})
+					if cb.Clicked() {
+						a.later(func() { a.closeTab(i) })
 					}
 				})
-				if cb.Clicked() {
-					a.later(func() { a.closeTab(i) })
-				}
 			})
-			line := ui.Box(c).Height(2).FillWidth().Shrink(0)
-			if active {
-				line.Background(p.tabActiveBorder)
-			}
 		})
-		vline(c, p.tabDivider)
+		if cell.Clicked() && !active {
+			a.later(func() {
+				a.showHome = false
+				a.activate(i)
+			})
+		}
 	})
-	if cell.Clicked() && !active {
-		a.later(func() {
-			a.showHome = false
-			a.activate(i)
-		})
+	// 标签之间的竖分隔线：选中标签自带边框，它两侧不再画。
+	if !active && !(i+1 == a.active && !a.showHome) {
+		ui.Box(c.Key("tabdiv:" + t.draft.ID)).Width(1).Height(tabHeight).Shrink(0).Background(p.tabDivider)
 	}
 }
 
 // tabMenu 是标签的右键菜单：关闭、关闭其他、关闭全部。
 func (a *app) tabMenu(m *ui.Menu, i int) {
-	if m.Item(a.t("关闭", "Close")).Chosen() {
-		a.later(func() { a.closeTab(i) })
+	if i < 0 || i >= len(a.tabs) {
+		return
+	}
+	t := a.tabs[i]
+	if m.Item(a.t("保存", "Save")).Shortcut(ui.Cmd, ui.KeyS).Disabled(!t.dirty && !t.unsaved).Chosen() {
+		a.later(func() { a.saveTab(t) })
+	}
+	if t.env == nil {
+		id := t.draft.ID
+		if m.Item(a.t("复制 cURL", "Copy as cURL")).Chosen() {
+			a.later(func() { a.copyCurlOf(id) })
+		}
+		if m.Item(a.t("复制地址", "Copy URL")).Disabled(t.draft.URL == "").Chosen() {
+			a.later(func() { a.copyText(t.draft.URL, a.t("已复制地址", "URL copied")) })
+		}
+		if m.Item(a.t("在侧栏中定位", "Reveal in sidebar")).Disabled(t.unsaved).Chosen() {
+			a.later(func() { a.showHome = false; a.side.tab = 0; a.activate(a.tabIndex(t)) })
+		}
+	}
+	m.Separator()
+	if m.Item(a.t("关闭", "Close")).Shortcut(ui.Cmd, ui.KeyW).Chosen() {
+		a.later(func() { a.closeTab(a.tabIndex(t)) })
+	}
+	if m.Item(a.t("关闭右侧", "Close to the right")).Disabled(i >= len(a.tabs)-1).Chosen() {
+		a.later(func() {
+			for j := len(a.tabs) - 1; j > a.tabIndex(t); j-- {
+				a.closeTab(j)
+			}
+		})
 	}
 	if m.Item(a.t("关闭其他", "Close others")).Disabled(len(a.tabs) <= 1).Chosen() {
 		a.later(func() {
@@ -199,4 +245,14 @@ func (a *app) envMenu(m *ui.Menu) {
 	if m.Item(a.t("管理环境…", "Manage environments…")).Chosen() {
 		a.later(a.openEnvManager)
 	}
+}
+
+// tabIndex 返回标签当前的下标，找不到（已关闭）返回 -1。
+func (a *app) tabIndex(t *tab) int {
+	for i, x := range a.tabs {
+		if x == t {
+			return i
+		}
+	}
+	return -1
 }

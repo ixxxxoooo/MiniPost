@@ -29,6 +29,7 @@ type fakeBackend struct {
 
 	importedStrategy string
 	saved            []savedFile // SaveResponseToFile 收到的保存请求
+	texts            []savedFile // SaveTextFile 收到的保存请求（如导出 cURL）
 	sampleNames      []string    // InstallSampleProjects 的返回值
 }
 
@@ -276,7 +277,10 @@ func (f *fakeBackend) OpenFileDialogAny(*mygo.Window) (string, error) { return "
 func (f *fakeBackend) SaveFileDialogJSON(*mygo.Window, string, string) error {
 	return nil
 }
-func (f *fakeBackend) SaveTextFile(*mygo.Window, string, string) error { return nil }
+func (f *fakeBackend) SaveTextFile(_ *mygo.Window, name, content string) error {
+	f.texts = append(f.texts, savedFile{name, content})
+	return nil
+}
 func (f *fakeBackend) SaveResponseToFile(_ *mygo.Window, name, content string) error {
 	f.saved = append(f.saved, savedFile{name, content})
 	return nil

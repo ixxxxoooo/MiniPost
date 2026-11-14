@@ -101,7 +101,8 @@ type sideState struct {
 	outline       ui.OutlineState[string]
 	outRow        int
 	histRow       int
-	syncSel       bool // 下一帧让侧栏选中与当前标签一致
+	syncSel       bool   // 下一帧让侧栏选中与当前标签一致
+	sel           string // 选中的节点（请求/文件夹）ID，快捷键和右键菜单作用于它
 }
 
 // later 登记一个在本帧构建结束后执行的变更。

@@ -191,7 +191,10 @@ func (a *app) treeNode(c *ui.Context, id string, depth int) {
 	row := ui.ButtonBase(c.Key("f:" + id)).Height(28).MarginX(4).PaddingStart(8 + float32(depth)*12).PaddingEnd(8).Radius(radiusBtn).Gap(4).
 		AlignItems(ui.Center).Justify(ui.Start).ContextMenu(func(m *ui.Menu) { a.nodeMenu(m, id) })
 	hover := row.Hovered()
-	if hover {
+	switch {
+	case a.side.sel == id:
+		row = row.Background(p.sideActive)
+	case hover:
 		row = row.Background(p.sideHover)
 	}
 	row.Children(func() {
@@ -215,11 +218,8 @@ func (a *app) treeNode(c *ui.Context, id string, depth int) {
 	})
 	if row.Clicked() {
 		a.later(func() {
-			if open {
-				a.side.outline.Open.Remove(id)
-			} else {
-				a.side.outline.Open.Add(id)
-			}
+			a.selectNode(id)
+			a.toggleFolder(id)
 		})
 	}
 	if open {
@@ -282,6 +282,7 @@ func (a *app) nodeMenu(m *ui.Menu, id string) {
 	if !ok {
 		return
 	}
+	a.selectNode(id)
 	if n.folder {
 		if m.Item(a.t("添加请求", "Add request")).Chosen() {
 			a.later(func() { a.newRequest(id) })
@@ -289,12 +290,31 @@ func (a *app) nodeMenu(m *ui.Menu, id string) {
 		if m.Item(a.t("添加文件夹", "Add folder")).Chosen() {
 			a.later(func() { a.newFolder(id) })
 		}
+		open := a.side.outline.Open.Has(id)
+		label := a.t("展开", "Expand")
+		if open {
+			label = a.t("折叠", "Collapse")
+		}
+		if m.Item(label).Chosen() {
+			a.later(func() { a.toggleFolder(id) })
+		}
+		m.Separator()
+	} else {
+		if m.Item(a.t("打开", "Open")).Chosen() {
+			a.later(func() { a.openRequest(id) })
+		}
+		if m.Item(a.t("复制 cURL", "Copy as cURL")).Chosen() {
+			a.later(func() { a.copyCurlOf(id) })
+		}
+		if m.Item(a.t("导出 cURL…", "Export cURL…")).Chosen() {
+			a.later(func() { a.exportCurlOf(id) })
+		}
 		m.Separator()
 	}
-	if m.Item(a.t("重命名", "Rename")).Chosen() {
+	if m.Item(a.t("重命名", "Rename")).Shortcut(ui.Cmd, ui.KeyE).Chosen() {
 		a.later(func() { a.renameNode(id) })
 	}
-	if m.Item(a.t("复制", "Duplicate")).Chosen() {
+	if m.Item(a.t("复制", "Duplicate")).Shortcut(ui.Cmd, ui.KeyD).Chosen() {
 		a.later(func() { a.duplicateNode(id) })
 	}
 	m.Submenu(a.t("移动到", "Move to"), func(sm *ui.Menu) {
@@ -313,8 +333,17 @@ func (a *app) nodeMenu(m *ui.Menu, id string) {
 		}
 	})
 	m.Separator()
-	if m.Item(a.t("删除", "Delete")).Danger().Chosen() {
+	if m.Item(a.t("删除", "Delete")).Danger().Shortcut(0, ui.KeyBackspace).Chosen() {
 		a.later(func() { a.deleteNode(id) })
+	}
+}
+
+// toggleFolder 展开或折叠文件夹。
+func (a *app) toggleFolder(id string) {
+	if a.side.outline.Open.Has(id) {
+		a.side.outline.Open.Remove(id)
+	} else {
+		a.side.outline.Open.Add(id)
 	}
 }
 
@@ -407,7 +436,8 @@ func (a *app) textIconButton(c *ui.Context, iconName, label string, col, hoverCo
 // historyRow 绘制一条历史记录：方法、地址、状态码与时间。
 func (a *app) historyRow(c *ui.Context, e historyItem) {
 	p := a.p
-	row := ui.ButtonBase(c.Key("h:" + e.ID)).FillWidth().Height(24).MarginX(4).PaddingStart(24).PaddingEnd(12).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start)
+	row := ui.ButtonBase(c.Key("h:" + e.ID)).FillWidth().Height(24).MarginX(4).PaddingStart(24).PaddingEnd(12).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start).
+		ContextMenu(func(m *ui.Menu) { a.historyMenu(m, e) })
 	if row.Hovered() {
 		row = row.Background(p.sideHover)
 	}
@@ -469,7 +499,8 @@ func (a *app) envList(c *ui.Context) {
 			for _, e := range a.envs {
 				e := e
 				active := e.ID == a.envID
-				row := ui.ButtonBase(c.Key("e:" + e.ID)).FillWidth().Height(24).MarginX(4).PaddingX(12).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start)
+				row := ui.ButtonBase(c.Key("e:" + e.ID)).FillWidth().Height(24).MarginX(4).PaddingX(12).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start).
+					ContextMenu(func(m *ui.Menu) { a.sidebarEnvMenu(m, e.ID, e.Name) })
 				hover := row.Hovered()
 				if hover {
 					row = row.Background(p.sideHover)
