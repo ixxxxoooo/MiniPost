@@ -6,6 +6,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"minipost/internal/model"
+	"minipost/internal/pkg/httputil"
 	"minipost/internal/pkg/logger"
 	"minipost/internal/service"
 )
@@ -133,16 +135,20 @@ func (a *app) importView(c *ui.Context) {
 		}
 	}, func() {
 		ui.Row(c).FillWidth().Padding(12, 16, 0, 16).Children(func() {
-			ui.Row(c).Radius(radiusInput).Background(p.surface2).Padding(2).Children(func() {
-				for i, l := range []string{a.t("文件导入", "File import"), a.t("URL 导入", "URL import"), a.t("cURL 导入", "cURL import")} {
+			ui.Row(c).Grow(1).Basis(0).Radius(radiusInput).Background(p.surface2).Padding(2).Children(func() {
+				tabs := []struct{ icon, zh, en string }{{"fileImport", "文件导入", "File import"}, {"globe", "URL 导入", "URL import"}, {"commandLine", "cURL 导入", "cURL import"}}
+				for i, tb := range tabs {
 					active := s.mode == i
-					b := ui.ButtonBase(c.Key("im-mode" + itoa(i))).Height(28).PaddingX(12).Radius(7).AlignItems(ui.Center).Justify(ui.Center)
+					b := ui.ButtonBase(c.Key("im-mode" + itoa(i))).Grow(1).Basis(0).Height(28).Gap(6).Radius(7).AlignItems(ui.Center).Justify(ui.Center)
 					col := p.fg2
 					if active {
 						b = b.Background(p.surface).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.08))
 						col = p.fg
 					}
-					b.Children(func() { txt(c, l, fsBase, col, 500) })
+					b.Children(func() {
+						icon(c, tb.icon, 12, col)
+						txt(c, a.t(tb.zh, tb.en), fsBase, col, 500)
+					})
 					if b.Clicked() && !s.busy && s.mode != i {
 						s.mode, s.err = i, ""
 					}
@@ -276,25 +282,43 @@ func (a *app) conflictList(c *ui.Context, s *importState, pv *service.ImportPrev
 			}
 		})
 	})
-	txt(c, a.t("冲突处理方式", "When a request already exists"), fsSmall, p.muted, 0)
-	labels := []string{
-		a.t("导入副本（保留现有）", "Import as copies"),
-		a.t("更新已有（保留我的修改）", "Update existing (keep my edits)"),
-		a.t("覆盖已有", "Overwrite existing"),
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Margin(4, 0, 0, 0).Children(func() {
+		icon(c, "toastWarn", 13, p.warning)
+		txt(c, fmt.Sprintf(a.t("发现 %d 个与现有请求（方法 + URL）相同的接口", "%d requests match existing ones (method + URL)"), pv.ConflictCount), fsBase, p.fg, 600)
+	})
+	type opt struct{ zh, en, tagZH, tagEN string }
+	opts := []opt{
+		{"导入副本（保留现有）", "Import as copies", "推荐", "Recommended"},
+		{"更新已有（保留我的修改）", "Update existing (keep my edits)", "", ""},
+		{"覆盖已有", "Overwrite existing", "会丢失本地修改", "Discards local edits"},
 	}
-	for i, l := range labels {
+	for i, o := range opts {
 		on := s.strategy == i
-		b := ui.ButtonBase(c.Key("im-strat" + itoa(i))).FillWidth().Height(26).Gap(8).AlignItems(ui.Center).Justify(ui.Start)
+		b := ui.ButtonBase(c.Key("im-strat" + itoa(i))).FillWidth().Height(34).PaddingX(12).Gap(8).Radius(radiusInput).AlignItems(ui.Center).Justify(ui.Start)
+		bd, bg := p.border, p.surface
+		if on {
+			bd, bg = p.accent, p.accent.Alpha(0.08)
+		} else if b.Hovered() {
+			bg = p.hover
+		}
+		b = b.Border(1, bd).Background(bg)
 		b.Children(func() {
-			ui.Row(c).Grow(1).Gap(8).AlignItems(ui.Center).Children(func() {
-				ring := ui.Row(c).Size(12, 12).Radius(6).Shrink(0).AlignItems(ui.Center).Justify(ui.Center)
-				if on {
-					ring.Border(1, p.accent).Children(func() { ui.Box(c).Size(6, 6).Radius(3).Background(p.accent) })
+			ring := ui.Row(c).Size(14, 14).Radius(7).Shrink(0).AlignItems(ui.Center).Justify(ui.Center)
+			if on {
+				ring.Background(p.accent).Children(func() { ui.Box(c).Size(6, 6).Radius(3).Background(p.accentFg) })
+			} else {
+				ring.Border(1, p.btnBorder)
+			}
+			txt(c, a.t(o.zh, o.en), fsBase, p.fg, 0).Grow(1)
+			if o.tagZH != "" {
+				if i == 0 {
+					ui.Row(c).Height(16).PaddingX(7).Radius(8).Background(p.selected).AlignItems(ui.Center).Children(func() {
+						txt(c, a.t(o.tagZH, o.tagEN), 10, p.fg2, 600)
+					})
 				} else {
-					ring.Border(1, p.btnBorder)
+					txt(c, a.t(o.tagZH, o.tagEN), fsSmall, p.muted, 0)
 				}
-				txt(c, l, fsBase, p.fg, 0)
-			})
+			}
 		})
 		if b.Clicked() {
 			s.strategy = i
@@ -339,7 +363,58 @@ func (a *app) importCurlBody(c *ui.Context, s *importState, doImport *bool) {
 			s.enter, *doImport = false, true
 		}
 	})
-	txt(c, a.t("Enter 导入，Shift+Enter 换行", "Enter to import, Shift+Enter for newline"), fsTiny, p.muted, 0)
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+		txt(c, a.t("按", "Press"), fsSmall, p.muted, 0)
+		a.kbdChip(c, "Enter")
+		txt(c, a.t("导入，", "to import,"), fsSmall, p.muted, 0)
+		a.kbdChip(c, "Shift Enter")
+		txt(c, a.t("换行", "for newline"), fsSmall, p.muted, 0)
+	})
+	if in, err := httputil.ParseCurlCommand(s.curl); err == nil && strings.TrimSpace(s.curl) != "" {
+		method, target, headers, body, auth := curlSummary(in)
+		ui.Column(c).FillWidth().Radius(radiusCard).Border(1, p.border).PaddingX(12).PaddingY(10).Gap(6).Children(func() {
+			txt(c, a.t("解析预览", "Parsed preview"), fsSmall, p.muted, 0)
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Row(c).Height(18).PaddingX(7).Radius(5).Background(p.method(method).Alpha(0.14)).AlignItems(ui.Center).Children(func() {
+					txtMono(c, method, fsTiny, p.method(method), 700)
+				})
+				txtEMono(c, target, fsBase, p.fg, 0).Grow(1).Basis(0)
+			})
+			ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
+				txt(c, fmt.Sprintf(a.t("%d 个请求头", "%d headers"), headers), fsSmall, p.fg2, 0)
+				if body != "" {
+					txt(c, body, fsSmall, p.fg2, 0)
+				}
+				if auth != "" {
+					txt(c, auth, fsSmall, p.fg2, 0)
+				}
+			})
+		})
+	}
+}
+
+// curlSummary 提取 cURL 解析结果的摘要：方法、地址、请求头数量、请求体类型说明、认证说明（没有则为空串）。
+func curlSummary(in *model.SendRequestInput) (method, target string, headers int, body, auth string) {
+	method, target, headers = in.Method, in.URL, len(in.Headers)
+	switch in.Body.Type {
+	case "json":
+		body = "JSON 请求体"
+	case "raw":
+		body = "文本请求体"
+	case "form-data":
+		body = "表单（form-data）"
+	case "form-urlencoded":
+		body = "表单（urlencoded）"
+	}
+	switch in.Auth.Type {
+	case "bearer":
+		auth = "Bearer 认证"
+	case "basic":
+		auth = "Basic 认证"
+	case "api-key":
+		auth = "API Key 认证"
+	}
+	return
 }
 
 func (a *app) runImport(p *service.ImportPreview, strategy string) {

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"minipost/internal/model"
 	"minipost/internal/pkg/logger"
 )
 
@@ -74,6 +75,39 @@ func shouldIncludeInBackup(relPath string) bool {
 		return true
 	}
 	return rel == backupConfigFile
+}
+
+// DataDir 返回数据目录（设置·数据页展示并可在 Finder 中打开）。
+func (a *App) DataDir() string { return a.store.BaseDir() }
+
+// ListBackups 返回备份目录里最新的 limit 个常规备份（按时间从新到旧）；目录不存在时返回空列表。
+func (a *App) ListBackups(limit int) ([]model.BackupFile, error) {
+	dir := filepath.Join(a.store.BaseDir(), backupDirName)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("读取备份目录失败: %w", err)
+	}
+	var out []model.BackupFile
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasPrefix(name, backupFilePrefix) || !strings.HasSuffix(name, ".zip") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		out = append(out, model.BackupFile{Name: name, Path: filepath.Join(dir, name), Size: info.Size(), ModTime: info.ModTime()})
+	}
+	// 文件名带时间戳，字典序降序即从新到旧
+	sort.Slice(out, func(i, j int) bool { return out[i].Name > out[j].Name })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
 }
 
 func (a *App) CreateBackup() (string, error) {

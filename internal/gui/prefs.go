@@ -1,12 +1,18 @@
 package gui
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"minipost/internal/client"
+	"minipost/internal/model"
 	"minipost/internal/pkg/logger"
 )
 
@@ -17,6 +23,9 @@ type prefsState struct {
 	timeout string
 	maxSize string
 	backup  string
+
+	backups       []model.BackupFile // 设置·数据页“最近备份”列表
+	backupsLoaded bool               // 列表是否已加载；备份或恢复后置 false 以重新读取
 }
 
 func (a *app) openPrefs() {
@@ -48,20 +57,21 @@ var prefsSections = []struct{ icon, zh, en string }{
 
 // prefsShortcuts 是快捷键列表（描述与按键）。
 var prefsShortcuts = []struct{ zh, en, keys string }{
-	{"发送请求", "Send request", "⌘ + Enter"},
-	{"保存请求", "Save request", "⌘ + S"},
-	{"新建请求", "Create request", "⌘ + N"},
-	{"导入 cURL", "Import cURL", "⌘ + I"},
-	{"重命名选中请求/文件夹", "Rename selected request/folder", "⌘ + E"},
-	{"复制选中请求/文件夹", "Duplicate selected request/folder", "⌘ + D"},
-	{"删除选中请求/文件夹", "Delete selected request/folder", "⌫"},
-	{"关闭当前标签", "Close current tab", "⌘ + W"},
-	{"搜索（响应体/编辑器内）", "Search (response/editor)", "⌘ + F"},
-	{"上一个 / 下一个标签", "Previous / next tab", "⌃ + ⇧ + Tab / ⌃ + Tab"},
-	{"环境管理", "Environments", "⌘ + ⌥ + E"},
-	{"复制为 cURL", "Copy as cURL", "⌘ + ⇧ + C"},
-	{"打开设置", "Open settings", "⌘ + ,"},
-	{"切换侧边栏", "Toggle sidebar", "⌘ + B"},
+	{"发送请求", "Send request", "⌘ ↵"},
+	{"保存", "Save", "⌘ S"},
+	{"关闭标签", "Close tab", "⌘ W"},
+	{"新建请求", "New request", "⌘ N"},
+	{"新建文件夹", "New folder", "⌘ ⇧ N"},
+	{"导入 cURL", "Import cURL", "⌘ I"},
+	{"导入集合", "Import collection", "⌘ O"},
+	{"重命名 / 复制 / 删除", "Rename / duplicate / delete", "⌘E · ⌘D · ⌫"},
+	{"在响应中查找", "Find in response", "⌘ F"},
+	{"下一个 / 上一个标签", "Next / previous tab", "⌃ Tab · ⌃⇧ Tab"},
+	{"复制为 cURL", "Copy as cURL", "⌘ ⇧ C"},
+	{"环境", "Environments", "⌘ ⌥ E"},
+	{"侧栏 / 控制台", "Sidebar / console", "⌘ B · ⌘ J"},
+	{"快速打开（新增）", "Quick open (new)", "⌘ K"},
+	{"设置", "Settings", "⌘ ,"},
 }
 
 // prefsView 绘制设置对话框（880×600 双栏）；任何修改立即生效并保存。
@@ -148,11 +158,6 @@ func (a *app) prefsView(c *ui.Context) {
 	if changed {
 		a.later(a.applySettings)
 	}
-}
-
-// section 是带 11px 圆角细边框的设置分组卡片。
-func (a *app) settingsCard(c *ui.Context, padX float32, fn func()) {
-	ui.Column(c).FillWidth().Radius(11).Border(1, a.p.border).PaddingX(padX).Clip().Children(fn)
 }
 
 // settingsRow 是一行设置：左侧标题与说明，右侧控件；last 为 true 时不画下边线。
@@ -469,48 +474,118 @@ func (a *app) prefsData(c *ui.Context, s *prefsState) bool {
 	changed := false
 	set := &a.set
 	p := a.p
-	a.settingsCard(c, 14, func() {
-		a.settingsRow(c, "backup", a.t("自动备份", "Auto backup"), a.t("按固定间隔自动备份项目数据（请求、环境、历史记录等）。", "Automatically backs up project data (requests, environments, history, etc.) on interval."), false, func() {
+	if !s.backupsLoaded {
+		list, err := a.be.ListBackups(4)
+		if err != nil {
+			logger.Warn("读取备份列表失败", "error", err.Error())
+		}
+		s.backups, s.backupsLoaded = list, true
+	}
+	ui.Column(c).FillWidth().Children(func() {
+		a.settingsRow(c, "backup", a.t("自动备份", "Auto backup"), a.t("定时备份请求、环境和历史记录。", "Back up requests, environments and history on a schedule."), false, func() {
 			if a.toggle(c, "backup-sw", &set.AutoBackupEnabled) {
 				changed = true
 			}
 		})
-		a.settingsRow(c, "interval", a.t("备份间隔", "Backup interval"), a.t("单位分钟，范围 5 - 1440。", "In minutes, range 5-1440."), false, func() {
+		a.settingsRow(c, "interval", a.t("备份间隔", "Backup interval"), a.t("范围 5 - 1440 分钟。", "Range 5 - 1440 minutes."), true, func() {
 			if a.numberField(c, "interval-in", &s.backup, a.t("分钟", "min"), !set.AutoBackupEnabled) {
 				set.AutoBackupIntervalMinutes = atoiOr(s.backup, 5)
 				changed = true
 			}
 		})
-		a.settingsRow(c, "now", a.t("立即备份 / 恢复", "Backup / Restore now"), a.t("备份文件默认保存到 ~/.minipost/backups；恢复会覆盖当前数据。", "Backups are saved to ~/.minipost/backups by default; restore will overwrite current data."), true, func() {
-			ui.Row(c).Gap(8).Children(func() {
-				bd := p.btnBorder
-				if a.button(c, btnOpts{h: 28, radius: 7, padX: 10, border: &bd, key: "backup-now"}, func(bool) {
-					txt(c, a.t("立即备份", "Backup now"), fsSmall, p.fg2, 0)
-				}) {
-					a.later(a.backupNow)
+	})
+	a.prefsGroup(c, a.t("立即操作", "Actions"), func() {
+		ui.Row(c).Gap(8).Padding(2, 0, 4, 0).Children(func() {
+			bd := p.btnBorder
+			if a.button(c, btnOpts{h: 28, radius: 7, padX: 10, gap: 6, border: &bd, key: "backup-now"}, func(bool) {
+				icon(c, "download", 12, p.success)
+				txt(c, a.t("立即备份", "Back up now"), fsSmall, p.fg, 0)
+			}) {
+				a.later(a.backupNow)
+			}
+			if a.button(c, btnOpts{h: 28, radius: 7, padX: 10, gap: 6, border: &bd, key: "backup-restore"}, func(bool) {
+				icon(c, "upload", 12, p.success)
+				txt(c, a.t("恢复备份", "Restore backup"), fsSmall, p.fg, 0)
+			}) {
+				a.later(a.restoreBackup)
+			}
+		})
+		txt(c, a.t("恢复会覆盖当前数据，建议先备份一次。", "Restoring replaces current data; back up first."), fsSmall, p.muted, 0)
+	})
+	a.prefsGroup(c, a.t("最近备份", "Recent backups"), func() {
+		if len(s.backups) == 0 {
+			txt(c, a.t("还没有备份", "No backups yet"), fsSmall, p.muted, 0).Margin(4, 0)
+			return
+		}
+		ui.Column(c).FillWidth().Gap(6).Padding(2, 0, 0, 0).Children(func() {
+			for _, bf := range s.backups {
+				bf := bf
+				row := ui.ButtonBase(c.Key("bk:"+bf.Name)).FillWidth().Height(32).Radius(8).PaddingX(10).Gap(8).AlignItems(ui.Center).Border(1, p.border).Tooltip(a.t("点击从此备份恢复", "Click to restore from this backup"))
+				if row.Hovered() {
+					row = row.Background(p.hover)
 				}
-				if a.button(c, btnOpts{h: 28, radius: 7, padX: 10, border: &bd, key: "backup-restore"}, func(bool) {
-					txt(c, a.t("恢复备份", "Restore backup"), fsSmall, p.fg2, 0)
-				}) {
-					a.later(a.restoreBackup)
+				row.Children(func() {
+					icon(c, "clock", 12, p.success)
+					txtMono(c, bf.ModTime.Format("2006-01-02 15:04"), fsSmall, p.fg, 0).Grow(1)
+					txtMono(c, formatSizeShort(bf.Size), fsTiny, p.muted, 0)
+				})
+				if row.Clicked() {
+					path := bf.Path
+					a.later(func() { a.confirmRestore(path) })
 				}
-			})
+			}
+		})
+	})
+	dir := a.be.DataDir()
+	ui.Column(c).FillWidth().Gap(4).Margin(10, 0, 0, 0).Children(func() {
+		txt(c, a.t("数据位置", "Data location"), fsSmall, p.fg2, 600)
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+			txtEMono(c, tildePath(dir), fsSmall, p.fg2, 0).Grow(1).Basis(0).Selectable()
+			bd := p.btnBorder
+			if a.button(c, btnOpts{h: 26, radius: 7, padX: 10, border: &bd, key: "reveal-data"}, func(bool) {
+				txt(c, a.t("在 Finder 中显示", "Show in Finder"), fsSmall, p.fg2, 0)
+			}) {
+				a.later(func() { revealInFileManager(dir) })
+			}
 		})
 	})
 	return changed
 }
 
+// tildePath 把家目录前缀缩写成 ~，用于展示数据位置。
+func tildePath(path string) string {
+	if home, err := os.UserHomeDir(); err == nil && home != "" && strings.HasPrefix(path, home) {
+		return "~" + strings.TrimPrefix(path, home)
+	}
+	return path
+}
+
+// revealInFileManager 在系统文件管理器里打开目录（macOS Finder / Linux xdg-open / Windows 资源管理器）。
+func revealInFileManager(dir string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", dir)
+	case "windows":
+		cmd = exec.Command("explorer", dir)
+	default:
+		cmd = exec.Command("xdg-open", dir)
+	}
+	if err := cmd.Start(); err != nil {
+		logger.Warn("打开文件管理器失败", "error", err.Error())
+		return
+	}
+	logger.Info("已在文件管理器中显示数据目录")
+	go func() { _ = cmd.Wait() }()
+}
+
 func (a *app) prefsShortcutsView(c *ui.Context) {
 	p := a.p
-	ui.Column(c).FillWidth().Radius(11).Border(1, p.border).Clip().Children(func() {
-		for i, sc := range prefsShortcuts {
-			row := ui.Row(c.Key(sc.keys)).FillWidth().PaddingX(14).PaddingY(10).AlignItems(ui.Center).Justify(ui.SpaceBetween)
-			if i > 0 {
-				row = row.BorderWidth(1, 0, 0, 0).BorderColor(p.border)
-			}
-			row.Children(func() {
-				txt(c, a.t(sc.zh, sc.en), fsBase, p.fg2, 0)
-				ui.Row(c).Radius(6).Border(1, p.btnBorder).Background(p.surface2).PaddingX(8).PaddingY(2).Children(func() {
+	ui.Column(c).FillWidth().Children(func() {
+		for _, sc := range prefsShortcuts {
+			ui.Row(c.Key(sc.keys)).FillWidth().Height(32).Shrink(0).AlignItems(ui.Center).Justify(ui.SpaceBetween).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
+				txt(c, a.t(sc.zh, sc.en), fsBase, p.fg, 0)
+				ui.Row(c).Height(18).Radius(5).Background(p.surface2).PaddingX(7).AlignItems(ui.Center).Children(func() {
 					txtMono(c, sc.keys, fsTiny, p.muted, 0)
 				})
 			})
@@ -520,21 +595,27 @@ func (a *app) prefsShortcutsView(c *ui.Context) {
 
 func (a *app) prefsAbout(c *ui.Context) {
 	p := a.p
-	ui.Column(c).FillWidth().Radius(11).Border(1, p.border).Padding(16).Gap(12).Children(func() {
-		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-			if img := logoImage(p.dark); img != nil {
-				ui.Image(c, img).Size(36, 36).Fit(ui.Contain)
-			}
-			ui.Column(c).Children(func() {
-				txt(c, "MiniPost", 14, p.fg, 600)
-				txt(c, "Version "+a.appVersion(), fsSmall, p.muted, 0)
-			})
-		})
-		ui.Text(c, a.t("MiniPost 是一个轻量 HTTP 请求调试工具，支持多项目、环境变量、历史记录、响应预览与 Cookie 管理。",
-			"MiniPost is a lightweight HTTP debugging client with multi-project support, environment variables, history, response preview, and cookie management.")).
-			FontSize(fsBase).FixedLineHeight(24).TextColor(p.fg2)
+	ui.Column(c).FillWidth().AlignItems(ui.Center).Gap(8).Padding(8, 0, 0, 0).Children(func() {
+		if img := logoImage(p.dark); img != nil {
+			ui.Image(c, img).Size(52, 52).Fit(ui.Contain)
+		}
+		txt(c, "MiniPost", 16, p.fg, 600)
+		txtMono(c, a.t("版本 ", "Version ")+a.appVersion(), fsSmall, p.muted, 0)
+		ui.Text(c, a.t("轻量的 HTTP 调试工具。支持多项目、环境变量、历史记录、响应预览与 Cookie 管理。",
+			"A lightweight HTTP debugging tool with multi-project support, environment variables, history, response preview and cookie management.")).
+			FontSize(fsBase).FixedLineHeight(22).TextColor(p.fg2).TextAlign(ui.Center).MaxWidth(540).Margin(4, 0, 4, 0)
 	})
 	a.updateCard(c)
+	ui.Column(c).FillWidth().Gap(6).Children(func() {
+		note := func(ic, zh, en string) {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				icon(c, ic, 12, p.success)
+				txt(c, a.t(zh, en), fsSmall, p.fg2, 0)
+			})
+		}
+		note("lock", "数据只保存在本机 ~/.minipost，仅所有者可读写。", "Data stays on this machine in ~/.minipost, readable only by you.")
+		note("info", "日志不记录请求体、令牌和 Cookie。", "Logs never include request bodies, tokens or cookies.")
+	})
 }
 
 func indexOf(values []string, v string) int {
@@ -563,6 +644,7 @@ func (a *app) backupNow() {
 				a.fail(a.t("创建备份", "Back up"), err)
 				return
 			}
+			a.overlays.prefs.backupsLoaded = false
 			a.toastOK(a.t("备份已创建：", "Backup created: ") + path)
 		}
 	})
@@ -579,17 +661,24 @@ func (a *app) restoreBackup() {
 			if path == "" {
 				return
 			}
-			a.overlays.askConfirm(a.t("从备份恢复？", "Restore from backup?"),
-				a.t("当前数据会被备份内容替换。", "Current data will be replaced by the backup."), a.t("恢复", "Restore"), func() {
-					if err := a.be.RestoreBackup(path); err != nil {
-						a.fail(a.t("恢复备份", "Restore backup"), err)
-						return
-					}
-					a.reloadAll()
-					a.toastOK(a.t("已从备份恢复", "Restored from backup"))
-				})
+			a.confirmRestore(path)
 		}
 	})
+}
+
+// confirmRestore 弹出确认后用指定备份文件覆盖当前数据。
+func (a *app) confirmRestore(path string) {
+	a.overlays.askConfirm(a.t("从备份恢复？", "Restore from backup?"),
+		a.t("当前数据会被备份内容替换。", "Current data will be replaced by the backup."), a.t("恢复", "Restore"), func() {
+			if err := a.be.RestoreBackup(path); err != nil {
+				a.fail(a.t("恢复备份", "Restore backup"), err)
+				return
+			}
+			a.overlays.prefs.backupsLoaded = false
+			logger.Info("已从备份恢复", "file", filepath.Base(path))
+			a.reloadAll()
+			a.toastOK(a.t("已从备份恢复", "Restored from backup"))
+		})
 }
 
 // reloadAll 在数据被外部替换（恢复备份、导入）后重新加载全部内容。

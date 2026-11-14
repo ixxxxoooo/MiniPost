@@ -9,6 +9,7 @@ import (
 
 	"minipost/internal/client"
 	"minipost/internal/model"
+	"minipost/internal/service"
 )
 
 // 设计稿 3A：树/历史/标签里的方法用缩写（DELETE→DEL、OPTIONS→OPT），其余原样。
@@ -709,4 +710,104 @@ func TestPrefsAppearanceCards(t *testing.T) {
 	if a.set.ColorScheme != "ink" {
 		t.Fatalf("点击墨白应切换配色，实际 %q", a.set.ColorScheme)
 	}
+}
+
+// 设置·数据（设计稿 18）：显示“最近备份”与数据位置；点备份行会先确认再恢复。
+func TestPrefsDataRecentBackups(t *testing.T) {
+	a, tt, be := zhApp(t)
+	be.backups = []model.BackupFile{
+		{Name: "minipost-backup-20261115-120000.zip", Path: "/tmp/b1.zip", Size: 2400000, ModTime: time.Date(2026, 11, 15, 12, 0, 0, 0, time.Local)},
+		{Name: "minipost-backup-20261114-180000.zip", Path: "/tmp/b2.zip", Size: 2300, ModTime: time.Date(2026, 11, 14, 18, 0, 0, 0, time.Local)},
+	}
+	a.openPrefs()
+	tt.Frame()
+	if err := tt.Click("数据"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	for _, want := range []string{"自动备份", "立即操作", "立即备份", "恢复备份", "最近备份", "2026-11-15 12:00", "2.3 MB", "2026-11-14 18:00", "数据位置", "/tmp/minipost", "在 Finder 中显示"} {
+		if !tt.HasText(want) {
+			t.Fatalf("数据页缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	snapshot(t, tt, "d_prefs_data")
+	if err := tt.Click("2026-11-14 18:00"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.overlays.confirm.open {
+		t.Fatal("点击备份行应先弹出恢复确认")
+	}
+}
+
+// 设置·关于（设计稿 18）：居中的名称与版本、隐私说明。
+func TestPrefsAboutDesign(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openPrefs()
+	tt.Frame()
+	if err := tt.Click("关于"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	for _, want := range []string{"MiniPost", "版本 dev", "数据只保存在本机 ~/.minipost，仅所有者可读写。", "日志不记录请求体、令牌和 Cookie。"} {
+		if !tt.HasText(want) {
+			t.Fatalf("关于页缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	snapshot(t, tt, "d_prefs_about")
+}
+
+// 导入·cURL（设计稿 15）：输入命令后实时显示“解析预览”（方法、地址、请求头数、请求体/认证）。
+func TestImportCurlParsedPreview(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openImport(importCurlMode)
+	a.overlays.imp.curl = `curl -X POST 'https://httpbin.org/post' -H 'Content-Type: application/json' -H 'Authorization: Bearer abc' -d '{"name":"MiniPost"}'`
+	tt.Frame()
+	for _, want := range []string{"文件导入", "URL 导入", "cURL 导入", "解析预览", "POST", "https://httpbin.org/post", "JSON 请求体"} {
+		if !tt.HasText(want) {
+			t.Fatalf("cURL 导入缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	snapshot(t, tt, "d_import_curl")
+	// 清空后不再显示预览
+	a.overlays.imp.curl = ""
+	tt.Frame()
+	if tt.HasText("解析预览") {
+		t.Fatal("没有命令时不应显示解析预览")
+	}
+}
+
+func TestCurlSummary(t *testing.T) {
+	in := &model.SendRequestInput{Method: "PUT", URL: "http://x/y", Headers: []model.KeyValue{{Key: "A"}, {Key: "B"}},
+		Body: model.RequestBody{Type: "json"}, Auth: model.AuthConfig{Type: "bearer"}}
+	m, u, h, b, a := curlSummary(in)
+	if m != "PUT" || u != "http://x/y" || h != 2 || b != "JSON 请求体" || a != "Bearer 认证" {
+		t.Fatalf("摘要不符：%s %s %d %s %s", m, u, h, b, a)
+	}
+	_, _, _, b, a = curlSummary(&model.SendRequestInput{Body: model.RequestBody{Type: "none"}, Auth: model.AuthConfig{Type: "none"}})
+	if b != "" || a != "" {
+		t.Fatalf("无请求体/认证时应为空：%q %q", b, a)
+	}
+}
+
+// 导入·文件有重复接口时：显示警告标题与三种处理方式（含“推荐”标记），点击切换策略。
+func TestImportConflictStrategyCards(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openImport(importFile)
+	s := &a.overlays.imp
+	s.preview = &service.ImportPreview{Kind: "postman", ConflictCount: 2,
+		Conflicts: []service.ImportConflict{{Method: "GET", URL: "https://x/a", Name: "a"}, {Method: "POST", URL: "https://x/b", Name: "b"}}}
+	tt.Frame()
+	for _, want := range []string{"发现 2 个与现有请求（方法 + URL）相同的接口", "导入副本（保留现有）", "推荐", "更新已有（保留我的修改）", "覆盖已有", "会丢失本地修改"} {
+		if !tt.HasText(want) {
+			t.Fatalf("冲突处理缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	if err := tt.Click("覆盖已有"); err != nil {
+		t.Fatal(err)
+	}
+	if s.strategy != 2 {
+		t.Fatalf("点击覆盖已有应切换策略，实际 %d", s.strategy)
+	}
+	snapshot(t, tt, "d_import_conflict")
 }

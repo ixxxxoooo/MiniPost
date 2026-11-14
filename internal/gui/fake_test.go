@@ -26,6 +26,7 @@ type fakeBackend struct {
 	sent     []model.SendRequestInput
 	resp     *model.HttpResponse
 	sendErr  error
+	backups  []model.BackupFile // ListBackups 返回的备份列表
 	canceled []string
 
 	importedStrategy string
@@ -325,8 +326,10 @@ func (f *fakeBackend) InstallSampleProjects() ([]string, error) {
 	}
 	return f.sampleNames, nil
 }
-func (f *fakeBackend) CreateBackup() (string, error)   { return "/tmp/backup", nil }
-func (f *fakeBackend) RestoreBackup(path string) error { return nil }
+func (f *fakeBackend) CreateBackup() (string, error)                     { return "/tmp/backup", nil }
+func (f *fakeBackend) ListBackups(limit int) ([]model.BackupFile, error) { return f.backups, nil }
+func (f *fakeBackend) DataDir() string                                   { return "/tmp/minipost" }
+func (f *fakeBackend) RestoreBackup(path string) error                   { return nil }
 func (f *fakeBackend) OpenFileDialogJSON(*mygo.Window) (string, error) {
 	return "", nil
 }

@@ -59,6 +59,8 @@ type Backend interface {
 	ImportCollectionWithStrategy(projectID, format, content, sourceURL, strategy string) error
 	InstallSampleProjects() ([]string, error)
 	CreateBackup() (string, error)
+	ListBackups(limit int) ([]model.BackupFile, error)
+	DataDir() string
 	RestoreBackup(backupPath string) error
 
 	// 文件对话框
