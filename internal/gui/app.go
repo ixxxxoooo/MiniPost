@@ -37,7 +37,9 @@ type app struct {
 	tabs []*tab
 	// closeQueue 是批量关闭时尚待处理的标签（逐个确认未保存修改）。
 	closeQueue []*tab
-	active     int
+	// revealTab 为真时，下一帧把选中的标签滚进标签栏的可视区域。
+	revealTab bool
+	active    int
 
 	homeName   string            // 项目主页“新建项目”输入框
 	themePick  string            // 正在选择主题色的项目 ID

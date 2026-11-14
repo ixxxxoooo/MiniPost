@@ -89,6 +89,11 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 			}
 			return false
 		})
+	if active && a.revealTab {
+		// 只在切换的那一帧滚动一次，之后用户仍可自由滚动标签栏。
+		a.revealTab = false
+		cell = cell.ScrollIntoView()
+	}
 	hover := cell.Hovered()
 	switch {
 	case active:

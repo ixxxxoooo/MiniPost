@@ -139,6 +139,7 @@ func (a *app) openRequest(id string) {
 
 func (a *app) activate(i int) {
 	a.active = i
+	a.revealTab = true // 下一帧把选中的标签滚进标签栏可视区
 	a.side.syncSel = true
 	if a.tabs[i].env != nil {
 		return
@@ -299,4 +300,5 @@ func (a *app) restoreSession() {
 	if ps.Active >= 0 && ps.Active < len(a.tabs) {
 		a.active = ps.Active
 	}
+	a.revealTab = true
 }

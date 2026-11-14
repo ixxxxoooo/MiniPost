@@ -178,3 +178,35 @@ func TestTabWidthStableOnSwitch(t *testing.T) {
 		t.Errorf("选中第一个标签时顶部强调线应在 x=%d 结束", sw+tabWidth-1)
 	}
 }
+
+// 标签栏放不下所有标签时，切换/打开的标签要自动滚进可视区。
+func TestActiveTabScrollsIntoView(t *testing.T) {
+	a, _, _ := zhApp(t)
+	tt := ui.NewTester(a.view, 600, 760) // 窄窗口：标签栏只有约 150px 宽，放不下一个 220px 的标签
+	a.openRequest(a.coll.Requests[0].ID)
+	a.openRequest(a.coll.Requests[1].ID)
+	for i := 0; i < 4; i++ {
+		tt.Frame()
+	}
+	sw, y := int(a.set.SidebarWidth), sizeToolbar-1
+	acc := rgb(a.p.tabActiveBorder)
+	visible := func() bool {
+		img := tt.Image()
+		for x := sw; x < sw+120; x++ { // 标签栏左侧 120px 内必须能看到选中标签的强调线
+			if px(img, x, y) == acc {
+				return true
+			}
+		}
+		return false
+	}
+	if !visible() {
+		t.Fatal("打开第二个标签后，它应滚入可视区")
+	}
+	a.activate(0)
+	for i := 0; i < 4; i++ {
+		tt.Frame()
+	}
+	if !visible() {
+		t.Fatal("切回第一个标签后，它应滚入可视区")
+	}
+}
