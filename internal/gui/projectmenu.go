@@ -22,6 +22,7 @@ const (
 	projPanelMax  = 320
 	projPanelBase = 84
 	projCharWidth = 11
+	projRowH      = 30 // 项目行固定高度（12px 文字 18 + 上下内边距 6）
 )
 
 // projectDropdown 绘制项目下拉面板：搜索/新建栏 + 项目列表（当前标记、悬停时的导出与删除）。
@@ -68,7 +69,8 @@ func (a *app) projectDropdown(c *ui.Context, anchor ui.Element, trigW float32) {
 						}
 						pr := pr
 						selected := pr.ID == a.projectID
-						row := ui.Row(c.Key("pm:" + pr.ID)).FillWidth().Radius(7).PaddingX(8).PaddingY(6).Gap(8).AlignItems(ui.Center)
+						// 行高固定为 30：悬停时才出现的 20px 操作按钮不会把行撑高，否则列表会随鼠标移动抖动。
+						row := ui.Row(c.Key("pm:" + pr.ID)).FillWidth().Height(projRowH).Radius(7).PaddingX(8).Gap(8).AlignItems(ui.Center)
 						hover := row.Hovered()
 						switch {
 						case selected:

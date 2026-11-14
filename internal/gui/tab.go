@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"time"
+
 	"github.com/egoist/mygo/ui/editor"
 
 	"minipost/internal/client"
@@ -51,6 +53,7 @@ type tab struct {
 
 	resp     *respState
 	sending  bool
+	sendAt   time.Time // 本次发送开始时间，用于保证等待动画至少显示 shimmerMin
 	sendID   string
 	urlCache string // 上一次与 Params 同步过的 URL
 

@@ -141,12 +141,16 @@ func (a *app) projectCard(c *ui.Context, pr model.Project) {
 			id, text := pr.ID, strings.TrimSpace(draft)
 			a.later(func() { a.saveProjectDescription(id, text) })
 		}
-		tb := ui.Row(c.Key("theme:"+pr.ID)).Height(sizeBtn).PaddingX(12).Gap(6).Radius(radiusBtn).Border(1, p.border).Background(p.surface2).AlignItems(ui.Center).Shrink(0)
+		// 外层 Row 让按钮保持内容宽度（旧版是 inline-flex），否则在卡片的 Column 里会被拉满整行。
+		var tb ui.Element
 		open := a.themePick == pr.ID
-		tb.Children(func() {
-			ui.Box(c).Size(10, 10).Radius(5).Background(dot)
-			txt(c, a.t("主题色", "Theme color"), fsSmall, p.fg2, 0)
-			icon(c, "arrowDown", 10, p.fg2)
+		ui.Row(c).FillWidth().Children(func() {
+			tb = ui.Row(c.Key("theme:"+pr.ID)).Height(sizeBtn).PaddingX(12).Gap(6).Radius(radiusBtn).Border(1, p.border).Background(p.surface2).AlignItems(ui.Center).Shrink(0)
+			tb.Children(func() {
+				ui.Box(c).Size(10, 10).Radius(5).Background(dot)
+				txt(c, a.t("主题色", "Theme color"), fsSmall, p.fg2, 0)
+				icon(c, "arrowDown", 10, p.fg2)
+			})
 		})
 		if tb.Hovered() {
 			inner = true

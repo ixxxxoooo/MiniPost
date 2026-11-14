@@ -59,6 +59,7 @@ func (a *app) responsePane(c *ui.Context, t *tab) {
 	rs := t.resp
 	p := a.p
 	ui.Column(c).Grow(1).Basis(0).Background(p.surface).Children(func() {
+		a.sendShimmer(c, t)
 		switch {
 		case rs.err != "":
 			a.respTitle(c)

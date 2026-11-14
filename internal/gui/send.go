@@ -2,6 +2,7 @@ package gui
 
 import (
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 
@@ -29,6 +30,7 @@ func (a *app) sendTab(t *tab) {
 	stream := client.WantsStreaming(d)
 
 	t.sending, t.sendID = true, reqID
+	t.sendAt = time.Now()
 	t.resp.reset()
 	t.resp.streaming = stream
 	a.logRequest(d.Method, info.ResolvedURL)
