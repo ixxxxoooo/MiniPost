@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"math"
 	"strings"
 	"time"
 
@@ -104,7 +103,7 @@ func (a *app) consoleRow(c *ui.Context, i int) {
 			txtMono(c, "Error", fsTiny, p.danger, 0)
 		default:
 			txtMono(c, itoa(e.status), fsSmall, a.statusTextColor(e.status), 700)
-			txtMono(c, itoa(int(math.Round(e.ms)))+"ms", fsSmall, p.muted, 0)
+			txtMono(c, formatDuration(e.ms), fsSmall, p.muted, 0)
 		}
 		txtMono(c, e.at.Format("15:04:05"), fsTiny, p.muted, 0).MarginStart(4)
 	})
@@ -135,7 +134,7 @@ func (a *app) consoleRow(c *ui.Context, i int) {
 			line("Error: "+e.err, p.danger)
 		case e.done:
 			line("Status: "+itoa(e.status), p.fg2)
-			line("Duration: "+itoa(int(math.Round(e.ms)))+"ms", p.fg2)
+			line("Duration: "+formatDuration(e.ms), p.fg2)
 		}
 	})
 	hline(c, p.border.Alpha(0.5))

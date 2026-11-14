@@ -2,7 +2,6 @@ package gui
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -106,7 +105,7 @@ func (a *app) lastRequestSummary() (text string, col ui.Color, ok bool) {
 	case e.err != "":
 		return a.t("请求失败", "Request failed"), a.p.danger, true
 	}
-	return fmt.Sprintf("%d · %dms", e.status, int(math.Round(e.ms))), a.statusTextColor(e.status), true
+	return fmt.Sprintf("%d · %s", e.status, formatDuration(e.ms)), a.statusTextColor(e.status), true
 }
 
 // statusInfo 在底栏左侧 Console/Cookies 之后显示只读状态：当前环境、最近一次请求的状态与耗时。

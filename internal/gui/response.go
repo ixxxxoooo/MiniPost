@@ -280,7 +280,7 @@ func (a *app) respMeta(c *ui.Context, rs *respState) {
 		badge.Children(func() { txtMono(c, strings.TrimSpace(fmt.Sprintf("%d %s", code, text)), fsTiny, fg, 600) })
 		a.hoverCard(c, "status", badge, 340, func() { a.statusCard(c, code, text) })
 		sep()
-		timeEl := txt(c, fmt.Sprintf("%.0fms", resp.Duration), fsSmall, p.muted, 0).Tooltip("")
+		timeEl := txt(c, formatDuration(resp.Duration), fsSmall, p.muted, 0).Tooltip("")
 		a.hoverCard(c, "time", timeEl, 460, func() { a.timingCard(c, resp) })
 		sep()
 		sizeEl := txt(c, formatSizeShort(resp.Size), fsSmall, p.muted, 0)
@@ -373,28 +373,29 @@ func (a *app) timingCard(c *ui.Context, resp *model.HttpResponse) {
 		total = resp.Duration
 	}
 	ttfb := tm.WaitingTTFB
-	if ttfb == 0 {
-		ttfb = resp.Duration
+	if tm == (model.TimingBreakdown{}) {
+		ttfb = resp.Duration // 没有分阶段数据（旧记录）时，整段耗时都算作等待
 	}
 	rows := []struct {
-		label string
-		v     float64
-		col   ui.Color
+		label  string
+		v      float64
+		col    ui.Color
+		dashed bool // 等待首字节用浅红底加虚线框，突出最耗时的等待阶段
 	}{
-		{a.t("准备", "Prepare"), tm.Prepare, ui.RGB(183, 189, 198)},
-		{a.t("Socket 初始化", "Socket Initialization"), tm.SocketInitialization, ui.RGB(242, 190, 66)},
-		{a.t("DNS 查询", "DNS Lookup"), tm.DNSLookup, ui.RGB(242, 190, 66)},
-		{a.t("TCP 握手", "TCP Handshake"), tm.TCPHandshake, ui.RGB(76, 137, 227)},
-		{a.t("SSL 握手", "SSL Handshake"), tm.SSLHandshake, ui.RGB(61, 120, 207)},
-		{a.t("等待首字节 (TTFB)", "Waiting (TTFB)"), ttfb, ui.RGB(239, 143, 103)},
-		{a.t("下载", "Download"), tm.Download, ui.RGB(92, 163, 121)},
-		{a.t("处理", "Process"), tm.Process, ui.RGB(165, 173, 184)},
+		{a.t("准备", "Prepare"), tm.Prepare, ui.RGB(183, 189, 198), false},
+		{a.t("Socket 初始化", "Socket Initialization"), tm.SocketInitialization, ui.RGB(242, 190, 66), false},
+		{a.t("DNS 查询", "DNS Lookup"), tm.DNSLookup, ui.RGB(242, 190, 66), false},
+		{a.t("TCP 握手", "TCP Handshake"), tm.TCPHandshake, ui.RGB(76, 137, 227), false},
+		{a.t("SSL 握手", "SSL Handshake"), tm.SSLHandshake, ui.RGB(61, 120, 207), false},
+		{a.t("等待首字节 (TTFB)", "Waiting (TTFB)"), ttfb, ui.RGB(239, 143, 103), true},
+		{a.t("下载", "Download"), tm.Download, ui.RGB(92, 163, 121), false},
+		{a.t("处理", "Process"), tm.Process, ui.RGB(165, 173, 184), false},
 	}
 	ui.Row(c).FillWidth().AlignItems(ui.Center).Padding(0, 0, 4, 0).Children(func() {
 		icon(c, "clock", 14, p.muted)
 		txt(c, a.t("响应时间", "Response Time"), fsLarge, p.fg, 600).MarginStart(8)
 		ui.Spacer(c)
-		txt(c, fmt.Sprintf("%.0fms", total), fsBase, p.fg, 600)
+		txt(c, formatDuration(total), fsBase, p.fg, 600)
 	})
 	if total <= 0 {
 		total = 1
@@ -402,22 +403,30 @@ func (a *app) timingCard(c *ui.Context, resp *model.HttpResponse) {
 	const zone = 231.0
 	cum := 0.0
 	for _, r := range rows {
-		off, w := cum/total*zone, math.Max(r.v/total*zone, 2.8)
+		off, w := timelineBar(cum, r.v, total, zone)
 		cum += r.v
 		ui.Row(c).FillWidth().Height(22).Gap(6).AlignItems(ui.Center).Children(func() {
 			txtE(c, r.label, fsTiny, p.fg2, 0).Width(120).Shrink(0)
 			ui.Row(c).Width(zone+2).Height(20).Shrink(0).AlignItems(ui.Center).BorderWidth(0, 1, 0, 1).BorderColor(p.border).Children(func() {
-				ui.Box(c).Width(float32(off)).Shrink(0)
-				bar := ui.Box(c).Width(float32(w)).Height(12).Shrink(0)
-				if r.col == ui.RGB(239, 143, 103) {
-					bar.Background(ui.RGBA(253, 233, 229, 0.7)).Border(1, ui.RGB(230, 127, 113))
+				ui.Box(c).Width(off).Shrink(0)
+				bar := ui.Box(c).Width(w).Height(12).Shrink(0)
+				if r.dashed {
+					bar.Background(ui.RGBA(253, 233, 229, 0.7)).Border(1, ui.RGB(230, 127, 113)).BorderStyle(ui.BorderDashed)
 				} else {
 					bar.Background(r.col)
 				}
 			})
-			txt(c, fmt.Sprintf("%.2f ms", r.v), fsTiny, p.muted, 0).Width(68).Shrink(0).TextAlign(ui.End)
+			txt(c, formatPhaseMs(r.v), fsTiny, p.muted, 0).Width(68).Shrink(0).TextAlign(ui.End)
 		})
 	}
+}
+
+// timelineBar 算出某个阶段在时间轴上的起点偏移与宽度（像素）：start 是它之前各阶段的累计耗时，
+// 宽度至少 2.8 保证极短的阶段也看得见；整条不会越过时间轴右端。
+func timelineBar(start, v, total, zone float64) (off, w float32) {
+	width := math.Max(v/total*zone, 2.8)
+	x := math.Min(start/total*zone, zone-width)
+	return float32(math.Max(x, 0)), float32(width)
 }
 
 // sizeCard 是响应大小卡片：响应与请求各一组（头、体）。
@@ -442,11 +451,11 @@ func (a *app) sizeCard(c *ui.Context, resp *model.HttpResponse) {
 			})
 		}
 	}
-	body := sz.ResponseBody
-	if body == 0 {
-		body = resp.Size
+	head, body := sz.ResponseHeaders, sz.ResponseBody
+	if sz == (model.SizeBreakdown{}) {
+		head, body = 0, resp.Size // 没有分项数据（旧记录）时，只能把总大小算作响应体
 	}
-	group("download", ui.RGB(47, 111, 211), a.t("响应大小", "Response Size"), sz.ResponseHeaders, body, a.t("响应头", "Headers"), a.t("响应体", "Body"))
+	group("download", ui.RGB(47, 111, 211), a.t("响应大小", "Response Size"), head, body, a.t("响应头", "Headers"), a.t("响应体", "Body"))
 	hline(c, p.border).Margin(8, 0)
 	group("upload", ui.RGB(168, 130, 31), a.t("请求大小", "Request Size"), sz.RequestHeaders, sz.RequestBody, a.t("请求头", "Headers"), a.t("请求体", "Body"))
 }
