@@ -52,7 +52,7 @@ var prefsShortcuts = []struct{ zh, en, keys string }{
 	{"新建请求", "Create request", "⌘ + N"},
 	{"导入 cURL", "Import cURL", "⌘ + I"},
 	{"重命名选中请求/文件夹", "Rename selected request/folder", "⌘ + E"},
-	{"复制选中请求/文件夹", "Duplicate selected request/folder", "⌘ + D / ⌘ + C"},
+	{"复制选中请求/文件夹", "Duplicate selected request/folder", "⌘ + D"},
 	{"删除选中请求/文件夹", "Delete selected request/folder", "⌫"},
 	{"关闭当前标签", "Close current tab", "⌘ + W"},
 	{"搜索（响应体/编辑器内）", "Search (response/editor)", "⌘ + F"},

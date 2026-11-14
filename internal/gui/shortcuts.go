@@ -33,7 +33,7 @@ func (a *app) selectedNode() string {
 func (a *app) selectNode(id string) { a.side.sel = id }
 
 // handleShortcuts 处理不在菜单里的全局快捷键（每帧在构建视图时调用）：
-//   - 侧栏选中节点：⌘E 重命名、⌘D / ⌘C 复制、⌫ / Delete 删除（输入框有焦点时不响应，避免误删）；
+//   - 侧栏选中节点：⌘E 重命名、⌘D 复制（⌘C 留给系统的“复制文字”，不再复制节点）、⌫ / Delete 删除（输入框有焦点时不响应，避免误删）；
 //   - ⌘F 在响应体里查找（编辑器有焦点时由编辑器自己处理）；
 //   - 侧栏键盘导航：↑↓ 选择上/下一行，← 折叠或回到父文件夹，→ 展开或进入第一个子项，回车打开请求/展开折叠文件夹；
 //   - 标签切换：⌃Tab / ⌃⇧Tab、⌘⇧] / ⌘⇧[。
@@ -80,7 +80,7 @@ func (a *app) handleShortcuts(c *ui.Context) {
 	switch {
 	case c.Shortcut(ui.Cmd, ui.KeyE):
 		a.later(func() { a.renameNode(id) })
-	case c.Shortcut(ui.Cmd, ui.KeyD), c.Shortcut(ui.Cmd, ui.KeyC):
+	case c.Shortcut(ui.Cmd, ui.KeyD):
 		a.later(func() { a.duplicateNode(id) })
 	case c.Shortcut(0, ui.KeyBackspace), c.Shortcut(0, ui.KeyDelete):
 		a.later(func() { a.deleteNode(id) })
