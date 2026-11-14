@@ -46,28 +46,8 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 			})
 		}
 	}
-	appendData := func(data string) {
-		var body string
-		switch input.Body.Type {
-		case "json":
-			body = input.Body.JSON
-		case "raw":
-			body = input.Body.Raw
-		}
-		if body != "" {
-			body += "&" + data
-		} else {
-			body = data
-		}
-		if looksLikeJSONBody(body) {
-			input.Body = model.RequestBody{Type: "json", JSON: body}
-		} else {
-			input.Body = model.RequestBody{Type: "raw", Raw: body}
-		}
-		if input.Method == "GET" {
-			input.Method = "POST"
-		}
-	}
+	var data curlData
+	appendData := func(value string) { data.parts = append(data.parts, value) }
 	appendForm := func(value string) {
 		formArg := strings.TrimSpace(value)
 		key, formValue, ok := strings.Cut(formArg, "=")
@@ -136,6 +116,7 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 			case "--request":
 				if value, ok := consumeOptionValue(parts, &i, inlineValue, hasInlineValue); ok {
 					input.Method = strings.ToUpper(value)
+					data.methodExplicit = true
 				}
 				continue
 			case "--url":
@@ -145,6 +126,16 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 				continue
 			case "--head":
 				input.Method = "HEAD"
+				data.methodExplicit = true
+				continue
+			case "--get":
+				data.getMode = true
+				continue
+			case "--json":
+				if value, ok := consumeOptionValue(parts, &i, inlineValue, hasInlineValue); ok {
+					appendData(value)
+					data.jsonMode = true
+				}
 				continue
 			case "--header":
 				if value, ok := consumeHeaderOptionValue(parts, &i, inlineValue, hasInlineValue); ok {
@@ -185,9 +176,13 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 			if i+1 < len(parts) {
 				i++
 				input.Method = strings.ToUpper(parts[i])
+				data.methodExplicit = true
 			}
+		case "-G":
+			data.getMode = true
 		case "-I", "--head":
 			input.Method = "HEAD"
+			data.methodExplicit = true
 		case "-H":
 			if i+1 < len(parts) {
 				i++
@@ -226,6 +221,7 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 	if strings.TrimSpace(input.URL) == "" {
 		return nil, errors.New("cURL 命令缺少 URL")
 	}
+	finalizeCurlBody(input, data)
 
 	return input, nil
 }

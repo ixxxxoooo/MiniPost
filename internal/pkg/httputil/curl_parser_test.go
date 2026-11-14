@@ -1,6 +1,10 @@
 package httputil
 
-import "testing"
+import (
+	"testing"
+
+	"minipost/internal/model"
+)
 
 func TestParseCurlCommand_MultilineCommand(t *testing.T) {
 	cmd := `curl --request POST \
@@ -214,8 +218,8 @@ func TestParseCurlCommand_MultipleDataSegments(t *testing.T) {
 	if input.Method != "POST" {
 		t.Fatalf("expected POST, got %s", input.Method)
 	}
-	if input.Body.Type != "raw" || input.Body.Raw != "foo=1&bar=2&baz=3" {
-		t.Fatalf("unexpected body: %+v", input.Body)
+	if !sameForm(input.Body, "foo=1", "bar=2", "baz=3") {
+		t.Fatalf("多个 -d 应按 curl 语义用 & 连接，并默认作为表单导入: %+v", input.Body)
 	}
 }
 
@@ -225,9 +229,10 @@ func TestParseCurlCommand_AnsiCQuotedExtendedEscapes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseCurlCommand returned error: %v", err)
 	}
-	expected := "quote=' slash=\\ hex=' uni=\u4f60 octal=a bad=\\xZ short=\\u12Z"
-	if input.Body.Type != "raw" || input.Body.Raw != expected {
-		t.Fatalf("unexpected body:\nwant %q\ngot  %q", expected, input.Body.Raw)
+	expected := "' slash=\\ hex=' uni=\u4f60 octal=a bad=\\xZ short=\\u12Z"
+	if input.Body.Type != "form-urlencoded" || len(input.Body.FormUrlEncoded) != 1 ||
+		input.Body.FormUrlEncoded[0].Key != "quote" || input.Body.FormUrlEncoded[0].Value != expected {
+		t.Fatalf("unexpected body:\nwant quote=%q\ngot  %+v", expected, input.Body)
 	}
 }
 
@@ -243,7 +248,7 @@ func TestParseCurlCommand_WindowsCmdLineContinuations(t *testing.T) {
 	if input.URL != "https://example.com/api?x=1&y=2" {
 		t.Fatalf("expected URL to be parsed, got %s", input.URL)
 	}
-	if input.Body.Type != "raw" || input.Body.Raw != "name=alice" {
+	if !sameForm(input.Body, "name=alice") {
 		t.Fatalf("unexpected body: %+v", input.Body)
 	}
 	if len(input.Headers) != 1 || input.Headers[0].Key != "accept" || input.Headers[0].Value != "application/json" {
@@ -251,19 +256,43 @@ func TestParseCurlCommand_WindowsCmdLineContinuations(t *testing.T) {
 	}
 }
 
-func TestParseCurlDataURLEncode(t *testing.T) {
-	cases := map[string]string{
-		`curl http://x.test --data-urlencode 'k=v w&x'`: "k=v%20w%26x",
-		`curl http://x.test --data-urlencode '=a b'`:    "a%20b",
-		`curl http://x.test --data-urlencode 'a b'`:     "a%20b",
-		`curl http://x.test --data-urlencode 'f@/p/q'`:  "f@/p/q",
-		`curl http://x.test --data-urlencode '@/p/q'`:   "@/p/q",
-		`curl http://x.test --data-urlencode='中=文 字'`:   "中=%E6%96%87%20%E5%AD%97",
+// sameForm 判断请求体是否是由 want（k=v 形式）依次组成的表单键值行。
+func sameForm(b model.RequestBody, want ...string) bool {
+	if b.Type != "form-urlencoded" || len(b.FormUrlEncoded) != len(want) {
+		return false
 	}
-	for cmd, want := range cases {
+	for i, w := range want {
+		if b.FormUrlEncoded[i].Key+"="+b.FormUrlEncoded[i].Value != w {
+			return false
+		}
+	}
+	return true
+}
+
+func TestParseCurlDataURLEncode(t *testing.T) {
+	forms := map[string][]string{
+		`curl http://x.test --data-urlencode 'k=v w&x'`:                      {"k=v w&x"},
+		`curl http://x.test --data-urlencode='中=文 字'`:                        {"中=文 字"},
+		`curl http://x.test --data-urlencode 'a=1' --data-urlencode 'b=x y'`: {"a=1", "b=x y"},
+	}
+	for cmd, want := range forms {
 		in, err := ParseCurlCommand(cmd)
-		if err != nil || in.Body.Raw != want || in.Method != "POST" {
-			t.Errorf("%s\n got body=%q method=%q err=%v\nwant body=%q", cmd, in.Body.Raw, in.Method, err, want)
+		if err != nil || !sameForm(in.Body, want...) || in.Method != "POST" {
+			t.Errorf("%s\n got body=%+v method=%q err=%v\nwant form %v", cmd, in.Body, in.Method, err, want)
+		}
+	}
+	// 没有名字或 @文件：无法拆成键值行，保持 raw 原样，并补上 curl 默认的 Content-Type。
+	raws := map[string]string{
+		`curl http://x.test --data-urlencode '=a b'`:   "a%20b",
+		`curl http://x.test --data-urlencode 'a b'`:    "a%20b",
+		`curl http://x.test --data-urlencode 'f@/p/q'`: "f@/p/q",
+		`curl http://x.test --data-urlencode '@/p/q'`:  "@/p/q",
+	}
+	for cmd, want := range raws {
+		in, err := ParseCurlCommand(cmd)
+		ct, _ := headerValue(in.Headers, "Content-Type")
+		if err != nil || in.Body.Type != "raw" || in.Body.Raw != want || ct != formContentType {
+			t.Errorf("%s\n got body=%+v ct=%q err=%v\nwant raw %q", cmd, in.Body, ct, err, want)
 		}
 	}
 }

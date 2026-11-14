@@ -99,7 +99,46 @@ func TestSendDraftFromImportedCurl(t *testing.T) {
 	if got := r.query(); got != "b=2&a=1" {
 		t.Fatalf("导入的参数顺序应保持，实际 %q", got)
 	}
-	if string(r.Body) != "k=v%20w" {
-		t.Fatalf("表单内容不对: %q", r.Body)
+	if r.Header.Get("Content-Type") != "application/x-www-form-urlencoded" || string(r.Body) != "k=v+w" {
+		t.Fatalf("没有 Content-Type 的 --data-urlencode 应按表单发送，实际 %q %q", r.Header.Get("Content-Type"), r.Body)
+	}
+}
+
+// 导入 cURL 再发送，线上收到的 Content-Type 与 body 要和 curl 自己发的等价。
+func TestSendImportedCurlBodyMatchesCurl(t *testing.T) {
+	cases := []struct {
+		name, args, wantCT, wantBody string
+	}{
+		{"默认表单", `-d 'a=1&b=x y'`, "application/x-www-form-urlencoded", "a=1&b=x+y"},
+		{"多个 -d", `-d a=1 --data b=2`, "application/x-www-form-urlencoded", "a=1&b=2"},
+		{"显式 JSON", `-H 'Content-Type: application/json' -d '{"a":1}'`, "application/json", `{"a":1}`},
+		{"显式 text/plain", `-H 'Content-Type: text/plain' -d 'a=1'`, "text/plain", "a=1"},
+		{"无法拆成键值行", `-d 'plain text'`, "application/x-www-form-urlencoded", "plain text"},
+		{"--json", `--json '{"a":1}'`, "application/json", `{"a":1}`},
+	}
+	for _, c := range cases {
+		e := newSendEnv(t)
+		in, err := e.app.ImportCurl(`curl '` + e.srv.URL + `/i' ` + c.args)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		r := e.send(t, client.DraftFromSendInput(*in, "imp", e.pid, ""))
+		if r.Method != "POST" || r.Header.Get("Content-Type") != c.wantCT || string(r.Body) != c.wantBody {
+			t.Errorf("%s: method=%s ct=%q body=%q，期望 POST %q %q", c.name, r.Method, r.Header.Get("Content-Type"), r.Body, c.wantCT, c.wantBody)
+		}
+	}
+}
+
+// -G 把数据拼进查询串，请求不带 body。
+func TestSendImportedCurlGetMode(t *testing.T) {
+	e := newSendEnv(t)
+	in, err := e.app.ImportCurl(`curl -G '` + e.srv.URL + `/s' -d 'q=go lang' --data-urlencode 'n=a&b'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := e.send(t, client.DraftFromSendInput(*in, "imp", e.pid, ""))
+	v := parseQuery(t, r.query())
+	if r.Method != "GET" || len(r.Body) != 0 || v.Get("q") != "go lang" || v.Get("n") != "a&b" {
+		t.Fatalf("method=%s body=%q query=%q", r.Method, r.Body, r.query())
 	}
 }
