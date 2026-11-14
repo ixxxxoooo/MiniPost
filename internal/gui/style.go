@@ -22,7 +22,7 @@ var assetFS embed.FS
 const (
 	sizeToolbar   = 38  // 顶部自绘标题栏高度（含 1px 底线）
 	sizeBottom    = 25  // 底栏高度
-	sizeTabStrip  = 28  // 侧栏标签条与请求标签栏高度
+	sizeTabStrip  = 32  // 侧栏标签条与请求标签栏高度
 	sizeURLBar    = 34  // 地址栏（一体式控件）高度
 	sizeMethodCol = 32  // 侧栏树与历史里方法列的固定宽度
 	sizeBtn       = 24  // 工具栏图标按钮

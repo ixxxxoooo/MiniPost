@@ -199,24 +199,6 @@ func TestProjectDropdownHoverNoJitter(t *testing.T) {
 	}
 }
 
-// 项目主页：主题色按钮应保持内容宽度，而不是被拉满整张卡片。
-func TestThemeButtonKeepsContentWidth(t *testing.T) {
-	a, tt, _ := zhApp(t)
-	a.showHome = true
-	tt.Frame()
-	btn, ok := tt.Find("主题色")
-	if !ok {
-		t.Fatalf("主页应有主题色按钮，实际 %q", tt.Texts())
-	}
-	img := tt.Image()
-	y := int(btn.Y) + 1
-	inside := img.RGBAAt(int(btn.X+btn.W/2), y)
-	far := img.RGBAAt(int(btn.X+btn.W)+80, y)
-	if inside == far {
-		t.Fatalf("按钮右侧 80px 处仍是按钮底色，说明被拉满整行: %v %v", inside, far)
-	}
-}
-
 // 等待动画恰好在“按下”与“松开”之间到期时，点击不能丢：
 // 动画元素是响应区的第一个子元素，消失时不能让后面的兄弟元素换位置，否则按钮的按下状态会被丢掉。
 // （真实时间的 shimmerMin 窗口在 -race 这类慢环境下曾让响应区的点击测试随机失败。）

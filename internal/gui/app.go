@@ -43,30 +43,35 @@ type app struct {
 	undoStack []*undoEntry
 	active    int
 
-	homeName   string            // 项目主页“新建项目”输入框
-	themePick  string            // 正在选择主题色的项目 ID
-	descDraft  map[string]string // 项目描述的编辑草稿
-	bulk       map[string]string // 处于批量编辑模式的键值表及其文本
-	showHome   bool
-	splitPct   float32
-	overlays   overlays
-	deferred   []func()    // 在本帧构建结束后执行的变更，避免在遍历数据时修改它
-	toastMsgs  []toastNote // 待显示的提示（见 toast.go）
-	toastActs  []toastAct  // 带按钮的提示（更新提示等）
-	applied    appliedTheme
-	p          *palette  // 当前亮/暗调色板
-	th         *ui.Theme // 当前 MyGo 主题（每帧都要重新设置）
-	nav        navState  // 标签访问历史
-	menuLocale string
-	stopBackup func()        // 停止自动备份的周期任务
-	upd        updateState   // 自动更新状态（updates.go）
-	updater    updateBackend // 更新后端；测试里替换为假实现
-	stopUpdate func()        // 停止后台检查更新
-	relaunch   func()        // 重启应用；测试里替换
-	con        consoleState  // 控制台（console.go）
-	side       sideState     // 侧栏（sidebar.go）
-	projMenu   projMenuState // 工具栏项目下拉面板状态
-	scrollAt   time.Time     // 最近一次滚动输入的时间（滚动条自动隐藏用）
+	homeName     string // 项目主页“新建项目”输入框
+	homeSel      string // 项目主页右侧详情面板选中的项目 ID
+	homeSort     string // 项目主页排序：updated（默认）或 name
+	homeQuery    string // 项目主页搜索词
+	homeStats    map[string]projStats
+	homeStatsKey map[string]string // 统计缓存对应的项目更新时间，变化后重新读取
+	nameDraft    map[string]string // 项目名称的编辑草稿
+	descDraft    map[string]string // 项目描述的编辑草稿
+	bulk         map[string]string // 处于批量编辑模式的键值表及其文本
+	showHome     bool
+	splitPct     float32
+	overlays     overlays
+	deferred     []func()    // 在本帧构建结束后执行的变更，避免在遍历数据时修改它
+	toastMsgs    []toastNote // 待显示的提示（见 toast.go）
+	toastActs    []toastAct  // 带按钮的提示（更新提示等）
+	applied      appliedTheme
+	p            *palette  // 当前亮/暗调色板
+	th           *ui.Theme // 当前 MyGo 主题（每帧都要重新设置）
+	nav          navState  // 标签访问历史
+	menuLocale   string
+	stopBackup   func()        // 停止自动备份的周期任务
+	upd          updateState   // 自动更新状态（updates.go）
+	updater      updateBackend // 更新后端；测试里替换为假实现
+	stopUpdate   func()        // 停止后台检查更新
+	relaunch     func()        // 重启应用；测试里替换
+	con          consoleState  // 控制台（console.go）
+	side         sideState     // 侧栏（sidebar.go）
+	projMenu     projMenuState // 工具栏项目下拉面板状态
+	scrollAt     time.Time     // 最近一次滚动输入的时间（滚动条自动隐藏用）
 }
 
 func newApp(be Backend) *app {

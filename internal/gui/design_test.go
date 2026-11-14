@@ -3,6 +3,7 @@ package gui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -257,5 +258,166 @@ func TestQuickOpenBlockedWhenModalOrHome(t *testing.T) {
 	a.openQuick()
 	if a.overlays.quick.open {
 		t.Fatal("在项目主页时不应打开快速打开面板")
+	}
+}
+
+// homeApp 构造带三个项目的主页场景。
+func homeApp(t *testing.T) (*app, *ui.Tester, *fakeBackend) {
+	t.Helper()
+	be := newFakeBackend(t)
+	be.seedProject("示例项目", "a1", "a2")
+	be.seedProject("订单服务", "o1")
+	be.seedProject("支付网关")
+	a := newApp(be)
+	a.set.Locale = localeZH
+	a.showHome = true
+	tt := ui.NewTester(a.view, 1280, 800)
+	tt.Frame()
+	return a, tt, be
+}
+
+// 设计稿：项目主页有标题、搜索与总数、排序，右侧详情面板有主题色、实时预览与操作按钮。
+func TestHomeLayoutMatchesDesign(t *testing.T) {
+	_, tt, _ := homeApp(t)
+	for _, want := range []string{
+		"项目主页", "新建项目", "共 3 个项目", "排序", "最近更新", "项目名称", "主题色", "实时预览",
+		"打开项目", "重命名", "导出", "2 个请求 · 0 个文件夹", "1 个请求 · 0 个文件夹",
+	} {
+		if !tt.HasText(want) {
+			t.Errorf("项目主页缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	snapshot(t, tt, "d_home")
+}
+
+// 点击卡片选中项目（右侧详情随之切换），“打开项目”进入所选项目。
+func TestHomeSelectAndOpen(t *testing.T) {
+	a, tt, be := homeApp(t)
+	if err := tt.Click("订单服务"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.homeSel != be.projects[1].ID {
+		t.Fatalf("点击卡片应选中订单服务，实际 %q", a.homeSel)
+	}
+	if err := tt.Click("打开项目"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.showHome || a.projectID != be.projects[1].ID {
+		t.Fatalf("打开项目后应进入订单服务：showHome=%v projectID=%q", a.showHome, a.projectID)
+	}
+}
+
+// 搜索词过滤项目，排序方式切换为名称后按名称升序。
+func TestHomeSearchAndSort(t *testing.T) {
+	a, tt, _ := homeApp(t)
+	a.homeQuery = "订单"
+	tt.Frame()
+	if got := a.homeProjects(); len(got) != 1 || got[0].Name != "订单服务" {
+		t.Fatalf("搜索“订单”应只剩订单服务，实际 %+v", got)
+	}
+	if !tt.HasText("共 1 个项目") {
+		t.Fatalf("总数应随搜索更新：%q", tt.Texts())
+	}
+	a.homeQuery, a.homeSort = "", "name"
+	got := a.homeProjects()
+	for i := 1; i < len(got); i++ {
+		if strings.ToLower(got[i-1].Name) > strings.ToLower(got[i].Name) {
+			t.Fatalf("按名称排序应升序：%+v", got)
+		}
+	}
+}
+
+// 详情面板改名：提交后后端项目名更新，空名称与未变化不提交。
+func TestHomeRenameCommit(t *testing.T) {
+	a, _, be := homeApp(t)
+	id := be.projects[2].ID
+	a.commitProjectName(id, "")
+	a.commitProjectName(id, "支付网关")
+	if be.projects[2].Name != "支付网关" {
+		t.Fatalf("空名称/未变化不应改名：%q", be.projects[2].Name)
+	}
+	a.commitProjectName(id, "支付中心")
+	if be.projects[2].Name != "支付中心" {
+		t.Fatalf("应改名为支付中心，实际 %q", be.projects[2].Name)
+	}
+}
+
+// 相对时间文案：刚刚 / 分钟 / 小时 / 昨天 / 天 / 上周 / 日期；无法解析显示 --。
+func TestRelTime(t *testing.T) {
+	a, _, _ := zhApp(t)
+	now := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	ago := func(d time.Duration) string { return now.Add(-d).Format(time.RFC3339) }
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{ago(10 * time.Second), "刚刚"},
+		{ago(5 * time.Minute), "5 分钟前"},
+		{ago(2 * time.Hour), "2 小时前"},
+		{ago(30 * time.Hour), "昨天"},
+		{ago(3 * 24 * time.Hour), "3 天前"},
+		{ago(9 * 24 * time.Hour), "上周"},
+		{"", "--"},
+	}
+	for _, c := range cases {
+		if got := a.relTime(c.in, now); got != c.want {
+			t.Errorf("relTime(%q)=%q，应为 %q", c.in, got, c.want)
+		}
+	}
+	if projectInitial("  订单") != "订" || projectInitial("abc") != "A" || projectInitial("") != "?" {
+		t.Error("projectInitial 取首字不正确")
+	}
+}
+
+// 设计稿：欢迎页有四个快捷入口，点击分别触发对应操作；没有历史时不显示“最近打开”。
+func TestWelcomePageActions(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	for _, want := range []string{"新建请求", "导入 Postman / OpenAPI / cURL", "粘贴 cURL 命令", "快速打开请求、环境、命令", "⌘ N", "⌘ K"} {
+		if !tt.HasText(want) {
+			t.Errorf("欢迎页缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	if tt.HasText("最近打开") {
+		t.Error("没有历史记录时不应显示“最近打开”")
+	}
+	if err := tt.Click("粘贴 cURL 命令"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.overlays.curl.open {
+		t.Fatal("点击“粘贴 cURL 命令”应打开 cURL 对话框")
+	}
+	a.overlays.curl.open = false
+	tt.Frame()
+	if err := tt.Click("快速打开请求、环境、命令"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.overlays.quick.open {
+		t.Fatal("点击“快速打开”应打开快速打开面板")
+	}
+}
+
+// 有历史记录时，欢迎页列出“最近打开”，点击在标签里打开对应请求。
+func TestWelcomeRecentOpens(t *testing.T) {
+	a, tt, be := visualApp(t, false)
+	be.history[a.projectID][0].RequestID = be.colls[a.projectID].Requests[0].ID
+	a.reloadHistory()
+	tt.Frame()
+	snapshot(t, tt, "d_welcome")
+	if !tt.HasText("最近打开") {
+		t.Fatalf("有历史记录时应显示“最近打开”：%q", tt.Texts())
+	}
+	if len(a.tabs) != 0 {
+		t.Fatalf("初始不应有标签，实际 %d", len(a.tabs))
+	}
+	if err := tt.Click("获取用户列表"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(a.tabs) != 1 || a.tabs[0].draft.Name != "获取用户列表" {
+		t.Fatalf("点击最近打开应在标签里打开该请求，实际 %d 个标签", len(a.tabs))
 	}
 }
