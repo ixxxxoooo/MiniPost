@@ -2,6 +2,7 @@ package gui
 
 import (
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -37,6 +38,11 @@ func visualApp(t *testing.T, dark bool) (*app, *ui.Tester, *fakeBackend) {
 		{NodeID: r3.ID, NodeType: model.CollectionNodeTypeRequest, ProjectID: pid, ParentFolderID: "f2", SortOrder: 0},
 	}
 	be.colls[pid] = cd
+	// 与旧版 mock 一致：一个环境（含 host 变量）与一条历史记录
+	be.envs[pid] = []model.Environment{{ID: "e1", Name: "开发环境", ProjectID: pid,
+		Variables: []model.Variable{{ID: "v1", Key: "host", Value: "api.example.com", Enabled: true}}}}
+	be.history[pid] = []model.HistoryEntry{{ID: "h1", Name: "获取用户列表", Method: "GET", URL: "https://api.example.com/users",
+		StatusCode: 200, Duration: 128, Size: 512, Timestamp: time.Now().Format(time.RFC3339)}}
 	be.resp = &model.HttpResponse{
 		StatusCode: 200, StatusText: "200 OK", ContentType: "application/json", Duration: 128, Size: 100,
 		Headers: map[string][]string{"Content-Type": {"application/json"}, "Server": {"nginx"}},

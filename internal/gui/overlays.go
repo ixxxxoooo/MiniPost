@@ -11,6 +11,7 @@ type overlays struct {
 	closing closeState
 	prefs   prefsState
 	imp     importState
+	curl    curlState
 	cookies cookiesState
 }
 

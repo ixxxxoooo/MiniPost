@@ -18,7 +18,7 @@ var projectColors = []string{"#0A84FF", "#30D158", "#FF9F0A", "#FF453A", "#BF5AF
 func (a *app) homeView(c *ui.Context) {
 	p := a.p
 	cw, _ := c.Size()
-	ui.Scroll(c).Grow(1).Basis(0).Background(p.surface).Children(func() {
+	ui.Scroll(c).Grow(1).Basis(0).Background(p.surface).Scrollbars(a.scrollbarsVisible()).Children(func() {
 		ui.Column(c).FillWidth().PaddingX(32).PaddingY(24).AlignItems(ui.Center).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(1080).Children(func() {
 				a.homeHeader(c)
@@ -62,10 +62,10 @@ func (a *app) homeHeader(c *ui.Context) {
 			ui.Text(c, a.t("项目主题色会同步应用到选中态、高亮态以及发送按钮。", "Project theme color will be applied to selected states, highlights, and the send button.")).FontSize(fsBase).TextColor(p.muted).Margin(4, 0, 0, 0)
 		})
 		ui.Row(c).Width(320).Shrink(0).Gap(8).AlignItems(ui.Center).Children(func() {
-			in := a.input(c, &a.homeName, a.t("输入项目名后回车新建", "Enter project name and press Enter"), fieldOpts{h: 28, radius: radiusInput, fs: fsBase, padX: 12, key: "home-new"})
+			in := a.input(c, &a.homeName, a.t("输入项目名后回车新建", "Enter project name and press Enter"), fieldOpts{h: 28, radius: radiusInput, fs: fsVSm, padX: 12, key: "home-new"})
 			bg := p.accent
 			create := a.button(c, btnOpts{h: sizeBtn, radius: radiusBtn, padX: 12, bg: &bg, hoverBg: &p.accentHover, key: "home-create"}, func(bool) {
-				txt(c, a.t("新建项目", "New project"), fsBase, p.accentFg, 500)
+				txt(c, a.t("新建项目", "New project"), fsVSm, p.accentFg, 500)
 			})
 			if create || in.Submitted() {
 				a.later(a.createProjectFromHome)
@@ -109,7 +109,7 @@ func (a *app) projectCard(c *ui.Context, pr model.Project) {
 	card.Children(func() {
 		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Margin(0, 0, 12, 0).Children(func() {
 			ui.Box(c).Size(10, 10).Radius(5).Background(dot).Shrink(0)
-			txt(c, pr.Name, 14, p.fg, 600).Grow(1).Basis(0).SingleLine()
+			txtE(c, pr.Name, 14, p.fg, 600).Grow(1).Basis(0)
 			if active {
 				ui.Row(c).Height(18).PaddingX(8).Radius(9).Background(p.accent.Alpha(0.14)).AlignItems(ui.Center).Shrink(0).Children(func() {
 					txt(c, a.t("当前", "Current"), fsSmall, p.accent, 0)
@@ -173,7 +173,7 @@ func (a *app) themePicker(c *ui.Context, anchor ui.Element, pr model.Project) {
 	p := a.p
 	open := true
 	ui.PopoverBase(c, anchor, &open, func(panel ui.Element) {
-		panel.AttachTo(anchor, ui.AnchorBottomLeft, ui.AnchorTopLeft).Margin(6, 0, 0, 0).Width(228).Radius(10).Background(p.surface).Border(1, p.border).Padding(8).Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.18))
+		panel.AttachTo(anchor, ui.AnchorBottomLeft, ui.AnchorTopLeft).Margin(6, 0, 0, 0).Width(228).Radius(10).Background(p.surface).Border(1, p.border).Padding(8).Shadow(0, 8, 24, 0, p.shadowLg())
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
 			txt(c, a.t("选择项目主题色", "Pick a project theme color"), fsTiny, p.muted, 0)
 			ui.Row(c).FillWidth().Wrap().Gap(6).Children(func() {

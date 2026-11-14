@@ -45,7 +45,7 @@ type Settings struct {
 // DefaultSettings 返回与旧版一致的默认设置。
 func DefaultSettings() Settings {
 	return Settings{
-		Theme: "system", FontSize: 13, SidebarWidth: 260, LayoutDirection: "vertical", ConsoleHeight: 200,
+		Theme: "system", FontSize: 12, SidebarWidth: 240, LayoutDirection: "vertical", ConsoleHeight: 220,
 		FollowRedirects: true, HTTPVersion: "auto", MaxResponseSizeMB: 50, SSLVerify: true, ScrollbarAutoHide: true,
 		ResponseFormatDetection: "auto", AutoBackupIntervalMinutes: 30, EnvByProject: map[string]string{},
 	}
@@ -71,11 +71,11 @@ func (s *Settings) Normalize() {
 	if s.LayoutDirection != "horizontal" {
 		s.LayoutDirection = "vertical"
 	}
-	s.FontSize = clampInt(s.FontSize, 10, 20)
+	s.FontSize = clampInt(s.FontSize, 10, 16)
 	s.RequestTimeoutMs = clampInt(s.RequestTimeoutMs, 0, 3_600_000)
 	s.MaxResponseSizeMB = clampInt(s.MaxResponseSizeMB, 0, 2048)
 	s.AutoBackupIntervalMinutes = clampInt(s.AutoBackupIntervalMinutes, 5, 1440)
-	s.SidebarWidth = max(180, min(520, s.SidebarWidth))
+	s.SidebarWidth = max(180, min(500, s.SidebarWidth))
 	s.ConsoleHeight = max(80, min(600, s.ConsoleHeight))
 	if s.AlwaysSaveUnsaved {
 		s.AlwaysDiscardUnsaved = false

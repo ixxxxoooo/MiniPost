@@ -19,7 +19,12 @@ func (a *app) view(c *ui.Context) {
 	if t := a.activeTab(); t != nil {
 		t.refreshDirty() // 标签栏先于编辑区绘制，需要先算出本帧的未保存状态
 	}
-	ui.Column(c).Fill().Background(a.p.surface).Children(func() {
+	ui.Column(c).Fill().Background(a.p.surface).HandleInput(func(ev ui.InputEvent) bool {
+		if ev.Kind == ui.InputScroll {
+			a.noteScroll() // 滚动条自动隐藏：滚动后短暂显示
+		}
+		return false
+	}).Children(func() {
 		a.workspace(c)
 	})
 	a.overlayViews(c)
@@ -30,6 +35,7 @@ func (a *app) view(c *ui.Context) {
 func (a *app) overlayViews(c *ui.Context) {
 	a.prefsView(c)
 	a.importView(c)
+	a.curlView(c)
 	a.cookiesView(c)
 	// 询问类弹层最后绘制，才能显示在其他对话框之上。
 	a.promptView(c)
@@ -58,8 +64,11 @@ func (a *app) workspace(c *ui.Context) {
 			right()
 			return
 		}
-		split := ui.Split(c, &a.set.SidebarWidth, func() { a.sidebar(c) }, right).SplitReset(240).Fill()
+		// 旧版侧栏宽度（含 1px 右边框）为 SidebarWidth；这里的分隔线就是那条边框，所以窗格宽度减 1。
+		sw := a.set.SidebarWidth - 1
+		split := ui.Split(c, &sw, func() { a.sidebar(c) }, right).SplitReset(239).Fill()
 		if split.Changed() {
+			a.set.SidebarWidth = sw + 1
 			a.saveSettings()
 		}
 	})

@@ -231,25 +231,45 @@ func (rs *respState) statusInfo() (code int, text, proto string) {
 	return 0, "", ""
 }
 
-// statusBadge 返回状态码徽标的文字色与底色：2xx 绿、3xx 橙、其余红。
+// statusBadge 返回状态码徽标的文字色与底色，取值同旧版 statusBadgeClass（1xx 灰、2xx 绿、3xx 蓝、4xx 橙、其余红）。
 func (a *app) statusBadge(code int) (fg, bg ui.Color) {
-	dark := a.p.dark
+	if a.p.dark {
+		switch {
+		case code >= 100 && code < 200:
+			return ui.Hex("#aeb4bd"), ui.Hex("#2d2f34")
+		case code >= 200 && code < 300:
+			return ui.Hex("#7ce0ad"), ui.Hex("#123a2c")
+		case code >= 300 && code < 400:
+			return ui.Hex("#72c7e4"), ui.Hex("#113342")
+		case code >= 400 && code < 500:
+			return ui.Hex("#f3bf67"), ui.Hex("#3f2f16")
+		}
+		return ui.Hex("#ff8a83"), ui.Hex("#402222")
+	}
+	switch {
+	case code >= 100 && code < 200:
+		return ui.Hex("#6f7782"), ui.Hex("#f1f2f4")
+	case code >= 200 && code < 300:
+		return ui.Hex("#2b8a57"), ui.Hex("#e6f6ec")
+	case code >= 300 && code < 400:
+		return ui.Hex("#2a7f95"), ui.Hex("#e6f3f8")
+	case code >= 400 && code < 500:
+		return ui.Hex("#a56412"), ui.Hex("#fbf2e6")
+	}
+	return ui.Hex("#b44840"), ui.Hex("#fbeceb")
+}
+
+// statusDot 返回状态点颜色：2xx 成功色、3xx info、4xx 警告色、其余危险色（同旧版 statusDotClass）。
+func (a *app) statusDot(code int) ui.Color {
 	switch {
 	case code >= 200 && code < 300:
-		if dark {
-			return ui.RGB(110, 220, 150), ui.RGBA(52, 199, 89, 0.18)
-		}
-		return ui.RGB(43, 138, 87), ui.RGB(230, 246, 236)
+		return a.p.success
 	case code >= 300 && code < 400:
-		if dark {
-			return ui.RGB(255, 190, 90), ui.RGBA(255, 149, 0, 0.18)
-		}
-		return ui.RGB(165, 100, 18), ui.RGB(251, 242, 230)
+		return a.p.info
+	case code >= 400 && code < 500:
+		return a.p.warning
 	}
-	if dark {
-		return ui.RGB(255, 120, 110), ui.RGBA(255, 59, 48, 0.18)
-	}
-	return ui.RGB(180, 72, 64), ui.RGB(251, 236, 235)
+	return a.p.danger
 }
 
 // responseBody 绘制成功响应：标签行（含右侧状态/耗时/大小）与当前标签内容。
@@ -258,6 +278,11 @@ func (a *app) responseBody(c *ui.Context, t *tab) {
 	p := a.p
 	labels := []string{a.t("响应体", "Body"), a.t("响应头", "Headers"), "Cookies"}
 	counts := []int{0, a.respHeaderCount(rs), len(a.respCookies(rs))}
+	for i := 1; i < 3; i++ {
+		if counts[i] == 0 {
+			counts[i] = countZero // 旧版响应头 / Cookies 标签始终显示数量
+		}
+	}
 	if rs.streamed {
 		labels = append(labels, "Stream")
 		counts = append(counts, 0)
@@ -267,7 +292,7 @@ func (a *app) responseBody(c *ui.Context, t *tab) {
 	}
 	rs.sub = min(rs.sub, len(labels)-1)
 	ui.Column(c).Grow(1).Basis(0).Children(func() {
-		ui.Row(c).FillWidth().Height(32).Shrink(0).PaddingX(8).Gap(4).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).FillWidth().Height(32).Shrink(0).PaddingStart(16).PaddingEnd(8).Gap(4).AlignItems(ui.Center).Children(func() {
 			a.pillTabs(c, "rs", &rs.sub, labels, counts)
 			ui.Spacer(c)
 			a.respMeta(c, rs)
@@ -302,7 +327,7 @@ func (a *app) respMeta(c *ui.Context, rs *respState) {
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
 		if len(resp.Warnings) > 0 {
 			ui.Row(c).Height(20).PaddingX(6).Radius(7).Background(ui.RGB(251, 242, 230)).AlignItems(ui.Center).Children(func() {
-				txt(c, a.t("警告", "Warning")+": "+resp.Warnings[0], fsTiny, ui.RGB(165, 100, 18), 500).MaxWidth(260).SingleLine()
+				txtE(c, a.t("警告", "Warning")+": "+resp.Warnings[0], fsTiny, ui.RGB(165, 100, 18), 500).MaxWidth(260)
 			})
 			sep()
 		}
@@ -346,13 +371,7 @@ func (a *app) hoverCard(c *ui.Context, key string, anchor ui.Element, w float32,
 func (a *app) statusCard(c *ui.Context, code int, text string) {
 	p := a.p
 	ui.Row(c).FillWidth().Gap(8).Children(func() {
-		dot := p.success
-		switch {
-		case code >= 400:
-			dot = p.danger
-		case code >= 300:
-			dot = p.warning
-		}
+		dot := a.statusDot(code)
 		ui.Box(c).Size(8, 8).Radius(4).Background(dot).Margin(5, 0, 0, 0).Shrink(0)
 		ui.Column(c).Grow(1).Basis(0).Gap(4).Children(func() {
 			txt(c, strings.TrimSpace(fmt.Sprintf("%d %s", code, text)), fsLarge, p.fg, 600)
@@ -442,7 +461,7 @@ func (a *app) timingCard(c *ui.Context, resp *model.HttpResponse) {
 		off, w := cum/total*zone, math.Max(r.v/total*zone, 2.8)
 		cum += r.v
 		ui.Row(c).FillWidth().Height(22).Gap(6).AlignItems(ui.Center).Children(func() {
-			txt(c, r.label, fsTiny, p.fg2, 0).Width(120).Shrink(0).SingleLine()
+			txtE(c, r.label, fsTiny, p.fg2, 0).Width(120).Shrink(0)
 			ui.Row(c).Width(zone+2).Height(20).Shrink(0).AlignItems(ui.Center).BorderWidth(0, 1, 0, 1).BorderColor(p.border).Children(func() {
 				ui.Box(c).Width(float32(off)).Shrink(0)
 				bar := ui.Box(c).Width(float32(w)).Height(12).Shrink(0)
@@ -573,7 +592,7 @@ func (a *app) bodyView(c *ui.Context, rs *respState) {
 				txt(c, a.t("二进制内容", "Binary content")+" · "+formatSize(resp.Size), fsBase, p.muted, 0)
 				rs.loadBody(a.set.ResponseFormatDetection)
 				if rs.image != nil {
-					ui.Scroll(c).Grow(1).Children(func() { ui.Image(c, rs.image).Fit(ui.Contain) })
+					ui.Scroll(c).Grow(1).Scrollbars(a.scrollbarsVisible()).Children(func() { ui.Image(c, rs.image).Fit(ui.Contain) })
 				}
 			})
 			return

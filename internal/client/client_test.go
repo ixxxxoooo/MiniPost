@@ -172,6 +172,7 @@ func TestBuildSendInputPipeline(t *testing.T) {
 
 	set := DefaultSettings()
 	set.SendNoCacheHeader, set.SendPostmanTokenHeader, set.RequestTimeoutMs = true, true, 1500
+	set.SSLTLSKeyLog = true
 	in, info := BuildSendInput(d, "rid", SendEnv{Vars: []Var{{"base", "https://example.com"}}, Settings: set, Jar: jar})
 
 	if in.URL != "https://example.com/items?a=1" || info.ResolvedURL != in.URL {
@@ -190,7 +191,7 @@ func TestBuildSendInputPipeline(t *testing.T) {
 	if headers["x-one"] != "2" || headers["cookie"] != "sid=abc" || headers["cache-control"] != "no-cache" || headers["minipost-token"] == "" {
 		t.Fatalf("headers: %+v", in.Headers)
 	}
-	if !info.CookieIncluded || !in.Options.DisableDefaultUserAgent || in.Options.TimeoutMS != 1500 {
+	if !info.CookieIncluded || !in.Options.DisableDefaultUserAgent || in.Options.TimeoutMS != 1500 || !in.Options.SSLTLSKeyLog {
 		t.Fatalf("options/info: %+v %+v", in.Options, info)
 	}
 }

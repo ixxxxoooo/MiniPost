@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"unicode/utf8"
+
 	"github.com/egoist/mygo/ui"
 )
 
@@ -9,7 +11,7 @@ import (
 func (a *app) titleBar(c *ui.Context) {
 	p := a.p
 	left := max(c.TitleBar().Left, 84) // 旧版红绿灯占 20~68px，侧栏开关从 84px 开始
-	ui.Row(c).FillWidth().Height(sizeToolbar).Shrink(0).Background(p.toolbar).
+	ui.Row(c).FillWidth().Height(sizeToolbar-1).Shrink(0).Background(p.toolbar).
 		Padding(0, 10, 0, left).AlignItems(ui.Center).DragWindow().Children(func() {
 		// 侧栏开关
 		name, tip := "sidebarCollapse", a.t("收起侧边栏", "Collapse sidebar")
@@ -27,7 +29,7 @@ func (a *app) titleBar(c *ui.Context) {
 
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
 			if a.iconButton(c, "fileImport", a.t("导入 cURL", "Import cURL")+" (⌘I)", 14, p.fg2) {
-				a.later(func() { a.openImport(importCurlMode) })
+				a.later(a.openCurlDialog)
 			}
 			themeIcon, themeTip := "moon", a.t("切换为深色主题", "Switch to dark theme")
 			if p.dark {
@@ -86,20 +88,35 @@ func (a *app) workspaceHeader(c *ui.Context) {
 	})
 }
 
-// projectButton 是项目选择器按钮，点击弹出项目菜单。
+// projectButton 是项目选择器按钮，点击弹出项目下拉面板（搜索/新建、切换、导出、删除）。
 func (a *app) projectButton(c *ui.Context) {
 	p := a.p
 	name := a.t("选择项目", "Select project")
 	if pr := a.project(); pr != nil {
 		name = pr.Name
 	}
-	ui.ButtonBase(c.Key("project-btn")).Background(p.surface2).Radius(radiusInput).Height(28).PaddingX(8).Gap(6).AlignItems(ui.Center).
-		PopoverMenuButton(func(m *ui.Menu) { a.projectMenu(m) }).
-		Children(func() {
-			icon(c, "folderShared", 15, p.fg2)
-			txt(c, name, fsSmall, p.fg, 500)
-			icon(c, "arrowDown", 11, p.muted)
-		})
+	// 旧版按钮宽度：54 + 名称长度×11，限制在 92~180
+	w := min(float32(180), max(float32(92), float32(54+11*utf8.RuneCountInString(name))))
+	btn := ui.ButtonBase(c.Key("project-btn")).Width(w).Background(p.surface2).Radius(radiusInput).Height(28).PaddingX(8).Gap(6).AlignItems(ui.Center).Shrink(0)
+	if btn.Hovered() {
+		btn = btn.Background(p.btnBg)
+	}
+	btn.Children(func() {
+		icon(c, "folderShared", 15, p.fg2)
+		txtE(c, name, fsSmall, p.fg, 500).Grow(1).Basis(0)
+		arrow := icon(c, "arrowDown", 11, p.muted)
+		if a.projMenu.open {
+			arrow.Rotate(180) // 面板展开时箭头翻转（同旧版）
+		}
+	})
+	if btn.Clicked() {
+		pm := &a.projMenu
+		pm.open = !pm.open
+		pm.query = ""
+	}
+	if a.projMenu.open {
+		a.projectDropdown(c, btn, w)
+	}
 }
 
 func (a *app) toggleSidebar() {
@@ -116,20 +133,4 @@ func (a *app) toggleHome() {
 	}
 	a.persistSession()
 	a.showHome = true
-}
-
-func (a *app) projectMenu(m *ui.Menu) {
-	for _, p := range a.projects {
-		id := p.ID
-		if m.Item(p.Name).Radio(id == a.projectID).Chosen() {
-			a.later(func() { a.selectProject(id) })
-		}
-	}
-	m.Separator()
-	if m.Item(a.t("项目首页", "All Projects")).Chosen() {
-		a.later(func() {
-			a.persistSession()
-			a.showHome = true
-		})
-	}
 }

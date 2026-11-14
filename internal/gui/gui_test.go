@@ -4,6 +4,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -222,13 +223,30 @@ func TestDeleteRequestClosesTab(t *testing.T) {
 	}
 }
 
-func TestImportCurlCreatesRequest(t *testing.T) {
+// cURL 导入应生成「未保存草稿」标签；保存时才在项目里创建请求。
+func TestImportCurlOpensUnsavedDraft(t *testing.T) {
 	a, tt, be := zhApp(t)
+	before := len(be.colls[a.projectID].Requests)
 	a.openImport(importCurlMode)
 	a.overlays.imp.curl = "curl https://curl.example/x -d hi"
 	tt.Frame()
-	if err := tt.Click("导入 (⌘Enter)"); err != nil {
+	if err := tt.Click("导入 cURL"); err != nil {
 		t.Fatal(err)
+	}
+	tt.Frame()
+	tab := a.activeTab()
+	if tab == nil || !tab.unsaved || tab.draft.URL != "https://curl.example/x" || tab.draft.Method != "POST" {
+		t.Fatalf("应打开导入的草稿标签，实际 %+v", tab)
+	}
+	tab.refreshDirty()
+	if !tab.dirty {
+		t.Fatal("草稿标签应为未保存状态")
+	}
+	if got := len(be.colls[a.projectID].Requests); got != before {
+		t.Fatalf("保存前不应写入请求，之前 %d 现在 %d", before, got)
+	}
+	if !a.saveTab(tab) {
+		t.Fatal("保存草稿失败")
 	}
 	var found bool
 	for _, r := range be.colls[a.projectID].Requests {
@@ -236,8 +254,66 @@ func TestImportCurlCreatesRequest(t *testing.T) {
 			found = true
 		}
 	}
-	if !found {
-		t.Fatalf("应创建并保存导入的请求，实际 %+v", be.colls[a.projectID].Requests)
+	if !found || tab.unsaved {
+		t.Fatalf("保存后应创建请求，实际 %+v", be.colls[a.projectID].Requests)
+	}
+}
+
+// ⌘I 弹窗：Enter 直接导入，Shift+Enter 换行不导入。
+func TestCurlDialogEnterImports(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openCurlDialog()
+	tt.Frame()
+	tt.Type("curl https://curl.example/y")
+	tt.Key(ui.Shift, ui.KeyEnter)
+	tt.Frame()
+	if !a.overlays.curl.open {
+		t.Fatal("Shift+Enter 只应换行，不应导入")
+	}
+	if !strings.Contains(a.overlays.curl.text, "\n") {
+		t.Fatalf("Shift+Enter 应插入换行，实际 %q", a.overlays.curl.text)
+	}
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if a.overlays.curl.open {
+		t.Fatal("Enter 应导入并关闭弹窗")
+	}
+	if tab := a.activeTab(); tab == nil || !tab.unsaved {
+		t.Fatalf("应打开草稿标签，实际 %+v", tab)
+	}
+}
+
+// 侧栏统一导入对话框的 cURL 方式同样 Enter 直接导入。
+func TestImportDialogCurlEnterImports(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openImport(importCurlMode)
+	tt.Frame()
+	tt.Type("curl https://curl.example/w")
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if a.overlays.imp.open {
+		t.Fatal("Enter 应导入并关闭对话框")
+	}
+	if tab := a.activeTab(); tab == nil || !tab.unsaved || tab.draft.URL != "https://curl.example/x" {
+		t.Fatalf("应打开草稿标签，实际 %+v", tab)
+	}
+}
+
+// 未选择项目时，cURL 弹窗应提示而不是导入。
+func TestCurlDialogNeedsProject(t *testing.T) {
+	be := newFakeBackend(t)
+	a := newApp(be)
+	a.set.Locale = localeZH
+	tt := ui.NewTester(a.view, 1200, 760)
+	a.openCurlDialog()
+	a.overlays.curl.text = "curl https://curl.example/z"
+	tt.Frame()
+	if err := tt.Click("导入 (Enter)"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.overlays.curl.open || a.overlays.curl.err == "" {
+		t.Fatalf("没有项目时应保留弹窗并显示错误，实际 %+v", a.overlays.curl)
 	}
 }
 

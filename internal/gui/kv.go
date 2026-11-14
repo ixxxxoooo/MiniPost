@@ -36,7 +36,7 @@ func (a *app) tableCell(c *ui.Context, grow, h float32, children func()) {
 
 // tableFrame 是表格外框容器：左、上边框 + 8px 内边距的滚动区域。
 func (a *app) tableFrame(c *ui.Context, rows func()) {
-	ui.Scroll(c).Grow(1).Basis(0).Children(func() {
+	ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
 		ui.Column(c).FillWidth().Padding(8).Children(func() {
 			ui.Column(c).FillWidth().BorderWidth(1, 0, 0, 1).BorderColor(a.p.border).Children(rows)
 		})
@@ -47,9 +47,12 @@ func (a *app) tableFrame(c *ui.Context, rows func()) {
 func (a *app) kvCellInput(c *ui.Context, key string, v *string, ph string, mono bool, col ui.Color, dim bool, disabled bool) ui.Element {
 	p := a.p
 	in := ui.TextInputBase(c.Key(key), v).Placeholder(ph).PlaceholderColor(p.muted).FontSize(fsSmall).TextColor(col).
-		Grow(1).Basis(0).Height(24).PaddingX(8)
+		Grow(1).Basis(0).Height(24).Padding(0, 8, 2, 8) // 底部多留 2px，使文字与旧版基线一致
 	if mono {
 		in = in.Font(monoFont)
+	}
+	if !mono && *v == "" {
+		in = in.Italic() // 旧版说明列的占位符为斜体
 	}
 	if dim {
 		in = in.Opacity(0.4)
@@ -64,7 +67,7 @@ func (a *app) kvCellInput(c *ui.Context, key string, v *string, ph string, mono 
 func (a *app) kvHeaderCell(c *ui.Context, grow float32, label string, extra func()) {
 	a.tableCell(c, grow, 25.5, func() {
 		ui.Row(c).FillWidth().PaddingX(8).AlignItems(ui.Center).Children(func() {
-			txt(c, label, fsSmall, a.p.fg2, 600).SingleLine().Grow(1)
+			txtE(c, label, fsSmall, a.p.fg2, 600).Grow(1)
 			if extra != nil {
 				extra()
 			}
@@ -106,7 +109,7 @@ func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {
 					label += " " + itoa(len(auto))
 				}
 				bg := p.surface2
-				if a.button(c, btnOpts{h: 16, radius: 8, padX: 6, gap: 4, bg: &bg, border: &p.border, noHover: true, key: "auto-toggle"}, func(bool) {
+				if a.button(c, btnOpts{w: 72, h: 16, radius: 8, padX: 6, gap: 4, bg: &bg, border: &p.border, noHover: true, key: "auto-toggle"}, func(bool) {
 					icon(c, name, 10, p.fg2)
 					txt(c, label, fsTiny, p.fg2, 500)
 				}) {
@@ -145,10 +148,10 @@ func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {
 						})
 					})
 					a.tableCell(c, colKey, 25, func() {
-						txtMono(c, it.Key, fsSmall, p.fg2, 0).PaddingX(8).SingleLine().Grow(1)
+						txtEMono(c, it.Key, fsSmall, p.fg2, 0).PaddingX(8).Grow(1)
 					})
 					a.tableCell(c, colValue, 25, func() {
-						txtMono(c, it.Value, fsSmall, p.muted, 0).PaddingX(8).SingleLine().Grow(1)
+						txtEMono(c, it.Value, fsSmall, p.muted, 0).PaddingX(8).Grow(1)
 					})
 					if !o.noDesc {
 						a.tableCell(c, colDesc, 25, func() {
@@ -156,7 +159,7 @@ func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {
 							if d == "" {
 								d = a.t("发送时自动生成", "Auto-generated when sending")
 							}
-							txt(c, d, fsSmall, p.muted, 0).PaddingX(8).SingleLine().Grow(1)
+							txtE(c, d, fsSmall, p.muted, 0).PaddingX(8).Grow(1)
 						})
 					}
 					a.tableCell(c, colAct, 25, func() {})
@@ -170,7 +173,8 @@ func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {
 			hover := rowEl.Hovered()
 			rowEl.Children(func() {
 				a.tableCell(c, colCheck, 25, func() {
-					ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
+					// 旧版原生复选框距单元格顶部约 4px，而不是垂直居中
+					ui.Row(c).FillWidth().Height(24).Padding(3, 0, 0, 0).Justify(ui.Center).AlignItems(ui.Start).Children(func() {
 						changed = a.checkbox(c, "chk:"+r.ID, &r.Enabled, last) || changed
 					})
 				})
@@ -311,7 +315,8 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 			hover := rowEl.Hovered()
 			rowEl.Children(func() {
 				a.tableCell(c, 28, 25, func() {
-					ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
+					// 旧版原生复选框距单元格顶部约 4px，而不是垂直居中
+					ui.Row(c).FillWidth().Height(24).Padding(3, 0, 0, 0).Justify(ui.Center).AlignItems(ui.Start).Children(func() {
 						changed = a.checkbox(c, "chk:"+r.ID, &r.Enabled, last) || changed
 					})
 				})
@@ -346,7 +351,7 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 							label, col = a.t("选择文件…", "Choose file…"), p.accent
 						}
 						if a.button(c, btnOpts{h: 24, padX: 8, noHover: true, key: "file:" + r.ID}, func(bool) {
-							txt(c, label, fsSmall, col, 0).SingleLine()
+							txtE(c, label, fsSmall, col, 0)
 						}) {
 							a.pickFormFile(r)
 						}

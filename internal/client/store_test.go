@@ -69,7 +69,7 @@ func TestSettingsStoreRoundTripAndNormalize(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := store.Load()
-	if got.FontSize != 20 || got.RequestTimeoutMs != 0 || got.AlwaysDiscardUnsaved || got.Theme != "system" {
+	if got.FontSize != 16 || got.RequestTimeoutMs != 0 || got.AlwaysDiscardUnsaved || got.Theme != "system" {
 		t.Fatalf("normalized: %+v", got)
 	}
 }

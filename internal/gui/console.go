@@ -74,7 +74,7 @@ func (a *app) consolePanel(c *ui.Context) {
 			return
 		}
 		a.consoleList.FollowEnd = true
-		ui.List(c, &a.consoleList, len(a.console), func(i int) { a.consoleRow(c, i) }).Grow(1).Basis(0)
+		ui.List(c, &a.consoleList, len(a.console), func(i int) { a.consoleRow(c, i) }).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible())
 	})
 }
 
@@ -96,7 +96,7 @@ func (a *app) consoleRow(c *ui.Context, i int) {
 		}
 		icon(c, arrow, 8, p.muted).Shrink(0)
 		txtMono(c, strings.ToUpper(e.method), fsSmall, p.method(e.method), 700).Width(44).Shrink(0)
-		txtMono(c, e.url, fsSmall, p.fg, 0).Grow(1).Basis(0).SingleLine().Selectable()
+		txtEMono(c, e.url, fsSmall, p.fg, 0).Grow(1).Basis(0).Selectable()
 		switch {
 		case !e.done:
 			txtMono(c, "…", fsSmall, p.muted, 0)

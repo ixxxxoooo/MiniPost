@@ -118,7 +118,7 @@ func (a *app) cookiesView(c *ui.Context) {
 					hline(c, p.border)
 					ui.Column(c).FillWidth().Padding(10).Gap(8).Shrink(0).Children(func() {
 						ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Children(func() {
-							in := a.input(c, &s.domInput, a.t("输入域名", "Type a domain name"), fieldOpts{h: 28, radius: 7, fs: fsSmall, key: "ck-dom"})
+							in := a.input(c, &s.domInput, a.t("输入域名", "Type a domain name"), fieldOpts{h: 28, radius: 7, fs: fsSmall, key: "ck-dom", bd: &bd})
 							add := a.button(c, btnOpts{h: 28, radius: 7, padX: 10, border: &bd, key: "ck-dom-add", tip: a.t("新增域名", "Add domain")}, func(bool) {
 								txt(c, a.t("添加", "Add"), fsSmall, p.fg2, 0)
 							})
@@ -127,13 +127,15 @@ func (a *app) cookiesView(c *ui.Context) {
 							}
 						})
 						ui.Row(c).FillWidth().Children(func() {
-							a.input(c, &s.filter, a.t("搜索 Cookie", "Search cookies"), fieldOpts{h: 28, radius: 7, fs: fsSmall, icon: "search", key: "ck-search"})
+							a.input(c, &s.filter, a.t("搜索 Cookie", "Search cookies"), fieldOpts{h: 28, radius: 7, fs: fsSmall, icon: "search", key: "ck-search", bd: &bd, iconSize: 11, iconLeft: 7, iconGap: 10})
 						})
 					})
-					ui.Scroll(c).Grow(1).Basis(0).Children(func() {
+					ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
 						ui.Column(c).FillWidth().Padding(0, 8, 8, 8).Gap(2).Children(func() {
 							if len(groups) == 0 {
-								txt(c, a.t("暂无域名", "No domains"), fsSmall, p.muted, 0).Margin(24, 8, 24, 8)
+								ui.Row(c).FillWidth().Justify(ui.Center).Padding(24, 8).Children(func() {
+									txt(c, a.t("暂无域名", "No domains"), fsSmall, p.muted, 0)
+								})
 							}
 							for _, g := range groups {
 								a.domainItem(c, g, g.domain == cur)
@@ -170,7 +172,7 @@ func (a *app) cookiesView(c *ui.Context) {
 						if small("ck-add", "add", a.t("添加 Cookie", "Add Cookie"), p.fg, false) {
 							a.later(func() { a.addBlankCookie(cur) })
 						}
-						if small("ck-clear-dom", "", a.t("清空当前域名", "Clear Domain"), p.fg2, cur == "") {
+						if small("ck-clear-dom", "", a.t("清空当前域名", "Clear Domain"), p.fg2, false) {
 							d := cur
 							a.later(func() { a.jar.ClearDomain(d) })
 						}
@@ -179,6 +181,7 @@ func (a *app) cookiesView(c *ui.Context) {
 								a.overlays.askConfirm(a.t("清空所有 Cookie？", "Clear all cookies?"), a.t("此操作无法撤销。", "This can't be undone."), a.t("清空", "Clear"), a.jar.Clear)
 							})
 						}
+						ui.Box(c).Width(1).Shrink(0)
 						if a.iconButton(c, "clear", a.t("关闭", "Close"), 11, p.muted) {
 							s.open = false
 						}
@@ -217,7 +220,7 @@ func (a *app) domainItem(c *ui.Context, g cookieGroup, selected bool) {
 			if name == "" {
 				name = a.t("无域名", "No Domain")
 			}
-			txt(c, name, fsSmall, p.fg, 0).Grow(1).Basis(0).SingleLine()
+			txtE(c, name, fsSmall, p.fg, 0).Grow(1).Basis(0)
 			txt(c, itoa(len(g.items)), fsTiny, p.muted, 0)
 		})
 	})
@@ -247,7 +250,7 @@ func (a *app) cookieTable(c *ui.Context, shown []client.Cookie) {
 		}
 		return e.Grow(1).Basis(0)
 	}
-	ui.Scroll(c).Grow(1).Basis(0).Children(func() {
+	ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
 		ui.Column(c).FillWidth().Children(func() {
 			ui.Row(c).FillWidth().Height(28).Background(p.surface2).BorderWidth(0, 0, 1, 0).BorderColor(p.border).AlignItems(ui.Center).Children(func() {
 				for i, h := range cols {

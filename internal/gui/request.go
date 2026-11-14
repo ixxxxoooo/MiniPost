@@ -49,15 +49,19 @@ func (a *app) breadcrumb(c *ui.Context, t *tab) {
 		sky = ui.RGB(56, 189, 248)
 	}
 	ui.Row(c).FillWidth().Shrink(0).Padding(4, 12, 0, 12).Children(func() {
-		ui.Row(c).FillWidth().Height(28).PaddingX(8).Gap(4).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).FillWidth().Height(28).PaddingX(8).AlignItems(ui.Center).Children(func() {
 			ui.Row(c).Height(16).MinWidth(24).PaddingX(4).Radius(4).Background(skyBg).AlignItems(ui.Center).Justify(ui.Center).Shrink(0).Children(func() {
 				txtMono(c, "HTTP", 9, sky, 600)
 			})
+			ui.Box(c).Width(4).Shrink(0)
 			for i, seg := range a.breadcrumbSegments(t) {
 				ui.Row(c.Key("seg" + itoa(i))).Height(24).PaddingX(6).Radius(6).AlignItems(ui.Center).Shrink(0).Children(func() {
-					txt(c, seg, fsBase, p.muted, 0).MaxWidth(220).SingleLine()
+					txtE(c, seg, fsBase, p.muted, 0).MaxWidth(220)
 				})
-				icon(c, "arrowRight", 10, p.muted).MarginX(2)
+				// 旧版间距：路径段 →2px→ 箭头 →6px→ 下一段
+				ui.Box(c.Key("bs" + itoa(i))).Width(2).Shrink(0)
+				icon(c, "arrowRight", 10, p.muted)
+				ui.Box(c.Key("bt" + itoa(i))).Width(6).Shrink(0)
 			}
 			a.requestName(c, t)
 			ui.Row(c).MarginStart(4).Height(24).Gap(4).AlignItems(ui.Center).Shrink(0).Children(func() {
@@ -97,7 +101,7 @@ func (a *app) requestName(c *ui.Context, t *tab) {
 		if btn.Hovered() {
 			btn = btn.Background(hv)
 		}
-		btn.Children(func() { txt(c, t.title(), fsBase, p.fg, 600).SingleLine() })
+		btn.Children(func() { txtEFlat(c, t.title(), fsBase, p.fg, 600) })
 		if btn.Clicked() {
 			t.editName, t.nameBuf = true, t.draft.Name
 		}
@@ -147,7 +151,7 @@ func (a *app) urlBar(c *ui.Context, t *tab) {
 				icon(c, "arrowDown", 14, mc)
 			})
 			url := ui.TextInputBase(c.Key("url"), &d.URL).Placeholder(a.t("输入请求 URL...", "Enter request URL...")).PlaceholderColor(p.muted).
-				FontSize(fsLarge).Font(monoFont).TextColor(p.fg).Grow(1).Basis(0).FillHeight().PaddingX(12)
+				FontSize(fsVXs).Font(monoFont).TextColor(p.fg).Grow(1).Basis(0).FillHeight().Padding(0, 12, 2, 12)
 			if url.Changed() {
 				d.Params = client.SyncParamsWithURL(d.URL, d.Params)
 			}

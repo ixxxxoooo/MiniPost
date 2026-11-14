@@ -59,6 +59,7 @@ type tab struct {
 	editName      bool   // 面包屑里的请求名是否处于编辑状态
 	nameBuf       string // 请求名编辑缓冲
 	downloadAfter bool   // 本次发送完成后保存响应到文件（Send and Download）
+	unsaved       bool   // 尚未写入项目的草稿标签（cURL 导入），首次保存时才创建请求
 }
 
 func newTab(d *client.Draft, base *client.Draft) *tab {
@@ -156,6 +157,12 @@ func (a *app) saveTab(t *tab) bool {
 		return a.saveEnvTab(t)
 	}
 	t.flush()
+	if t.unsaved {
+		if err := a.persistDraft(t); err != nil {
+			a.fail(a.t("保存请求", "Save request"), err)
+			return false
+		}
+	}
 	if err := a.be.SaveRequestItem(t.draft.ToItem()); err != nil {
 		a.fail(a.t("保存请求", "Save request"), err)
 		return false
@@ -227,8 +234,8 @@ func (a *app) persistSession() {
 	s := a.sessions.Load()
 	ps := client.ProjectSession{}
 	for i, t := range a.tabs {
-		if t.env != nil {
-			continue // 环境编辑页不进入会话
+		if t.env != nil || t.unsaved {
+			continue // 环境编辑页与未保存草稿不进入会话
 		}
 		if i == a.active {
 			ps.Active = len(ps.Tabs)

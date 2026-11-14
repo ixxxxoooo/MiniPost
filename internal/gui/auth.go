@@ -13,7 +13,7 @@ func (a *app) authField(c *ui.Context, label string, value *string, password boo
 	p := a.p
 	ui.Column(c).FillWidth().MaxWidth(448).Gap(4).Shrink(0).Children(func() {
 		txt(c, label, 10.4, p.fg2, 0)
-		in := a.input(c, value, "", fieldOpts{h: 28, radius: radiusInput, padX: 12, fs: fsLarge, key: "af:" + label})
+		in := a.input(c, value, "", fieldOpts{h: 28, radius: radiusInput, padX: 12, fs: fsVXs, key: "af:" + label})
 		if password {
 			in.Password()
 		}
@@ -32,7 +32,7 @@ func (a *app) authTab(c *ui.Context, t *tab) {
 	}
 	ui.Column(c).Grow(1).Basis(0).Padding(8).Children(func() {
 		ui.Row(c).FillWidth().Shrink(0).Gap(4).AlignItems(ui.Center).Padding(0, 0, 12, 0).Children(func() {
-			if a.kindPills(c, "auth", &kind, []string{"None", "Basic", "Bearer", "API Key"}) {
+			if a.kindPills(c, "auth", &kind, []string{"None", "Basic", "Bearer", "API Key"}, 8) {
 				au.Type = authKinds[kind]
 			}
 		})
@@ -53,7 +53,7 @@ func (a *app) authTab(c *ui.Context, t *tab) {
 						loc = 1
 					}
 					ui.Row(c).Gap(8).Children(func() {
-						if a.kindPills(c, "akloc", &loc, []string{"Header", "Query Param"}) {
+						if a.kindPills(c, "akloc", &loc, []string{"Header", "Query Param"}, 8) {
 							au.APIKeyLocation = []string{"header", "query"}[loc]
 						}
 					})

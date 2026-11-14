@@ -125,7 +125,7 @@ func (a *app) envPage(c *ui.Context, t *tab) {
 				}
 			})
 		})
-		ui.Scroll(c).Grow(1).Basis(0).Children(func() {
+		ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
 			ui.Column(c).FillWidth().Padding(20, 16, 16, 16).Children(func() {
 				a.envTable(c, ed)
 			})

@@ -17,6 +17,7 @@ type RequestOptions struct {
 	TimeoutMS               int    `json:"timeoutMs"`
 	MaxResponseSizeMB       int    `json:"maxResponseSizeMB"`
 	SSLVerify               bool   `json:"sslVerify"`
+	SSLTLSKeyLog            bool   `json:"sslTlsKeyLog,omitempty"`
 	HTTPVersion             string `json:"httpVersion"`
 	DisableDefaultUserAgent bool   `json:"disableDefaultUserAgent"`
 	DisableDefaultAccept    bool   `json:"disableDefaultAccept"`

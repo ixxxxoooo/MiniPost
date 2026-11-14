@@ -38,6 +38,10 @@ type HttpService struct {
 	// transports 按 (sslVerify, httpVersion) 维度缓存 *http.Transport，
 	// 以便跨请求复用连接池（keep-alive），避免每次请求都新建 transport 导致重复握手与空闲连接堆积。
 	transports map[string]*http.Transport
+	// keyLogPath 是 TLS 会话密钥日志（NSS Key Log 格式）的写入路径，空表示不支持。
+	keyLogMu   sync.Mutex
+	keyLogPath string
+	keyLogFile *os.File
 }
 
 type requestOptions struct {
@@ -45,6 +49,7 @@ type requestOptions struct {
 	timeout                 time.Duration
 	maxResponseBytes        int64
 	sslVerify               bool
+	sslKeyLog               bool
 	httpVersion             string
 	disableDefaultUserAgent bool
 	disableDefaultAccept    bool
@@ -193,6 +198,52 @@ func NewHttpService() *HttpService {
 		inflight:   make(map[string]context.CancelFunc),
 		transports: make(map[string]*http.Transport),
 	}
+}
+
+// SetKeyLogPath 设置 TLS 会话密钥日志文件路径；设置里开启「SSL/TLS Key Log」后，握手密钥会追加写入该文件，
+// 可供 Wireshark 等工具解密抓包。环境变量 SSLKEYLOGFILE 优先于此路径。
+func (s *HttpService) SetKeyLogPath(path string) {
+	s.keyLogMu.Lock()
+	defer s.keyLogMu.Unlock()
+	s.keyLogPath = path
+}
+
+// KeyLogPath 返回当前生效的密钥日志路径（可能为空）。
+func (s *HttpService) KeyLogPath() string {
+	s.keyLogMu.Lock()
+	defer s.keyLogMu.Unlock()
+	if p := strings.TrimSpace(os.Getenv("SSLKEYLOGFILE")); p != "" {
+		return p
+	}
+	return s.keyLogPath
+}
+
+// keyLogWriter 惰性打开密钥日志文件并返回写入器；路径为空或打开失败时返回 nil。
+func (s *HttpService) keyLogWriter() io.Writer {
+	path := s.KeyLogPath()
+	if path == "" {
+		return nil
+	}
+	s.keyLogMu.Lock()
+	defer s.keyLogMu.Unlock()
+	if s.keyLogFile != nil && s.keyLogFile.Name() == path {
+		return s.keyLogFile
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		logger.Warn("创建 TLS 密钥日志目录失败", "error", err.Error())
+		return nil
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		logger.Warn("打开 TLS 密钥日志失败", "error", err.Error())
+		return nil
+	}
+	if s.keyLogFile != nil {
+		_ = s.keyLogFile.Close()
+	}
+	s.keyLogFile = f
+	logger.Info("已启用 TLS 密钥日志", "path", path)
+	return f
 }
 
 func (s *HttpService) registerInflight(requestID string, cancel context.CancelFunc) {
@@ -800,6 +851,7 @@ func (s *HttpService) extractRequestOptions(inputOptions *model.RequestOptions) 
 		options.maxResponseBytes = int64(inputOptions.MaxResponseSizeMB) * 1024 * 1024
 	}
 	options.sslVerify = inputOptions.SSLVerify
+	options.sslKeyLog = inputOptions.SSLTLSKeyLog
 	switch strings.ToLower(strings.TrimSpace(inputOptions.HTTPVersion)) {
 	case "http1", "http2":
 		options.httpVersion = strings.ToLower(strings.TrimSpace(inputOptions.HTTPVersion))
@@ -833,7 +885,8 @@ func (s *HttpService) buildClient(options requestOptions) *http.Client {
 // transportFor 返回与给定选项匹配的 *http.Transport，命中缓存则直接复用，否则构建后缓存。
 // 单个 *http.Transport 可并发安全使用，缓存后可在多次请求间复用连接池。
 func (s *HttpService) transportFor(options requestOptions) *http.Transport {
-	key := fmt.Sprintf("ssl=%t|ver=%s", options.sslVerify, options.httpVersion)
+	keyLog := options.sslKeyLog && s.keyLogWriter() != nil
+	key := fmt.Sprintf("ssl=%t|ver=%s|keylog=%t", options.sslVerify, options.httpVersion, keyLog)
 
 	s.transportMu.Lock()
 	defer s.transportMu.Unlock()
@@ -846,8 +899,12 @@ func (s *HttpService) transportFor(options requestOptions) *http.Transport {
 	}
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	if !options.sslVerify {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	if !options.sslVerify || keyLog {
+		cfg := &tls.Config{InsecureSkipVerify: !options.sslVerify}
+		if keyLog {
+			cfg.KeyLogWriter = s.keyLogWriter()
+		}
+		transport.TLSClientConfig = cfg
 	}
 	switch options.httpVersion {
 	case "http1":

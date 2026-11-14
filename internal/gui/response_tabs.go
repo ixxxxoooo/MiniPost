@@ -24,7 +24,7 @@ func (a *app) respCookies(rs *respState) []respCookie {
 // respTable 绘制响应头/Cookies 的只读表格：灰底大写表头，行间细线，等宽字体。
 func (a *app) respTable(c *ui.Context, heads []string, widths []float32, rows [][]string) {
 	p := a.p
-	ui.Scroll(c).Grow(1).Basis(0).Children(func() {
+	ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
 		ui.Column(c).FillWidth().Padding(8).Children(func() {
 			ui.Row(c).FillWidth().Background(p.surface2).BorderWidth(0, 0, 1, 0).BorderColor(p.btnBorder).Children(func() {
 				for i, h := range heads {
@@ -47,7 +47,7 @@ func (a *app) respTable(c *ui.Context, heads []string, widths []float32, rows []
 						if i == 0 {
 							weight, col = 500, p.fg
 						}
-						cell := ui.Text(c, v).FontSize(fsBase).Font(monoFont).TextColor(col).Selectable().PaddingX(12).PaddingY(4)
+						cell := ui.Text(c, v).FontSize(fsV2xs).Font(monoFont).TextColor(col).Selectable().PaddingX(12).PaddingY(4)
 						if weight > 0 {
 							cell = cell.FontWeight(weight)
 						}
@@ -120,5 +120,5 @@ func (a *app) streamView(c *ui.Context, rs *respState) {
 			txtMono(c, ch.Kind, fsSmall, p.muted, 0).Width(110).Shrink(0)
 			ui.Text(c, ch.Data).FontSize(fsSmall).Font(monoFont).TextColor(p.fg).Grow(1).Basis(0).Selectable()
 		})
-	}).Grow(1).Basis(0)
+	}).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible())
 }

@@ -25,7 +25,6 @@ func (a *app) sidebar(c *ui.Context) {
 				a.collectionView(c)
 			}
 		})
-		vline(c, p.border)
 	})
 }
 
@@ -94,7 +93,7 @@ func (a *app) collectionView(c *ui.Context) {
 	p := a.p
 	a.searchRow(c)
 	q := strings.ToLower(strings.TrimSpace(a.sideQuery))
-	ui.Scroll(c).Grow(1).Basis(0).ContextMenu(a.rootMenu).Children(func() {
+	ui.Scroll(c).Grow(1).Basis(0).ContextMenu(a.rootMenu).Scrollbars(a.scrollbarsVisible()).Children(func() {
 		ui.Column(c).FillWidth().Children(func() {
 			if q == "" {
 				a.treeRootRow(c)
@@ -189,7 +188,7 @@ func (a *app) treeNode(c *ui.Context, id string, depth int) {
 	}
 	p := a.p
 	open := a.outline.Open.Has(id)
-	row := ui.ButtonBase(c.Key("f:" + id)).FillWidth().Height(28).MarginX(4).PaddingStart(8 + float32(depth)*12).PaddingEnd(8).Radius(radiusBtn).Gap(4).
+	row := ui.ButtonBase(c.Key("f:" + id)).Height(28).MarginX(4).PaddingStart(8 + float32(depth)*12).PaddingEnd(8).Radius(radiusBtn).Gap(4).
 		AlignItems(ui.Center).Justify(ui.Start).ContextMenu(func(m *ui.Menu) { a.nodeMenu(m, id) })
 	hover := row.Hovered()
 	if hover {
@@ -206,7 +205,7 @@ func (a *app) treeNode(c *ui.Context, id string, depth int) {
 			fi = "folderOpen"
 		}
 		icon(c, fi, 14, p.muted)
-		txt(c, n.name, fsBase, p.fg, 0).PaddingStart(2).Grow(1).SingleLine()
+		txtE(c, n.name, fsV2xs, p.fg, 0).PaddingStart(2).Grow(1)
 		if hover {
 			if a.miniIcon(c, "add", a.t("新建请求", "New request")) {
 				a.later(func() { a.newRequest(id) })
@@ -250,7 +249,7 @@ func (a *app) requestRow(c *ui.Context, id string, depth int) {
 	if t := a.activeTab(); t != nil && t.draft.ID == id {
 		active = true
 	}
-	row := ui.ButtonBase(c.Key("r:" + id)).FillWidth().Height(28).MarginX(4).PaddingStart(20 + float32(depth)*12).PaddingEnd(8).Radius(radiusBtn).Gap(4).
+	row := ui.ButtonBase(c.Key("r:" + id)).Height(28).MarginX(4).PaddingStart(20 + float32(depth)*12).PaddingEnd(8).Radius(radiusBtn).Gap(4).
 		AlignItems(ui.Center).Justify(ui.Start).ContextMenu(func(m *ui.Menu) { a.nodeMenu(m, id) })
 	hover := row.Hovered()
 	switch {
@@ -265,7 +264,7 @@ func (a *app) requestRow(c *ui.Context, id string, depth int) {
 		if active {
 			col, w = p.accent, 500
 		}
-		txt(c, n.name, fsBase, col, w).Grow(1).SingleLine()
+		txtE(c, n.name, fsV2xs, col, w).Grow(1)
 		if hover {
 			if a.miniIcon(c, "add", a.t("新建请求", "New request")) {
 				a.later(func() { a.newRequest(n.parent) })
@@ -335,7 +334,7 @@ func (a *app) nodeMenu(m *ui.Menu, id string) {
 // historyView 绘制历史标签：标题行（刷新/清空）与按天分组的记录。
 func (a *app) historyView(c *ui.Context) {
 	p := a.p
-	ui.Row(c).FillWidth().Shrink(0).Padding(4, 12).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).FillWidth().Shrink(0).Padding(6, 12, 4, 12).AlignItems(ui.Center).Children(func() {
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
 			icon(c, "clock", 12, p.muted)
 			txt(c, a.t("历史", "History"), 10.4, p.muted, 500)
@@ -366,12 +365,12 @@ func (a *app) historyView(c *ui.Context) {
 		return
 	}
 	groups, order := a.groupHistory()
-	ui.Scroll(c).Grow(1).Basis(0).Children(func() {
+	ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
 		ui.Column(c).FillWidth().Children(func() {
 			for _, label := range order {
 				entries := groups[label]
 				collapsed := a.histCollapsed[label]
-				head := ui.ButtonBase(c.Key("hg:" + label)).FillWidth().Height(23).PaddingX(8).Gap(4).AlignItems(ui.Center).Justify(ui.Start)
+				head := ui.ButtonBase(c.Key("hg:" + label)).FillWidth().Height(23).PaddingX(12).Gap(4).AlignItems(ui.Center).Justify(ui.Start)
 				if head.Hovered() {
 					head = head.Background(p.sideHover)
 				}
@@ -380,7 +379,6 @@ func (a *app) historyView(c *ui.Context) {
 					if collapsed {
 						chev = "arrowRight"
 					}
-					ui.Box(c).Width(4).Shrink(0)
 					icon(c, chev, 8, p.muted)
 					txt(c, label, fsTiny, p.fg2, 500)
 					txt(c, fmt.Sprintf("(%d)", len(entries)), fsTiny, p.muted, 0)
@@ -420,7 +418,7 @@ func (a *app) textIconButton(c *ui.Context, iconName, label string, col, hoverCo
 // historyRow 绘制一条历史记录：方法、地址、状态码与时间。
 func (a *app) historyRow(c *ui.Context, e historyItem) {
 	p := a.p
-	row := ui.ButtonBase(c.Key("h:" + e.ID)).FillWidth().Height(24).MarginX(4).PaddingStart(20).PaddingEnd(8).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start)
+	row := ui.ButtonBase(c.Key("h:" + e.ID)).FillWidth().Height(24).MarginX(4).PaddingStart(24).PaddingEnd(12).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start)
 	if row.Hovered() {
 		row = row.Background(p.sideHover)
 	}
@@ -437,7 +435,7 @@ func (a *app) historyRow(c *ui.Context, e historyItem) {
 		if u == "" {
 			u = e.Name
 		}
-		txt(c, u, fsSmall, p.fg, 0).Grow(1).SingleLine()
+		txtE(c, u, fsSmall, p.fg, 0).Grow(1).Basis(0).MinWidth(0)
 		ui.Box(c).Width(4).Shrink(0)
 		txtMono(c, fmt.Sprint(e.StatusCode), fsTiny, a.statusTextColor(e.StatusCode), 0)
 		ui.Box(c).Width(6).Shrink(0)
@@ -464,8 +462,7 @@ func (a *app) statusTextColor(code int) ui.Color {
 // envList 绘制环境标签：标题行（新建按钮）与环境列表，圆点表示当前激活的环境。
 func (a *app) envList(c *ui.Context) {
 	p := a.p
-	ui.Row(c).FillWidth().Shrink(0).Padding(4, 8).AlignItems(ui.Center).Children(func() {
-		ui.Box(c).Width(4)
+	ui.Row(c).FillWidth().Shrink(0).Padding(6, 12, 4, 12).AlignItems(ui.Center).Children(func() {
 		txt(c, a.t("环境变量", "Environment variables"), 10.4, p.muted, 500)
 		ui.Spacer(c)
 		if a.button(c, btnOpts{w: 20, h: 20, radius: 4, hoverBg: &p.sideHover, tip: a.t("新建环境", "New environment"), key: "env-add"}, func(bool) {
@@ -478,12 +475,12 @@ func (a *app) envList(c *ui.Context) {
 		a.sideHint(c, a.t("暂无环境，点击 + 创建", "No environments yet. Click + to create one."))
 		return
 	}
-	ui.Scroll(c).Grow(1).Basis(0).Children(func() {
+	ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
 		ui.Column(c).FillWidth().Children(func() {
 			for _, e := range a.envs {
 				e := e
 				active := e.ID == a.envID
-				row := ui.ButtonBase(c.Key("e:" + e.ID)).FillWidth().Height(24).MarginX(4).PaddingX(8).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start)
+				row := ui.ButtonBase(c.Key("e:" + e.ID)).FillWidth().Height(24).MarginX(4).PaddingX(12).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start)
 				hover := row.Hovered()
 				if hover {
 					row = row.Background(p.sideHover)
@@ -511,7 +508,7 @@ func (a *app) envList(c *ui.Context) {
 						})
 					}
 					ui.Box(c).Width(8).Shrink(0)
-					txt(c, e.Name, fsBase, p.fg, 0).Grow(1).SingleLine()
+					txtE(c, e.Name, fsV2xs, p.fg, 0).Grow(1)
 					if hover {
 						if a.miniIcon(c, "delete", a.t("删除环境", "Delete environment")) {
 							a.later(func() { a.deleteEnvironment(e.ID, e.Name) })

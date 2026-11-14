@@ -32,6 +32,20 @@ const (
 	sizeSideMin  = 180 // 侧栏最小宽度
 )
 
+// 旧版用 CSS 变量 --size-font-2xs/xs/sm 表示随「界面字体」设置缩放的字号（N、N+1、N+2，默认 N=12）；
+// 其余文本是固定像素，不随设置变化。
+var (
+	fsV2xs float32 = 12
+	fsVXs  float32 = 13
+	fsVSm  float32 = 14
+)
+
+// setUIFontSize 按设置的界面字体 N（10~16）更新三档可缩放字号。
+func setUIFontSize(n int) {
+	n = min(max(n, 10), 16)
+	fsV2xs, fsVXs, fsVSm = float32(n), float32(n+1), float32(n+2)
+}
+
 // palette 是一套完整的颜色令牌，对应 globals.css 的 :root 与 .dark。
 type palette struct {
 	dark bool
@@ -51,6 +65,22 @@ type palette struct {
 
 	jsonKey, jsonString, jsonNumber, jsonBool, jsonBracket ui.Color
 	hover                                                  ui.Color
+}
+
+// elevated 对应旧版 --surface-elevated（弹出层背景）：亮色为白色，暗色为 rgb(48,48,48)。
+func (p *palette) elevated() ui.Color {
+	if p.dark {
+		return p.surface2
+	}
+	return p.surface
+}
+
+// shadowLg 对应旧版 --shadow-lg：0 8px 24px，亮色 0.12、暗色 0.4 的黑色。
+func (p *palette) shadowLg() ui.Color {
+	if p.dark {
+		return ui.RGBA(0, 0, 0, 0.4)
+	}
+	return ui.RGBA(0, 0, 0, 0.12)
 }
 
 func lightPalette() *palette {
@@ -119,7 +149,7 @@ func (p *palette) theme(fontSize float32) *ui.Theme {
 	th.Surface = p.btnBg
 	th.SurfaceHover = p.selected
 	th.SurfacePressed = p.selected
-	th.Border = p.btnBorder
+	th.Border = p.border
 	th.Text = p.fg
 	th.TextMuted = p.muted
 	th.Accent = p.accent
@@ -215,9 +245,37 @@ func icon(c *ui.Context, name string, size float32, col ui.Color) ui.Element {
 	return ui.Icon(c, s).Size(size, size).TextColor(col)
 }
 
+// textShiftY 把文本整体上移的像素数：Chrome 会把基线对齐到整数像素，而 MyGo 按小数定位，
+// 实测同一行文字 MyGo 平均偏低约 0.5~0.8px，这里统一补偿以便与旧版逐像素对齐。
+var textShiftY float32 = -1
+
 // txt 绘制单行文本，指定字号、颜色与字重（0 为常规）。
 func txt(c *ui.Context, s string, size float32, col ui.Color, weight int) ui.Element {
-	e := ui.Text(c, s).FontSize(size).TextColor(col).NoWrap()
+	return txtFlat(c, s, size, col, weight).Translate(0, textShiftY)
+}
+
+// txtE 是可截断的单行文本：超出容器宽度时以省略号结尾（txt 为 NoWrap，不会截断）。
+func txtE(c *ui.Context, s string, size float32, col ui.Color, weight int) ui.Element {
+	return txtEFlat(c, s, size, col, weight).Translate(0, textShiftY)
+}
+
+// txtEFlat 同 txtE 但不做基线补偿。
+func txtEFlat(c *ui.Context, s string, size float32, col ui.Color, weight int) ui.Element {
+	e := ui.Text(c, s).FontSize(size).TextColor(col).FixedLineHeight(size * 1.5).SingleLine().Ellipsis("…")
+	if weight > 0 {
+		e = e.FontWeight(weight)
+	}
+	return e
+}
+
+// txtEMono 是可截断的等宽单行文本。
+func txtEMono(c *ui.Context, s string, size float32, col ui.Color, weight int) ui.Element {
+	return txtE(c, s, size, col, weight).Font(monoFont)
+}
+
+// txtFlat 与 txt 相同但不做上移补偿，用于旧版文字基线本来就与 MyGo 一致的位置（分段标签、标签页标题等）。
+func txtFlat(c *ui.Context, s string, size float32, col ui.Color, weight int) ui.Element {
+	e := ui.Text(c, s).FontSize(size).TextColor(col).NoWrap().FixedLineHeight(size * 1.5) // 旧版 Tailwind 默认 line-height: 1.5
 	if weight > 0 {
 		e = e.FontWeight(weight)
 	}
@@ -320,7 +378,7 @@ func (a *app) pill(c *ui.Context, text string, size float32, fg, bg ui.Color, ra
 func (a *app) kbd(c *ui.Context, s string) {
 	p := a.p
 	ui.Row(c).Width(20).Height(20).Radius(5).Background(p.surface2).Border(1, p.border).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-		txt(c, s, fsTiny, p.fg2, 0)
+		txt(c, s, fsTiny, p.muted, 0)
 	})
 }
 
@@ -336,6 +394,10 @@ type fieldOpts struct {
 	flat   bool // 无边框（用于表格单元格）
 	mono   bool
 	focus  bool // 出现时自动获得焦点
+	// bd 非 nil 时覆盖默认边框色（弹窗内的输入框用 btnBorder）。
+	bd *ui.Color
+	// iconSize/iconLeft/iconGap 覆盖搜索图标的尺寸、左边距与到文字的距离，0 表示默认（12/6/6）。
+	iconSize, iconLeft, iconGap float32
 }
 
 // input 绘制 TablePlus 风格的输入框：圆角边框，获得焦点时边框变为强调色。返回内部输入框以便读取 Changed/Submitted。
@@ -362,6 +424,9 @@ func (a *app) input(c *ui.Context, v *string, ph string, o fieldOpts) ui.Element
 	}
 	if !o.flat {
 		col := p.border
+		if o.bd != nil {
+			col = *o.bd
+		}
 		if wrap.FocusWithin() {
 			col = p.accent
 		}
@@ -371,9 +436,19 @@ func (a *app) input(c *ui.Context, v *string, ph string, o fieldOpts) ui.Element
 	wrap.Children(func() {
 		pad := o.padX
 		if o.icon != "" {
-			ui.Box(c).Width(6).Shrink(0)
-			icon(c, o.icon, 12, p.muted)
-			pad = 6
+			isz, ileft, igap := o.iconSize, o.iconLeft, o.iconGap
+			if isz == 0 {
+				isz = 12
+			}
+			if ileft == 0 {
+				ileft = 6
+			}
+			if igap == 0 {
+				igap = 6
+			}
+			ui.Box(c).Width(ileft).Shrink(0)
+			icon(c, o.icon, isz, p.muted)
+			pad = igap
 		} else if pad == 0 {
 			pad = 8
 		}
@@ -403,11 +478,14 @@ func (a *app) checkbox(c *ui.Context, key any, on *bool, disabled bool) bool {
 	}
 	b.Children(func() {
 		if *on {
-			icon(c, "tick", 9, p.accentFg)
+			icon(c, "tick", 12, p.accentFg)
 		}
 	})
 	return b.Changed()
 }
+
+// countZero 传给 pillTabs 表示「数量为 0 时也显示 (0)」（旧版响应头 / Cookies 标签）。
+const countZero = -1
 
 // pillTabs 是 TablePlus 风格的分段标签（Params/Headers/Body/Auth、响应体/响应头等）：
 // 选中项有浅灰底，数量显示在名称后。返回是否切换了选项。
@@ -419,8 +497,12 @@ func (a *app) pillTabs(c *ui.Context, key string, sel *int, labels []string, cou
 		if i < len(counts) {
 			n = counts[i]
 		}
+		show := n > 0 || n == countZero
+		if n == countZero {
+			n = 0
+		}
 		h := float32(19)
-		if n > 0 {
+		if show {
 			h = 24
 		}
 		active := *sel == i
@@ -435,9 +517,9 @@ func (a *app) pillTabs(c *ui.Context, key string, sel *int, labels []string, cou
 			col = p.fg2
 		}
 		b.Children(func() {
-			txt(c, l, fsSmall, col, 500)
-			if n > 0 {
-				txt(c, "("+itoa(n)+")", 10.4, p.muted, 500)
+			txtFlat(c, l, fsSmall, col, 500)
+			if show {
+				txtFlat(c, "("+itoa(n)+")", 10.4, p.muted, 500)
 			}
 		})
 		if b.Clicked() && !active {
@@ -449,12 +531,12 @@ func (a *app) pillTabs(c *ui.Context, key string, sel *int, labels []string, cou
 }
 
 // kindPills 是 Body/Auth 的类型小标签：12px，圆角 4，选中时为浅强调色底与强调色文字。
-func (a *app) kindPills(c *ui.Context, key string, sel *int, labels []string) bool {
+func (a *app) kindPills(c *ui.Context, key string, sel *int, labels []string, padX float32) bool {
 	p := a.p
 	changed := false
 	for i, l := range labels {
 		active := *sel == i
-		b := ui.ButtonBase(c.Key(key + l)).Height(26).Radius(4).PaddingX(10).AlignItems(ui.Center).Shrink(0)
+		b := ui.ButtonBase(c.Key(key + l)).Height(26).Radius(4).PaddingX(padX).AlignItems(ui.Center).Shrink(0)
 		col, w := p.muted, 0
 		switch {
 		case active:
@@ -463,7 +545,7 @@ func (a *app) kindPills(c *ui.Context, key string, sel *int, labels []string) bo
 		case b.Hovered():
 			col = p.fg2
 		}
-		b.Children(func() { txt(c, l, fsBase, col, w) })
+		b.Children(func() { txt(c, l, fsV2xs, col, w) })
 		if b.Clicked() && !active {
 			*sel = i
 			changed = true
@@ -517,11 +599,16 @@ func (a *app) edTheme() *editor.Theme {
 
 // dialog 绘制居中的对话框：半透明遮罩 + 固定宽高、圆角、细边框与大阴影的面板（同旧版弹窗）。
 func (a *app) dialog(c *ui.Context, open *bool, w, h, radius float32, fn func()) {
+	a.dialogDim(c, open, w, h, radius, 0.35, fn)
+}
+
+// dialogDim 与 dialog 相同，但可指定遮罩的黑色透明度（旧版 cURL 弹窗用 0.5）。
+func (a *app) dialogDim(c *ui.Context, open *bool, w, h, radius, dim float32, fn func()) {
 	p := a.p
 	cw, ch := c.Size()
 	ui.DialogBase(c, open, func(back, panel ui.Element) {
-		back.Background(ui.RGBA(0, 0, 0, 0.4))
-		panel.Width(w).Radius(radius).Background(p.surface).Border(1, p.border).Clip().Shadow(0, 20, 50, 0, ui.RGBA(0, 0, 0, 0.3))
+		back.Background(ui.RGBA(0, 0, 0, dim))
+		panel.Width(w).Radius(radius).Background(p.surface).Border(1, p.border).Clip().Shadow(0, 8, 24, 0, p.shadowLg())
 		if h > 0 {
 			panel.Height(h)
 		}

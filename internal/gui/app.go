@@ -3,6 +3,7 @@ package gui
 import (
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -61,10 +62,11 @@ type app struct {
 	applied       appliedTheme
 	p             *palette  // 当前亮/暗调色板
 	th            *ui.Theme // 当前 MyGo 主题（每帧都要重新设置）
-	zoom          float32   // 已应用的界面缩放（FontSize/13）
 	nav           navState  // 标签访问历史
 	menuLocale    string
 	backupStop    chan struct{}
+	projMenu      projMenuState // 工具栏项目下拉面板状态
+	scrollAt      time.Time     // 最近一次滚动输入的时间（滚动条自动隐藏用）
 }
 
 func newApp(be Backend) *app {

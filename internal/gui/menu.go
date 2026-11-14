@@ -26,7 +26,7 @@ func (a *app) installMenu() {
 		{Label: a.t("文件", "File"), Submenu: []*mygo.MenuItem{
 			{Label: a.t("新建请求", "New Request"), Accelerator: "CmdOrCtrl+N", Click: act(true, func() { a.newRequest("") })},
 			{Label: a.t("新建文件夹", "New Folder"), Accelerator: "CmdOrCtrl+Shift+N", Click: act(true, func() { a.newFolder("") })},
-			{Label: a.t("导入 cURL…", "Import cURL…"), Accelerator: "CmdOrCtrl+I", Click: act(true, func() { a.openImport(importCurlMode) })},
+			{Label: a.t("导入 cURL…", "Import cURL…"), Accelerator: "CmdOrCtrl+I", Click: act(true, a.openCurlDialog)},
 			{Label: a.t("导入集合…", "Import Collection…"), Accelerator: "CmdOrCtrl+Shift+I", Click: act(true, a.importFromFile)},
 			{Label: a.t("从 URL 导入…", "Import from URL…"), Click: act(true, a.importFromURL)},
 			{Label: a.t("导出项目…", "Export Project…"), Accelerator: "CmdOrCtrl+Shift+E", Click: act(true, a.exportProject)},

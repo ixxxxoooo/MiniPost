@@ -149,6 +149,7 @@ func BuildSendInput(d *Draft, requestID string, env SendEnv) (model.SendRequestI
 		TimeoutMS:               max(0, set.RequestTimeoutMs),
 		MaxResponseSizeMB:       max(0, set.MaxResponseSizeMB),
 		SSLVerify:               set.SSLVerify,
+		SSLTLSKeyLog:            set.SSLTLSKeyLog,
 		HTTPVersion:             set.HTTPVersion,
 		DisableDefaultUserAgent: isSuppressed("user-agent"),
 		DisableDefaultAccept:    isSuppressed("accept"),

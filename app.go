@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"path/filepath"
 
 	"minipost/internal/pkg/logger"
 	"minipost/internal/repository"
@@ -43,6 +44,7 @@ func NewApp() *App {
 		historySvc: service.NewHistoryService(store),
 		store:      store,
 	}
+	app.httpSvc.SetKeyLogPath(filepath.Join(store.BaseDir(), "logs", "sslkeys.log"))
 	logger.Info("所有服务初始化完成")
 
 	return app

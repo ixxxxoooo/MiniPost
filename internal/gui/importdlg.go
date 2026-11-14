@@ -25,6 +25,7 @@ type importState struct {
 	strategy int
 	url      string
 	curl     string
+	enter    bool // cURL 文本框按下 Enter（由按键回调置位）
 	busy     bool
 	err      string
 }
@@ -167,25 +168,19 @@ func (a *app) importView(c *ui.Context) {
 			}
 		})
 	}, func() {
-		if s.mode == importCurlMode {
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				a.kbdChip(c, "⌘I")
-				txt(c, a.t("快速唤起", "Quick launch"), fsTiny, p.muted, 0)
-			})
-			ui.Spacer(c)
-		}
 		if a.dlgButton(c, "im-cancel", a.t("取消", "Cancel"), dlgNormal, s.busy) {
 			s.open = false
 		}
-		label := a.t("导入", "Import")
+		label := a.t("导入文件", "Import file")
 		disabled := s.busy
 		switch s.mode {
 		case importFile:
 			disabled = disabled || s.preview == nil
 		case importURL:
+			label = a.t("导入地址", "Import URL")
 			disabled = disabled || strings.TrimSpace(s.url) == ""
 		default:
-			label += " (⌘Enter)"
+			label = a.t("导入 cURL", "Import cURL")
 			disabled = disabled || strings.TrimSpace(s.curl) == ""
 		}
 		if a.dlgButton(c, "im-ok", label, dlgPrimary, disabled) {
@@ -206,9 +201,13 @@ func (a *app) importView(c *ui.Context) {
 			}
 		default:
 			if text := strings.TrimSpace(s.curl); text != "" {
-				s.open = false
-				s.curl = ""
-				a.later(func() { a.importCurl(text, "") })
+				a.later(func() {
+					if err := a.importCurl(text, ""); err != nil {
+						s.err = err.Error()
+						return
+					}
+					s.open, s.curl, s.err = false, "", ""
+				})
 			}
 		}
 	}
@@ -267,10 +266,10 @@ func (a *app) importFileBody(c *ui.Context, s *importState) {
 // conflictList 列出冲突的请求并提供处理方式单选。
 func (a *app) conflictList(c *ui.Context, s *importState, pv *service.ImportPreview) {
 	p := a.p
-	ui.Scroll(c).FillWidth().MaxHeight(120).Children(func() {
+	ui.Scroll(c).FillWidth().MaxHeight(120).Scrollbars(a.scrollbarsVisible()).Children(func() {
 		ui.Column(c).FillWidth().Gap(2).Children(func() {
 			for _, cf := range pv.Conflicts {
-				txtMono(c, fmt.Sprintf("%s %s  (%s)", cf.Method, cf.URL, cf.Name), fsSmall, p.fg2, 0).SingleLine()
+				txtEMono(c, fmt.Sprintf("%s %s  (%s)", cf.Method, cf.URL, cf.Name), fsSmall, p.fg2, 0)
 			}
 			if pv.ConflictCount > len(pv.Conflicts) {
 				txt(c, "…", fsSmall, p.muted, 0)
@@ -326,13 +325,21 @@ func (a *app) importCurlBody(c *ui.Context, s *importState, doImport *bool) {
 		bd = p.accent
 	}
 	box.Border(1, bd).Children(func() {
-		ta := ui.TextAreaBase(c, &s.curl).Placeholder("curl --request GET \\\n  --url https://api.example.com/data \\\n  --header 'Content-Type: application/json'").
+		ta := ui.TextAreaBase(c, &s.curl).Placeholder(a.t("粘贴 cURL 命令，按 Enter 可直接导入", "Paste a cURL command, press Enter to import")).
 			PlaceholderColor(p.muted).Font(monoFont).FontSize(fsBase).TextColor(p.fg).Grow(1).Basis(0).FillHeight().Padding(12).AutoFocus()
-		if ta.Shortcut(ui.Cmd, ui.KeyEnter) {
-			*doImport = true
+		// Enter 导入，Shift+Enter 换行
+		ta.OnTextKey(func(k ui.TextKey) bool {
+			if k.Key == ui.KeyEnter && k.Mods == 0 {
+				s.enter = true
+				return true
+			}
+			return false
+		})
+		if s.enter {
+			s.enter, *doImport = false, true
 		}
 	})
-	txt(c, a.t("⌘ + Enter 导入，Enter 换行", "⌘ + Enter to import, Enter for newline"), fsTiny, p.muted, 0)
+	txt(c, a.t("Enter 导入，Shift+Enter 换行", "Enter to import, Shift+Enter for newline"), fsTiny, p.muted, 0)
 }
 
 func (a *app) runImport(p *service.ImportPreview, strategy string) {
@@ -348,16 +355,9 @@ func (a *app) runImport(p *service.ImportPreview, strategy string) {
 
 // exportProject 把当前项目导出为 JSON 文件。
 func (a *app) exportProject() {
-	pid := a.projectID
 	name := "minipost-export"
 	if p := a.project(); p != nil {
-		name = strings.ReplaceAll(p.Name, "/", "-")
+		name = p.Name
 	}
-	a.async(func() func() {
-		content, err := a.be.ExportProjectJSON(pid)
-		if err == nil {
-			err = a.be.SaveFileDialogJSON(a.win, name+".json", content)
-		}
-		return func() { a.fail(a.t("导出项目", "Export project"), err) }
-	})
+	a.exportProjectByID(a.projectID, name)
 }

@@ -15,7 +15,7 @@ func (a *app) tabBar(c *ui.Context) {
 			})
 			vline(c, p.tabDivider)
 		}
-		ui.ScrollHorizontal(c).Grow(1).Basis(0).Children(func() {
+		ui.ScrollHorizontal(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
 			ui.Row(c).FillHeight().AlignItems(ui.End).Children(func() {
 				for i, t := range a.tabs {
 					a.tabItem(c, i, t)
@@ -77,7 +77,7 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 				if active {
 					col, w = p.fg, 500
 				}
-				txt(c, t.title(), fsBase, col, w).Grow(1).Basis(0).SingleLine()
+				txtE(c, t.title(), fsV2xs, col, w).Grow(1).Basis(0)
 				if t.dirty {
 					ui.Box(c).Size(6, 6).Radius(3).Background(p.accent).Shrink(0)
 				}
@@ -179,7 +179,7 @@ func (a *app) envSelector(c *ui.Context) {
 	}
 	btn.Children(func() {
 		icon(c, "globe", 11, col)
-		txt(c, name, fsTiny, col, 0).MaxWidth(100).SingleLine()
+		txtE(c, name, fsTiny, col, 0).MaxWidth(100)
 		icon(c, "arrowDown", 8, col)
 	})
 }

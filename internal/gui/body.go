@@ -24,7 +24,7 @@ func (a *app) bodyTab(c *ui.Context, t *tab) {
 	}
 	ui.Column(c).Grow(1).Basis(0).Children(func() {
 		ui.Row(c).FillWidth().Shrink(0).PaddingX(8).Padding(6, 8).Gap(4).AlignItems(ui.Center).Children(func() {
-			if a.kindPills(c, "body", &kind, []string{"none", "form-data", "raw", "JSON", "x-www-form-urlencoded"}) {
+			if a.kindPills(c, "body", &kind, []string{"none", "form-data", "raw", "JSON", "x-www-form-urlencoded"}, 10) {
 				d.Body.Type = bodyKinds[kind]
 			}
 			ui.Spacer(c)

@@ -15,11 +15,8 @@ type appliedTheme struct {
 
 // applyTheme 按设置中的主题模式选择亮/暗调色板，并把对应的 MyGo 主题应用到窗口。
 func (a *app) applyTheme(c *ui.Context) {
-	// 设置里的“界面字体”以 13px 为基准缩放整个界面；设置一次后保持，变化时才重设。
-	if z := float32(a.set.FontSize) / 13; z != a.zoom && z > 0 {
-		c.SetZoom(z)
-		a.zoom = z
-	}
+	// 设置里的“界面字体”只缩放旧版用 --size-font-* 变量的那几处文本，而不是整个界面。
+	setUIFontSize(a.set.FontSize)
 	if a.native && (a.applied.source != a.set.Theme || !a.applied.ready) {
 		switch a.set.Theme {
 		case "light":

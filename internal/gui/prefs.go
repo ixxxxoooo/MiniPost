@@ -108,7 +108,7 @@ func (a *app) prefsView(c *ui.Context) {
 					}
 				})
 				hline(c, p.border)
-				ui.Scroll(c).Grow(1).Basis(0).Children(func() {
+				ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
 					ui.Column(c).FillWidth().PaddingX(16).PaddingY(10).Gap(12).Children(func() {
 						switch s.section {
 						case 0:
@@ -146,8 +146,8 @@ func (a *app) settingsRow(c *ui.Context, key string, title, desc string, last bo
 	}
 	row.Children(func() {
 		ui.Column(c).Grow(1).Basis(0).Gap(2).Children(func() {
-			ui.Text(c, title).FontSize(fsLarge).FontWeight(500).TextColor(p.fg)
-			ui.Text(c, desc).FontSize(fsSmall).FixedLineHeight(20).TextColor(p.fg2)
+			ui.Text(c, title).FontSize(fsLarge).FontWeight(500).FixedLineHeight(fsLarge*1.5).TextColor(p.fg).Translate(0, textShiftY)
+			ui.Text(c, desc).FontSize(fsSmall).FixedLineHeight(20).TextColor(p.fg2).Translate(0, textShiftY)
 		})
 		ui.Row(c).Shrink(0).AlignItems(ui.Center).Children(control)
 	})
