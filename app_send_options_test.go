@@ -104,16 +104,19 @@ func TestSendDraftFromImportedCurl(t *testing.T) {
 	}
 }
 
-// 导入 cURL 再发送，线上收到的 Content-Type 与 body 要和 curl 自己发的等价。
-func TestSendImportedCurlBodyMatchesCurl(t *testing.T) {
+// 导入 cURL 再发送：线上收到的 Content-Type 与 body 要符合 Postman 导入后再发送的结果。
+func TestSendImportedCurlBodyMatchesPostman(t *testing.T) {
 	cases := []struct {
 		name, args, wantCT, wantBody string
 	}{
 		{"默认表单", `-d 'a=1&b=x y'`, "application/x-www-form-urlencoded", "a=1&b=x+y"},
 		{"多个 -d", `-d a=1 --data b=2`, "application/x-www-form-urlencoded", "a=1&b=2"},
+		{"没有 = 的数据：键为原文、值为空", `-d 'plain text'`, "application/x-www-form-urlencoded", "plain+text="},
+		{"没有 Content-Type 时不猜 JSON", `-d '{"a":1}'`, "application/x-www-form-urlencoded", "%7B%22a%22%3A1%7D="},
 		{"显式 JSON", `-H 'Content-Type: application/json' -d '{"a":1}'`, "application/json", `{"a":1}`},
 		{"显式 text/plain", `-H 'Content-Type: text/plain' -d 'a=1'`, "text/plain", "a=1"},
-		{"无法拆成键值行", `-d 'plain text'`, "application/x-www-form-urlencoded", "plain text"},
+		{"--data-binary 一律 raw", `--data-binary 'a=1&b=2'`, "text/plain", "a=1&b=2"},
+		{"--data-binary 保留显式类型", `-H 'Content-Type: application/json' --data-binary '{"a":1}'`, "application/json", `{"a":1}`},
 		{"--json", `--json '{"a":1}'`, "application/json", `{"a":1}`},
 	}
 	for _, c := range cases {
@@ -126,6 +129,19 @@ func TestSendImportedCurlBodyMatchesCurl(t *testing.T) {
 		if r.Method != "POST" || r.Header.Get("Content-Type") != c.wantCT || string(r.Body) != c.wantBody {
 			t.Errorf("%s: method=%s ct=%q body=%q，期望 POST %q %q", c.name, r.Method, r.Header.Get("Content-Type"), r.Body, c.wantCT, c.wantBody)
 		}
+	}
+}
+
+// -F 导入后发送：multipart 带 boundary（导入时已删掉手写的 Content-Type 头），字段齐全。
+func TestSendImportedCurlFormData(t *testing.T) {
+	e := newSendEnv(t)
+	in, err := e.app.ImportCurl(`curl '` + e.srv.URL + `/f' -H 'Content-Type: multipart/form-data' -F 'a=1' -F 'solo'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := parseMultipart(t, e.send(t, client.DraftFromSendInput(*in, "imp", e.pid, "")))
+	if len(parts) != 2 || parts[0].name != "a" || parts[0].data != "1" || parts[1].name != "solo" || parts[1].data != "" {
+		t.Fatalf("字段不对: %+v", parts)
 	}
 }
 

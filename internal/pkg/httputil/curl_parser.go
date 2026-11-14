@@ -37,25 +37,36 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 			Value: cookieValue,
 		})
 	}
+	// appendHeader 与 Postman 的 cURL 导入一致：同名请求头只保留先出现的（Cookie 除外）；
+	// 形如 -H 'X-Custom;' 的无值请求头导入为空值。
 	appendHeader := func(value string) {
 		headerStr := strings.TrimSpace(value)
-		if idx := strings.Index(headerStr, ":"); idx > 0 {
-			input.Headers = append(input.Headers, model.KeyValue{
-				Key:   strings.TrimSpace(headerStr[:idx]),
-				Value: strings.TrimSpace(headerStr[idx+1:]),
-			})
+		idx := strings.Index(headerStr, ":")
+		if idx < 0 && strings.HasSuffix(headerStr, ";") {
+			headerStr = strings.TrimSuffix(headerStr, ";") + ":"
+			idx = strings.Index(headerStr, ":")
 		}
+		if idx <= 0 {
+			return
+		}
+		key, val := strings.TrimSpace(headerStr[:idx]), strings.TrimSpace(headerStr[idx+1:])
+		if !strings.EqualFold(key, "Cookie") {
+			for _, h := range input.Headers {
+				if h.Key == key {
+					return
+				}
+			}
+		}
+		input.Headers = append(input.Headers, model.KeyValue{Key: key, Value: val})
 	}
 	var data curlData
+	userAgent := ""
 	appendData := func(value string) { data.parts = append(data.parts, value) }
 	appendForm := func(value string) {
 		formArg := strings.TrimSpace(value)
-		key, formValue, ok := strings.Cut(formArg, "=")
-		if !ok {
-			return
-		}
+		key, formValue, _ := strings.Cut(formArg, "=") // 没有 = 时键为原文、值为空（同 Postman）
 		key = strings.TrimSpace(key)
-		formValue = strings.TrimSpace(formValue)
+		formValue = strings.TrimSpace(stripFormType(formValue))
 		if key == "" {
 			return
 		}
@@ -86,14 +97,11 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 		}
 	}
 	setBasicAuth := func(value string) {
-		if idx := strings.Index(value, ":"); idx >= 0 {
-			input.Auth = model.AuthConfig{
-				Type: "basic",
-				Basic: model.BasicAuth{
-					Username: value[:idx],
-					Password: value[idx+1:],
-				},
-			}
+		// 只有用户名也是合法的 curl 写法，密码留空（同 Postman）。
+		user, pass, _ := strings.Cut(value, ":")
+		input.Auth = model.AuthConfig{
+			Type:  "basic",
+			Basic: model.BasicAuth{Username: user, Password: pass},
 		}
 	}
 
@@ -126,7 +134,7 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 				continue
 			case "--head":
 				input.Method = "HEAD"
-				data.methodExplicit = true
+				data.head, data.methodExplicit = true, true
 				continue
 			case "--get":
 				data.getMode = true
@@ -147,9 +155,19 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 					appendLiteralCookieHeader(value)
 				}
 				continue
-			case "--data", "--data-raw", "--data-binary":
+			case "--data", "--data-raw", "--data-ascii":
 				if value, ok := consumeOptionValue(parts, &i, inlineValue, hasInlineValue); ok {
 					appendData(value)
+				}
+				continue
+			case "--data-binary":
+				if value, ok := consumeOptionValue(parts, &i, inlineValue, hasInlineValue); ok {
+					data.binary, data.hasBinary = value, true
+				}
+				continue
+			case "--user-agent":
+				if value, ok := consumeOptionValue(parts, &i, inlineValue, hasInlineValue); ok {
+					userAgent = strings.Trim(value, "'\"")
 				}
 				continue
 			case "--data-urlencode":
@@ -180,9 +198,14 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 			}
 		case "-G":
 			data.getMode = true
+		case "-A":
+			if i+1 < len(parts) {
+				i++
+				userAgent = strings.Trim(parts[i], "'\"")
+			}
 		case "-I", "--head":
 			input.Method = "HEAD"
-			data.methodExplicit = true
+			data.head, data.methodExplicit = true, true
 		case "-H":
 			if i+1 < len(parts) {
 				i++
@@ -221,7 +244,12 @@ func ParseCurlCommand(curlCmd string) (*model.SendRequestInput, error) {
 	if strings.TrimSpace(input.URL) == "" {
 		return nil, errors.New("cURL 命令缺少 URL")
 	}
-	finalizeCurlBody(input, data)
+	if userAgent != "" { // -A 导入为排在最前面的 User-Agent 请求头（同 Postman）
+		input.Headers = append([]model.KeyValue{{Key: "User-Agent", Value: userAgent}}, input.Headers...)
+	}
+	if err := finalizeCurlBody(input, data); err != nil {
+		return nil, err
+	}
 
 	return input, nil
 }
@@ -244,11 +272,6 @@ func encodeDataURLEncode(value string) string {
 		return enc(content)
 	}
 	return name + "=" + enc(content)
-}
-
-func looksLikeJSONBody(data string) bool {
-	trimmed := strings.TrimSpace(data)
-	return strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")
 }
 
 func splitLongOption(part string) (option string, value string, hasValue bool) {

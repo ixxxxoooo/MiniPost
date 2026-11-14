@@ -270,29 +270,20 @@ func sameForm(b model.RequestBody, want ...string) bool {
 }
 
 func TestParseCurlDataURLEncode(t *testing.T) {
+	// --data-urlencode 的每个参数是独立的一项：name=content 只编码 content，& 是内容的一部分。
 	forms := map[string][]string{
 		`curl http://x.test --data-urlencode 'k=v w&x'`:                      {"k=v w&x"},
 		`curl http://x.test --data-urlencode='中=文 字'`:                        {"中=文 字"},
 		`curl http://x.test --data-urlencode 'a=1' --data-urlencode 'b=x y'`: {"a=1", "b=x y"},
+		`curl http://x.test --data-urlencode '=a b'`:                         {"a b="},
+		`curl http://x.test --data-urlencode 'a b'`:                          {"a b="},
+		`curl http://x.test --data-urlencode 'f@/p/q'`:                       {"f@/p/q="}, // @文件 形式无法读取，原样保留
+		`curl http://x.test --data-urlencode '@/p/q'`:                        {"@/p/q="},
 	}
 	for cmd, want := range forms {
 		in, err := ParseCurlCommand(cmd)
 		if err != nil || !sameForm(in.Body, want...) || in.Method != "POST" {
 			t.Errorf("%s\n got body=%+v method=%q err=%v\nwant form %v", cmd, in.Body, in.Method, err, want)
-		}
-	}
-	// 没有名字或 @文件：无法拆成键值行，保持 raw 原样，并补上 curl 默认的 Content-Type。
-	raws := map[string]string{
-		`curl http://x.test --data-urlencode '=a b'`:   "a%20b",
-		`curl http://x.test --data-urlencode 'a b'`:    "a%20b",
-		`curl http://x.test --data-urlencode 'f@/p/q'`: "f@/p/q",
-		`curl http://x.test --data-urlencode '@/p/q'`:  "@/p/q",
-	}
-	for cmd, want := range raws {
-		in, err := ParseCurlCommand(cmd)
-		ct, _ := headerValue(in.Headers, "Content-Type")
-		if err != nil || in.Body.Type != "raw" || in.Body.Raw != want || ct != formContentType {
-			t.Errorf("%s\n got body=%+v ct=%q err=%v\nwant raw %q", cmd, in.Body, ct, err, want)
 		}
 	}
 }
