@@ -55,6 +55,9 @@ func (a *app) sendTab(t *tab) {
 // finishSend 在主线程处理发送结果。
 func (a *app) finishSend(t *tab, method, url string, resp *model.HttpResponse, err error) {
 	t.sending = false
+	if err != nil {
+		t.downloadAfter = false
+	}
 	rs := t.resp
 	rs.streaming = false
 	if err != nil {
@@ -73,6 +76,10 @@ func (a *app) finishSend(t *tab, method, url string, resp *model.HttpResponse, e
 	}
 	a.logResponse(method, url, resp.StatusCode, resp.Duration, "")
 	a.reloadHistory()
+	if t.downloadAfter {
+		t.downloadAfter = false
+		a.saveResponse(resp)
+	}
 }
 
 // copyResponse 复制响应体文本到剪贴板。

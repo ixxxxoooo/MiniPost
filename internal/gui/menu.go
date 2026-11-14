@@ -40,12 +40,12 @@ func (a *app) installMenu() {
 		}},
 		{Label: a.t("请求", "Request"), Submenu: []*mygo.MenuItem{
 			{Label: a.t("发送", "Send"), Accelerator: "CmdOrCtrl+Enter", Click: act(true, func() {
-				if t := a.activeTab(); t != nil {
+				if t := a.activeTab(); t != nil && t.env == nil {
 					a.sendTab(t)
 				}
 			})},
 			{Label: a.t("复制为 cURL", "Copy as cURL"), Accelerator: "CmdOrCtrl+Shift+C", Click: act(true, func() {
-				if t := a.activeTab(); t != nil {
+				if t := a.activeTab(); t != nil && t.env == nil {
 					a.copyCurl(t)
 				}
 			})},

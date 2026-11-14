@@ -12,11 +12,8 @@ import (
 
 func TestEnvManagerCreateAndSave(t *testing.T) {
 	a, tt, be := zhApp(t)
-	a.openEnvManager()
+	a.openEnvManager() // 没有环境时先询问名称
 	tt.Frame()
-	if err := tt.Click("新建环境"); err != nil {
-		t.Fatal(err)
-	}
 	tt.Key(ui.Cmd, ui.KeyA)
 	tt.Type("Prod")
 	if err := tt.Click("创建"); err != nil {
@@ -26,18 +23,33 @@ func TestEnvManagerCreateAndSave(t *testing.T) {
 	if len(envs) != 1 || envs[0].Name != "Prod" {
 		t.Fatalf("应创建环境 Prod，实际 %+v", envs)
 	}
-	d := a.overlays.envMgr.draft
-	if d == nil {
-		t.Fatalf("创建后应载入编辑草稿")
+	cur := a.activeTab()
+	if cur == nil || cur.env == nil || cur.env.env.ID != envs[0].ID {
+		t.Fatalf("创建后应以标签页打开环境编辑页")
 	}
-	d.Variables[0].Key, d.Variables[0].Value = "host", "api.test"
+	if cur.title() != "Prod" || cur.env.dirty() {
+		t.Fatalf("新打开的环境页不应有未保存修改")
+	}
+	cur.env.env.Variables[0].Key, cur.env.env.Variables[0].Value = "host", "api.test"
 	tt.Frame()
+	if !cur.env.dirty() {
+		t.Fatalf("修改变量后应有未保存修改")
+	}
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
 	}
 	saved := be.envs[a.projectID][0].Variables
 	if len(saved) != 1 || saved[0].Key != "host" || saved[0].Value != "api.test" {
 		t.Fatalf("应保存变量且不含空白行，实际 %+v", saved)
+	}
+	if cur.env.dirty() {
+		t.Fatalf("保存后不应再有未保存修改")
+	}
+	// 再次打开同一环境只切换，不新增标签。
+	n := len(a.tabs)
+	a.openEnvManagerFor(envs[0].ID)
+	if len(a.tabs) != n {
+		t.Fatalf("重复打开环境不应新增标签")
 	}
 }
 
@@ -50,7 +62,7 @@ func TestEnvVariablesResolvedOnSend(t *testing.T) {
 	a.openRequest(a.coll.Requests[0].ID)
 	a.activeTab().draft.URL = "https://{{host}}/x"
 	tt.Frame()
-	if err := tt.Click("发送"); err != nil {
+	if err := tt.Click("Send"); err != nil {
 		t.Fatal(err)
 	}
 	if len(be.sent) != 1 || be.sent[0].URL != "https://api.test/x" {
@@ -67,7 +79,7 @@ func TestSettingsApplyAndPersist(t *testing.T) {
 	a.set.Locale = localeEN
 	a.applySettings()
 	tt.Frame()
-	if !tt.HasText("Settings") {
+	if !tt.HasText("Requests") {
 		t.Fatalf("切换为英文后界面应使用英文，实际 %q", tt.Texts())
 	}
 	loaded := a.setStore.Load()
@@ -84,14 +96,26 @@ func TestSettingsDialogOpens(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	a.openPrefs()
 	tt.Frame()
-	if !tt.HasText("自动跟随重定向") && !tt.HasText("语言") {
-		t.Fatalf("设置对话框应显示选项，实际 %q", tt.Texts())
+	if !tt.HasText("HTTP 版本") || !tt.HasText("SSL 证书校验") {
+		t.Fatalf("设置对话框应显示通用选项，实际 %q", tt.Texts())
 	}
-	if err := tt.Click("请求"); err != nil {
+	if err := tt.Click("外观"); err != nil {
 		t.Fatal(err)
 	}
-	if !tt.HasText("校验 SSL 证书") {
-		t.Fatalf("请求页应显示 SSL 选项，实际 %q", tt.Texts())
+	if !tt.HasText("外观主题") {
+		t.Fatalf("外观页应显示主题选项，实际 %q", tt.Texts())
+	}
+	if err := tt.Click("深色"); err != nil {
+		t.Fatal(err)
+	}
+	if a.set.Theme != "dark" {
+		t.Fatalf("点击深色应切换主题，实际 %q", a.set.Theme)
+	}
+	if err := tt.Click("数据"); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.HasText("自动备份") {
+		t.Fatalf("数据页应显示备份选项，实际 %q", tt.Texts())
 	}
 	snapshot(t, tt, "prefs")
 }
@@ -111,7 +135,7 @@ func TestCookiesAddAndSent(t *testing.T) {
 	s.open = false
 	a.openRequest(a.coll.Requests[0].ID)
 	tt.Frame()
-	if err := tt.Click("发送"); err != nil {
+	if err := tt.Click("Send"); err != nil {
 		t.Fatal(err)
 	}
 	var cookie string
@@ -150,7 +174,7 @@ func TestConsolePanelToggle(t *testing.T) {
 	}
 	a.openRequest(a.coll.Requests[0].ID)
 	tt.Frame()
-	if err := tt.Click("发送"); err != nil {
+	if err := tt.Click("Send"); err != nil {
 		t.Fatal(err)
 	}
 	if !tt.HasText("https://example.com/alpha") {
@@ -199,7 +223,7 @@ func TestHeadersTabListsAutoHeaders(t *testing.T) {
 	}
 	var found bool
 	for _, s := range tt.Texts() {
-		if strings.HasPrefix(s, "自动生成的请求头 (") {
+		if strings.HasPrefix(s, "显示 ") {
 			found = true
 		}
 	}

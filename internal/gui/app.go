@@ -44,16 +44,22 @@ type app struct {
 	tabs   []*tab
 	active int
 
-	sideTab    int // 0 集合，1 历史
-	showHome   bool
-	splitPct   float32
-	syncSel    bool // 下一帧让侧栏选中与当前标签一致
-	overlays   overlays
-	deferred   []func() // 在本帧构建结束后执行的变更，避免在遍历数据时修改它
-	toastMsgs  []string
-	applied    appliedTheme
-	menuLocale string
-	backupStop chan struct{}
+	sideTab       int               // 0 请求，1 历史，2 环境
+	sideQuery     string            // 侧栏搜索词
+	histCollapsed map[string]bool   // 已折叠的历史日期分组
+	cardHot       string            // 当前保持显示的悬停卡片
+	bulk          map[string]string // 处于批量编辑模式的键值表及其文本
+	showHome      bool
+	splitPct      float32
+	syncSel       bool // 下一帧让侧栏选中与当前标签一致
+	overlays      overlays
+	deferred      []func() // 在本帧构建结束后执行的变更，避免在遍历数据时修改它
+	toastMsgs     []string
+	applied       appliedTheme
+	p             *palette // 当前亮/暗调色板
+	nav           navState // 标签访问历史
+	menuLocale    string
+	backupStop    chan struct{}
 }
 
 func newApp(be Backend) *app {
@@ -64,8 +70,10 @@ func newApp(be Backend) *app {
 		sessions:   client.NewSessionStore(base),
 		jar:        client.NewJar(filepath.Join(base, "cookies.json")),
 		outRow:     -1,
+		nav:        navState{idx: -1},
 		histRow:    -1,
-		splitPct:   50,
+		bulk:       map[string]string{},
+		splitPct:   55,
 		consolePct: 72,
 	}
 	a.set = a.setStore.Load()

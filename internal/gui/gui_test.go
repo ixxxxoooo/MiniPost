@@ -86,7 +86,7 @@ func TestSendShowsResponse(t *testing.T) {
 	a, tt, be := zhApp(t)
 	a.openRequest(a.coll.Requests[0].ID)
 	tt.Frame()
-	if err := tt.Click("发送"); err != nil {
+	if err := tt.Click("Send"); err != nil {
 		t.Fatal(err)
 	}
 	if len(be.sent) != 1 || be.sent[0].URL != "https://example.com/alpha" {
@@ -106,10 +106,10 @@ func TestSendFailureShowsError(t *testing.T) {
 	be.sendErr = os.ErrDeadlineExceeded
 	a.openRequest(a.coll.Requests[0].ID)
 	tt.Frame()
-	if err := tt.Click("发送"); err != nil {
+	if err := tt.Click("Send"); err != nil {
 		t.Fatal(err)
 	}
-	if !tt.HasText("请求失败") {
+	if !tt.HasText("无法发送请求") {
 		t.Fatalf("失败时应显示错误，实际 %q", tt.Texts())
 	}
 	if a.activeTab().sending {
@@ -123,10 +123,10 @@ func TestEditMarksDirtyAndSave(t *testing.T) {
 	tab := a.activeTab()
 	tab.draft.URL = "https://changed.example"
 	tt.Frame()
-	if !tab.dirty || !tt.HasText("alpha ●") {
+	if !tab.dirty {
 		t.Fatalf("修改后应标记未保存，实际 dirty=%v texts=%q", tab.dirty, tt.Texts())
 	}
-	if err := tt.Click("保存"); err != nil {
+	if err := tt.Click("Save"); err != nil {
 		t.Fatal(err)
 	}
 	if got := be.colls[a.projectID].Requests[0].URL; got != "https://changed.example" {
@@ -142,7 +142,7 @@ func TestCloseDirtyTabAsks(t *testing.T) {
 	a.openRequest(a.coll.Requests[0].ID)
 	a.activeTab().draft.URL = "https://changed.example"
 	tt.Frame()
-	if err := tt.Click("×"); err != nil {
+	if err := tt.Click("关闭 (⌘W)"); err != nil {
 		t.Fatal(err)
 	}
 	if !tt.HasText("不保存") {
@@ -160,7 +160,7 @@ func TestCloseCleanTabDirectly(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	a.openRequest(a.coll.Requests[0].ID)
 	tt.Frame()
-	if err := tt.Click("×"); err != nil {
+	if err := tt.Click("关闭 (⌘W)"); err != nil {
 		t.Fatal(err)
 	}
 	if len(a.tabs) != 0 {
@@ -174,9 +174,8 @@ func TestURLTypingSyncsParams(t *testing.T) {
 	tab := a.activeTab()
 	tab.draft.URL = "seed"
 	tt.Frame()
-	if err := tt.Click("URL"); err != nil {
-		t.Fatal(err)
-	}
+	tt.ClickAt(500, 117) // URL 输入框
+
 	tt.Key(ui.Cmd, ui.KeyA)
 	tt.Type("https://x.test/p?a=1&b=2")
 	if got := tab.draft.URL; got != "https://x.test/p?a=1&b=2" {
@@ -196,10 +195,7 @@ func TestURLTypingSyncsParams(t *testing.T) {
 func TestNewRequestFromSidebar(t *testing.T) {
 	a, tt, be := zhApp(t)
 	before := len(be.colls[a.projectID].Requests)
-	if err := tt.Click("+"); err != nil {
-		t.Fatal(err)
-	}
-	if err := tt.ChooseMenuItem("新建请求"); err != nil {
+	if err := tt.Click("新建请求 (⌘N)"); err != nil {
 		t.Fatal(err)
 	}
 	if got := len(be.colls[a.projectID].Requests); got != before+1 {

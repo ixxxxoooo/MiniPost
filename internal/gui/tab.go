@@ -53,6 +53,12 @@ type tab struct {
 	sending  bool
 	sendID   string
 	urlCache string // 上一次与 Params 同步过的 URL
+
+	env *envEdit // 非空表示这是环境编辑页标签，而不是请求标签
+
+	editName      bool   // 面包屑里的请求名是否处于编辑状态
+	nameBuf       string // 请求名编辑缓冲
+	downloadAfter bool   // 本次发送完成后保存响应到文件（Send and Download）
 }
 
 func newTab(d *client.Draft, base *client.Draft) *tab {
@@ -71,12 +77,19 @@ func (t *tab) flush() {
 }
 
 func (t *tab) refreshDirty() {
+	if t.env != nil {
+		t.dirty = t.env.dirty()
+		return
+	}
 	t.flush()
 	t.dirty = t.draft.Fingerprint() != t.base.Fingerprint()
 }
 
 // title 返回标签显示名。
 func (t *tab) title() string {
+	if t.env != nil {
+		return t.env.env.Name
+	}
 	if t.draft.Name == "" {
 		return "Untitled"
 	}
@@ -128,6 +141,10 @@ func (a *app) openRequest(id string) {
 func (a *app) activate(i int) {
 	a.active = i
 	a.syncSel = true
+	if a.tabs[i].env != nil {
+		return
+	}
+	a.navRecord(a.tabs[i].draft.ID)
 	for p := a.tree.nodes[a.tabs[i].draft.ID].parent; p != ""; p = a.tree.nodes[p].parent {
 		a.outline.Open.Add(p)
 	}
@@ -135,6 +152,9 @@ func (a *app) activate(i int) {
 
 // saveTab 保存标签到磁盘。
 func (a *app) saveTab(t *tab) bool {
+	if t.env != nil {
+		return a.saveEnvTab(t)
+	}
 	t.flush()
 	if err := a.be.SaveRequestItem(t.draft.ToItem()); err != nil {
 		a.fail(a.t("保存请求", "Save request"), err)
@@ -205,8 +225,14 @@ func (a *app) persistSession() {
 		return
 	}
 	s := a.sessions.Load()
-	ps := client.ProjectSession{Active: a.active}
-	for _, t := range a.tabs {
+	ps := client.ProjectSession{}
+	for i, t := range a.tabs {
+		if t.env != nil {
+			continue // 环境编辑页不进入会话
+		}
+		if i == a.active {
+			ps.Active = len(ps.Tabs)
+		}
 		t.refreshDirty()
 		st := client.SavedTab{RequestID: t.draft.ID}
 		if t.dirty {

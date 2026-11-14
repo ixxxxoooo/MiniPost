@@ -1,46 +1,84 @@
 package gui
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/google/uuid"
 
+	"minipost/internal/client"
 	"minipost/internal/model"
 	"minipost/internal/pkg/logger"
 )
 
-// envState 是环境管理对话框的状态。
-type envState struct {
-	open  bool
-	sel   int
-	list  ui.ListState
-	draft *model.Environment // 正在编辑的环境副本，点“保存”后才写回
-	index int                // draft 对应的环境下标，用于发现选择变化
+// envEdit 是环境编辑页（以标签页形式打开）的状态：环境的可编辑副本，保存后才写回。
+type envEdit struct {
+	env  model.Environment
+	base string // 最近一次保存（或载入）时的内容指纹，用于判断是否有未保存修改
 }
 
-func (a *app) openEnvManager() {
-	s := &a.overlays.envMgr
-	*s = envState{open: true, index: -1}
-	for i, e := range a.envs {
-		if e.ID == a.envID {
-			s.sel = i
-		}
+// fingerprint 生成忽略末尾空白行后的内容指纹。
+func (e *envEdit) fingerprint() string {
+	type row struct {
+		K, V   string
+		On, Sc bool
 	}
-	a.loadEnvDraft(s)
+	rows := []row{}
+	for _, v := range e.env.Variables {
+		if strings.TrimSpace(v.Key) == "" && v.Value == "" {
+			continue
+		}
+		rows = append(rows, row{strings.TrimSpace(v.Key), v.Value, v.Enabled, v.IsSecret})
+	}
+	b, _ := json.Marshal(struct {
+		Name string
+		Rows []row
+	}{strings.TrimSpace(e.env.Name), rows})
+	return string(b)
 }
 
-// loadEnvDraft 把选中的环境复制为可编辑草稿。
-func (a *app) loadEnvDraft(s *envState) {
-	s.index = s.sel
-	s.draft = nil
-	if s.sel < 0 || s.sel >= len(a.envs) {
+func (e *envEdit) dirty() bool { return e.fingerprint() != e.base }
+
+// newEnvTab 为环境创建编辑标签；草稿只是占位，保证请求标签的通用逻辑不会空指针。
+func newEnvTab(e model.Environment) *tab {
+	e.Variables = append([]model.Variable(nil), e.Variables...)
+	ensureBlankVar(&e)
+	ed := &envEdit{env: e}
+	ed.base = ed.fingerprint()
+	d := &client.Draft{ID: "env:" + e.ID}
+	t := newTab(d, d.Clone())
+	t.env = ed
+	return t
+}
+
+func (a *app) openEnvManager() { a.openEnvManagerFor(a.envID) }
+
+// openEnvManagerFor 打开指定环境的编辑标签；id 为空时取当前或第一个环境，没有环境则先新建。
+func (a *app) openEnvManagerFor(id string) {
+	if id == "" && len(a.envs) > 0 {
+		id = a.envs[0].ID
+	}
+	if id == "" {
+		a.newEnvironment()
 		return
 	}
-	d := a.envs[s.sel]
-	d.Variables = append([]model.Variable(nil), d.Variables...)
-	ensureBlankVar(&d)
-	s.draft = &d
+	for i, t := range a.tabs {
+		if t.env != nil && t.env.env.ID == id {
+			a.showHome = false
+			a.activate(i)
+			return
+		}
+	}
+	for _, e := range a.envs {
+		if e.ID == id {
+			a.tabs = append(a.tabs, newEnvTab(e))
+			a.showHome = false
+			a.activate(len(a.tabs) - 1)
+			logger.Info("已打开环境编辑页", "envID", id)
+			return
+		}
+	}
 }
 
 // ensureBlankVar 保证变量表末尾有一行空白行供输入。
@@ -51,88 +89,145 @@ func ensureBlankVar(e *model.Environment) {
 	}
 }
 
-// envDialogView 绘制环境管理对话框。
-func (a *app) envDialogView(c *ui.Context) {
-	s := &a.overlays.envMgr
-	th := c.Theme()
-	ui.Modal(c, &s.open, func() {
-		ui.Text(c, a.t("环境管理", "Environments")).Bold()
-		ui.Row(c).Gap(14).Children(func() {
-			ui.Column(c).Width(190).Shrink(0).Gap(8).Children(func() {
-				s.list.Selected = &s.sel
-				ui.List(c, &s.list, len(a.envs), func(i int) { ui.Text(c, a.envs[i].Name).SingleLine() }).Height(300)
-				if ui.Button(c, a.t("新建环境", "New Environment")).Clicked() {
-					a.later(a.newEnvironment)
+// envPage 绘制环境编辑页：44px 标题行（环境名输入、保存、关闭）+ 变量表。
+func (a *app) envPage(c *ui.Context, t *tab) {
+	p := a.p
+	ed := t.env
+	ui.Column(c).Grow(1).Basis(0).Background(p.surface).Children(func() {
+		ui.Row(c).Height(44).FillWidth().Shrink(0).PaddingX(16).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				icon(c, "globe", 14, p.accent)
+				bg := p.surface2
+				bdc := p.border
+				row := ui.Row(c).Height(28).MinWidth(220).MaxWidth(420).Radius(6).Background(bg).AlignItems(ui.Center)
+				if row.FocusWithin() {
+					bdc = p.accent
 				}
+				row.Border(1, bdc).Children(func() {
+					ui.TextInputBase(c, &ed.env.Name).Placeholder("Environment name").PlaceholderColor(p.muted).
+						FontSize(fsLarge).FontWeight(500).TextColor(p.fg).Grow(1).Basis(0).FillHeight().PaddingX(8)
+				})
 			})
-			ui.Column(c).Width(560).Gap(8).Children(func() {
-				if s.index != s.sel {
-					a.loadEnvDraft(s)
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				dirty := ed.dirty()
+				col := p.muted
+				if dirty {
+					col = p.fg2
 				}
-				if s.draft == nil {
-					ui.Text(c, a.t("没有环境，先新建一个。", "No environments yet — create one.")).TextColor(th.TextMuted)
-					return
+				if a.button(c, btnOpts{h: sizeBtn, radius: radiusBtn, padX: 12, gap: 4, disabled: !dirty, key: "env-save", tip: a.t("保存", "Save") + " (⌘S)"}, func(bool) {
+					icon(c, "save", 12, col)
+					txt(c, a.t("保存", "Save"), fsTiny, col, 500)
+				}) {
+					a.later(func() { a.saveTab(t) })
 				}
-				a.envEditor(c, s)
+				if a.iconButton(c, "clear", a.t("关闭", "Close"), 14, p.muted) {
+					a.later(func() { a.closeTab(a.active) })
+				}
 			})
 		})
-		ui.Row(c).Justify(ui.End).Children(func() {
-			if ui.Button(c, a.t("关闭", "Close")).Clicked() {
-				s.open = false
-			}
+		ui.Scroll(c).Grow(1).Basis(0).Children(func() {
+			ui.Column(c).FillWidth().Padding(20, 16, 16, 16).Children(func() {
+				a.envTable(c, ed)
+			})
 		})
 	})
 }
 
-func (a *app) envEditor(c *ui.Context, s *envState) {
-	d := s.draft
-	th := c.Theme()
-	ui.TextInput(c, &d.Name).Placeholder(a.t("环境名称", "Environment name"))
-	ui.Row(c).Gap(6).PaddingX(2).Children(func() {
-		ui.Box(c).Width(22).Shrink(0)
-		for _, h := range []string{a.t("变量", "Variable"), a.t("值", "Value")} {
-			ui.Text(c, h).TextColor(th.TextMuted).Grow(1).Basis(0)
-		}
-		ui.Box(c).Width(70).Shrink(0)
-		ui.Box(c).Width(28).Shrink(0)
-	})
-	remove := -1
-	ui.Scroll(c).Height(220).Children(func() {
-		ui.Column(c).Gap(4).Children(func() {
-			for i := range d.Variables {
-				i := i
-				v := &d.Variables[i]
-				ui.Row(c.Key(v.ID)).Gap(6).AlignItems(ui.Center).Children(func() {
-					ui.Checkbox(c, &v.Enabled, "").Width(22).Shrink(0)
-					ui.TextInput(c, &v.Key).Placeholder("name").Grow(1).Basis(0)
-					val := ui.TextInput(c, &v.Value).Placeholder("value").Grow(1).Basis(0)
-					if v.IsSecret {
-						val.Password()
+// envTable 是变量表：表头 34px，行高 32px，两列等宽加 44px 操作列。
+func (a *app) envTable(c *ui.Context, ed *envEdit) {
+	p := a.p
+	ui.Column(c).FillWidth().Border(1, p.border).Background(p.surface).Children(func() {
+		ui.Row(c).FillWidth().Height(34).Background(p.surface2).AlignItems(ui.Stretch).Children(func() {
+			for _, h := range []string{"Variable", "Value"} {
+				ui.Row(c.Key(h)).Grow(1).Basis(0).MinWidth(220).PaddingX(12).AlignItems(ui.Center).BorderWidth(0, 1, 0, 0).BorderColor(p.border).Children(func() {
+					txt(c, h, fsBase, p.fg2, 600)
+				})
+			}
+			ui.Row(c).Width(44).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Children(func() { icon(c, "more", 13, p.muted) })
+		})
+		hline(c, p.border)
+		remove := -1
+		vars := ed.env.Variables
+		for i := range vars {
+			v := &vars[i]
+			last := i == len(vars)-1 && v.Key == "" && v.Value == ""
+			row := ui.Row(c.Key(v.ID)).FillWidth().MinHeight(32).AlignItems(ui.Stretch)
+			hover := row.Hovered() && !last
+			if hover {
+				row = row.Background(p.surface2)
+			}
+			row.Children(func() {
+				ph := "Variable"
+				if last {
+					ph = "Add variable"
+				}
+				ui.Row(c).Grow(1).Basis(0).MinWidth(220).BorderWidth(0, 1, 0, 0).BorderColor(p.border).Children(func() {
+					ui.TextInputBase(c.Key("k"), &v.Key).Placeholder(ph).PlaceholderColor(p.muted).FontSize(fsBase).TextColor(p.fg).Grow(1).Basis(0).Height(32).PaddingX(12)
+				})
+				ui.Row(c).Grow(1).Basis(0).MinWidth(220).BorderWidth(0, 1, 0, 0).BorderColor(p.border).Children(func() {
+					vp := "Value"
+					if last {
+						vp = ""
 					}
-					ui.Checkbox(c, &v.IsSecret, a.t("密钥", "Secret")).Width(70).Shrink(0)
-					del := ui.Button(c, "×").Width(28).Shrink(0)
-					if v.Key == "" && v.Value == "" {
-						del.Invisible()
-					} else if del.Clicked() {
+					in := ui.TextInputBase(c.Key("v"), &v.Value).Placeholder(vp).PlaceholderColor(p.muted).FontSize(fsBase).TextColor(p.fg).Grow(1).Basis(0).Height(32).PaddingX(12)
+					if last {
+						in.Disabled(true).Opacity(0.5)
+					}
+					if v.IsSecret {
+						in.Password()
+					}
+				})
+				ui.Row(c).Width(44).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+					if hover && a.button(c, btnOpts{w: sizeBtn, h: sizeBtn, radius: 6, key: "del", tip: a.t("删除变量", "Delete variable")}, func(h bool) {
+						col := p.muted
+						if h {
+							col = p.danger
+						}
+						icon(c, "delete", 12, col)
+					}) {
 						remove = i
 					}
 				})
+			})
+			if i < len(vars)-1 {
+				hline(c, p.border)
 			}
-		})
+		}
+		if remove >= 0 {
+			ed.env.Variables = append(ed.env.Variables[:remove], ed.env.Variables[remove+1:]...)
+		}
+		ensureBlankVar(&ed.env)
 	})
-	if remove >= 0 {
-		d.Variables = append(d.Variables[:remove], d.Variables[remove+1:]...)
+}
+
+// saveEnvTab 去掉空白行后保存环境编辑页的内容。
+func (a *app) saveEnvTab(t *tab) bool {
+	ed := t.env
+	d := ed.env
+	d.Name = strings.TrimSpace(d.Name)
+	if d.Name == "" {
+		a.toast(a.t("环境名称不能为空", "Environment name is required"))
+		return false
 	}
-	ensureBlankVar(d)
-	ui.Row(c).Gap(8).Children(func() {
-		if ui.PrimaryButton(c, a.t("保存", "Save")).Clicked() {
-			a.later(func() { a.saveEnvDraft(s) })
+	vars := make([]model.Variable, 0, len(d.Variables))
+	for _, v := range d.Variables {
+		if v.Key == "" && v.Value == "" {
+			continue
 		}
-		if ui.Button(c, a.t("删除环境", "Delete")).Clicked() {
-			id, name := d.ID, d.Name
-			a.later(func() { a.deleteEnvironment(id, name) })
-		}
-	})
+		v.Key = strings.TrimSpace(v.Key)
+		vars = append(vars, v)
+	}
+	d.Variables = vars
+	if err := a.be.SaveEnvironment(d); err != nil {
+		a.fail(a.t("保存环境", "Save environment"), err)
+		return false
+	}
+	ed.env.Name = d.Name
+	ed.base = ed.fingerprint()
+	a.reloadEnvs()
+	a.toast(a.t("环境已保存", "Environment saved"))
+	logger.Info("环境已保存", "envID", d.ID, "variables", len(vars))
+	return true
 }
 
 func (a *app) newEnvironment() {
@@ -143,41 +238,9 @@ func (a *app) newEnvironment() {
 			return
 		}
 		a.reloadEnvs()
-		s := &a.overlays.envMgr
-		for i, x := range a.envs {
-			if x.ID == e.ID {
-				s.sel = i
-			}
-		}
-		s.index = -1
 		logger.Info("已创建环境", "envID", e.ID)
+		a.openEnvManagerFor(e.ID)
 	})
-}
-
-// saveEnvDraft 去掉空白行后保存当前编辑的环境。
-func (a *app) saveEnvDraft(s *envState) {
-	d := *s.draft
-	d.Name = strings.TrimSpace(d.Name)
-	if d.Name == "" {
-		a.toast(a.t("环境名称不能为空", "Environment name is required"))
-		return
-	}
-	vars := make([]model.Variable, 0, len(d.Variables))
-	for _, v := range d.Variables {
-		if v.Key == "" && v.Value == "" {
-			continue
-		}
-		vars = append(vars, v)
-	}
-	d.Variables = vars
-	if err := a.be.SaveEnvironment(d); err != nil {
-		a.fail(a.t("保存环境", "Save environment"), err)
-		return
-	}
-	a.reloadEnvs()
-	s.index = -1 // 重新载入草稿
-	a.toast(a.t("环境已保存", "Environment saved"))
-	logger.Info("环境已保存", "envID", d.ID, "variables", len(vars))
 }
 
 func (a *app) deleteEnvironment(id, name string) {
@@ -189,9 +252,11 @@ func (a *app) deleteEnvironment(id, name string) {
 		if a.envID == id {
 			a.setEnv("")
 		}
+		for i := len(a.tabs) - 1; i >= 0; i-- {
+			if a.tabs[i].env != nil && a.tabs[i].env.env.ID == id {
+				a.removeTab(i)
+			}
+		}
 		a.reloadEnvs()
-		s := &a.overlays.envMgr
-		s.sel = max(0, min(s.sel, len(a.envs)-1))
-		s.index = -1
 	})
 }

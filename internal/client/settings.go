@@ -11,20 +11,22 @@ import (
 
 // Settings 用户设置，持久化在数据目录的 settings.json 中。
 type Settings struct {
-	Locale           string  `json:"locale"` // zh-CN | en-US，空表示跟随系统
-	Theme            string  `json:"theme"`  // light | dark | system
-	FontSize         int     `json:"fontSize"`
-	SidebarWidth     float32 `json:"sidebarWidth"`
-	SidebarCollapsed bool    `json:"sidebarCollapsed"`
-	LayoutDirection  string  `json:"layoutDirection"` // vertical | horizontal
-	ConsoleOpen      bool    `json:"consoleOpen"`
-	ConsoleHeight    float32 `json:"consoleHeight"`
+	Locale            string  `json:"locale"` // zh-CN | en-US，空表示跟随系统
+	Theme             string  `json:"theme"`  // light | dark | system
+	FontSize          int     `json:"fontSize"`
+	SidebarWidth      float32 `json:"sidebarWidth"`
+	SidebarCollapsed  bool    `json:"sidebarCollapsed"`
+	ScrollbarAutoHide bool    `json:"scrollbarAutoHide"`
+	LayoutDirection   string  `json:"layoutDirection"` // vertical | horizontal
+	ConsoleOpen       bool    `json:"consoleOpen"`
+	ConsoleHeight     float32 `json:"consoleHeight"`
 
 	FollowRedirects         bool   `json:"followRedirects"`
 	HTTPVersion             string `json:"httpVersion"` // auto | http1 | http2
 	RequestTimeoutMs        int    `json:"requestTimeoutMs"`
 	MaxResponseSizeMB       int    `json:"maxResponseSizeMB"`
 	SSLVerify               bool   `json:"sslVerify"`
+	SSLTLSKeyLog            bool   `json:"sslTlsKeyLog"`
 	DisableCookies          bool   `json:"disableCookies"`
 	SendNoCacheHeader       bool   `json:"sendNoCacheHeader"`
 	SendPostmanTokenHeader  bool   `json:"sendPostmanTokenHeader"`
@@ -44,7 +46,7 @@ type Settings struct {
 func DefaultSettings() Settings {
 	return Settings{
 		Theme: "system", FontSize: 13, SidebarWidth: 260, LayoutDirection: "vertical", ConsoleHeight: 200,
-		FollowRedirects: true, HTTPVersion: "auto", MaxResponseSizeMB: 50, SSLVerify: true,
+		FollowRedirects: true, HTTPVersion: "auto", MaxResponseSizeMB: 50, SSLVerify: true, ScrollbarAutoHide: true,
 		ResponseFormatDetection: "auto", AutoBackupIntervalMinutes: 30, EnvByProject: map[string]string{},
 	}
 }
@@ -69,7 +71,7 @@ func (s *Settings) Normalize() {
 	if s.LayoutDirection != "horizontal" {
 		s.LayoutDirection = "vertical"
 	}
-	s.FontSize = clampInt(s.FontSize, 11, 20)
+	s.FontSize = clampInt(s.FontSize, 10, 20)
 	s.RequestTimeoutMs = clampInt(s.RequestTimeoutMs, 0, 3_600_000)
 	s.MaxResponseSizeMB = clampInt(s.MaxResponseSizeMB, 0, 2048)
 	s.AutoBackupIntervalMinutes = clampInt(s.AutoBackupIntervalMinutes, 5, 1440)

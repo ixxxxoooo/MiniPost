@@ -7,14 +7,13 @@ import (
 
 // appliedTheme 记录已应用到窗口的外观，避免每帧重复设置。
 type appliedTheme struct {
-	source   string
-	fontSize int
-	dark     bool
-	accent   string
-	ready    bool
+	source string
+	dark   bool
+	accent string
+	ready  bool
 }
 
-// applyTheme 把设置中的主题模式、字号与项目主题色应用到窗口。
+// applyTheme 按设置中的主题模式选择亮/暗调色板，并把对应的 MyGo 主题应用到窗口。
 func (a *app) applyTheme(c *ui.Context) {
 	if a.native && (a.applied.source != a.set.Theme || !a.applied.ready) {
 		switch a.set.Theme {
@@ -26,54 +25,38 @@ func (a *app) applyTheme(c *ui.Context) {
 			mygo.Theme.SetSource(mygo.ThemeSystem)
 		}
 	}
-	a.applied.source = a.set.Theme
 	dark := c.Theme().Dark
 	if a.native {
 		dark = mygo.Theme.IsDark()
 	}
-	accent := ""
-	if p := a.project(); p != nil {
-		accent = p.ThemeColor
+	switch a.set.Theme {
+	case "light":
+		dark = false
+	case "dark":
+		dark = true
 	}
-	if a.applied.ready && a.applied.dark == dark && a.applied.fontSize == a.set.FontSize && a.applied.accent == accent {
+	accent := ""
+	if pr := a.project(); pr != nil {
+		accent = pr.ThemeColor
+	}
+	if a.applied.ready && a.applied.dark == dark && a.applied.source == a.set.Theme && a.applied.accent == accent && a.p != nil {
 		return
 	}
-	th := ui.LightTheme()
 	if dark {
-		th = ui.DarkTheme()
+		a.p = darkPalette().withAccent(accent)
+	} else {
+		a.p = lightPalette().withAccent(accent)
 	}
-	if accent != "" {
-		th = th.WithAccent(ui.Hex(accent))
-	}
-	th.FontSize = float32(a.set.FontSize)
-	c.SetTheme(th)
-	a.applied = appliedTheme{source: a.set.Theme, fontSize: a.set.FontSize, dark: dark, accent: accent, ready: true}
+	c.SetTheme(a.p.theme(fsBase))
+	a.applied = appliedTheme{source: a.set.Theme, dark: dark, accent: accent, ready: true}
 }
 
-// methodColor 返回 HTTP 方法对应的强调色。
+// methodColor 返回 HTTP 方法对应的颜色（供尚未迁移到调色板的界面使用）。
 func methodColor(method string, dark bool) ui.Color {
-	switch method {
-	case "GET":
-		return pick(dark, "#16a34a", "#4ade80")
-	case "POST":
-		return pick(dark, "#d97706", "#fbbf24")
-	case "PUT":
-		return pick(dark, "#2563eb", "#60a5fa")
-	case "PATCH":
-		return pick(dark, "#7c3aed", "#a78bfa")
-	case "DELETE":
-		return pick(dark, "#dc2626", "#f87171")
-	case "HEAD":
-		return pick(dark, "#0d9488", "#2dd4bf")
-	}
-	return pick(dark, "#6b7280", "#9ca3af")
-}
-
-func pick(dark bool, light, darkHex string) ui.Color {
 	if dark {
-		return ui.Hex(darkHex)
+		return darkPalette().method(method)
 	}
-	return ui.Hex(light)
+	return lightPalette().method(method)
 }
 
 // statusColor 按状态码区间返回颜色。

@@ -20,7 +20,10 @@ func Open(be Backend) *mygo.Window {
 		MinWidth:  900,
 		MinHeight: 600,
 		StateKey:  "main",
-		Content:   ui.View(a.view),
+		// 隐藏系统标题栏，由界面自绘 37px 标题栏；红绿灯位置对齐旧版（左上角 20,12）。
+		TitleBarStyle:        mygo.TitleBarHidden,
+		TrafficLightPosition: &mygo.Point{X: 20, Y: 12},
+		Content:              ui.View(a.view),
 	})
 	a.win = win
 	// 关闭窗口或退出前保存标签会话（含未保存的修改），下次启动时恢复。

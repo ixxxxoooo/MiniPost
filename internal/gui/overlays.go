@@ -13,7 +13,6 @@ type overlays struct {
 	curl    curlState
 	prefs   prefsState
 	imp     importState
-	envMgr  envState
 	cookies cookiesState
 }
 
