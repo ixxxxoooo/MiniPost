@@ -92,7 +92,7 @@ func TestVisualResponse(t *testing.T) {
 	_ = tt.Click("用户服务")
 	_ = tt.Click("获取用户列表")
 	snapshot(t, tt, "v_resp_empty")
-	_ = tt.Click("Send")
+	_ = tt.Click("发送")
 	tt.Frame()
 	snapshot(t, tt, "v_resp")
 	if r, ok := tt.Find("128ms"); ok {
@@ -134,7 +134,7 @@ func TestVisualCookiesConsole(t *testing.T) {
 	a, tt, _ := visualApp(t, false)
 	_ = tt.Click("用户服务")
 	_ = tt.Click("获取用户列表")
-	_ = tt.Click("Send")
+	_ = tt.Click("发送")
 	a.jar.Add(client.Cookie{Domain: "api.example.com", Name: "sid", Value: "abc123", Path: "/", Enabled: true, HTTPOnly: true})
 	a.jar.Add(client.Cookie{Domain: "example.org", Name: "theme", Value: "dark", Path: "/", Enabled: true})
 	a.setConsoleOpen(true)
@@ -174,7 +174,7 @@ func TestVisualDark(t *testing.T) {
 	a.activeTab().draft.Name += " "
 	tt.Frame()
 	snapshot(t, tt, "v_dark_req")
-	_ = tt.Click("Send")
+	_ = tt.Click("发送")
 	tt.Frame()
 	snapshot(t, tt, "v_dark_resp")
 	a.openPrefs()

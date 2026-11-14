@@ -35,6 +35,7 @@ func (a *app) overlayViews(c *ui.Context) {
 	a.importView(c)
 	a.curlView(c)
 	a.cookiesView(c)
+	a.quickView(c)
 	// 询问类弹层最后绘制，才能显示在其他对话框之上。
 	a.promptView(c)
 	a.confirmView(c)

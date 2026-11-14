@@ -73,7 +73,7 @@ func rgb(c ui.Color) [3]uint8 { return [3]uint8{c.R, c.G, c.B} }
 
 // 标签条顶部只有一条线：选中的标签用强调色上边框盖住它，其余位置是普通边框色；
 // 线的下一行不能再有第二条线，上一行（标题栏）也不能有线——不会出现两条线叠在一起。
-// 请求标签条和侧栏标签条都要满足。
+// 侧栏顶部已改为分段控件，不再画顶线（见 TestSideSegmentedTabs）。
 func TestTabStripHasSingleTopLine(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	a.openRequest(a.coll.Requests[0].ID)
@@ -93,8 +93,6 @@ func TestTabStripHasSingleTopLine(t *testing.T) {
 		{"请求标签条空白处", img.Bounds().Max.X - 300, rgb(p.border)},
 		{"未选中的请求标签", sw + 60, rgb(p.border)},
 		{"选中的请求标签", sw + int(a.tabs[0].shownW) + 40, rgb(p.tabActiveBorder)},
-		{"侧栏选中的标签", 60, rgb(p.tabActiveBorder)},
-		{"侧栏未选中的标签", 150, rgb(p.border)},
 	}
 	for _, c := range cases {
 		if got := px(img, c.x, y); got != c.want {

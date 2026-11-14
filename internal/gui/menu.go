@@ -56,6 +56,7 @@ func (a *app) installMenu() {
 			{Label: a.t("显示/隐藏侧栏", "Toggle Sidebar"), Accelerator: "CmdOrCtrl+B", Click: act(true, a.toggleSidebar)},
 			{Label: a.t("显示/隐藏控制台", "Toggle Console"), Accelerator: "CmdOrCtrl+J", Click: act(true, func() { a.setConsoleOpen(!a.set.ConsoleOpen) })},
 			mygo.Separator(),
+			{Label: a.t("快速打开…", "Quick Open…"), Accelerator: "CmdOrCtrl+K", Click: act(true, a.openQuick)},
 			{Label: a.t("环境管理…", "Environments…"), Accelerator: "CmdOrCtrl+Alt+E", Click: act(true, a.openEnvManager)},
 			{Label: "Cookies…", Accelerator: "CmdOrCtrl+Shift+K", Click: act(true, a.openCookies)},
 			{Label: a.t("设置…", "Settings…"), Accelerator: "CmdOrCtrl+,", Click: act(false, a.openPrefs)},

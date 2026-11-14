@@ -11,7 +11,7 @@ import (
 // modalOpen 报告是否有对话框盖在主界面上；此时全局快捷键不应作用到后面的内容。
 func (a *app) modalOpen() bool {
 	o := &a.overlays
-	return o.prompt.open || o.confirm.open || o.closing.open || o.prefs.open || o.imp.open || o.curl.open || o.cookies.open
+	return o.prompt.open || o.confirm.open || o.closing.open || o.prefs.open || o.imp.open || o.curl.open || o.cookies.open || o.quick.open
 }
 
 // selectedNode 是侧栏当前选中的请求/文件夹：最近点击或右键过的节点，没有则取当前标签对应的请求。
@@ -39,6 +39,10 @@ func (a *app) selectNode(id string) { a.side.sel = id }
 //   - 标签切换：⌃Tab / ⌃⇧Tab、⌘⇧] / ⌘⇧[。
 func (a *app) handleShortcuts(c *ui.Context) {
 	if a.modalOpen() || a.showHome || a.projectID == "" {
+		return
+	}
+	if c.Shortcut(ui.Cmd, ui.KeyK) {
+		a.later(a.openQuick)
 		return
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyF) {

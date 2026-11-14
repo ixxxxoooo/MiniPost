@@ -63,7 +63,7 @@ func TestEnvVariablesResolvedOnSend(t *testing.T) {
 	a.openRequest(a.coll.Requests[0].ID)
 	a.activeTab().draft.URL = "https://{{host}}/x"
 	tt.Frame()
-	if err := tt.Click("Send"); err != nil {
+	if err := tt.Click("发送"); err != nil {
 		t.Fatal(err)
 	}
 	if len(be.sent) != 1 || be.sent[0].URL != "https://api.test/x" {
@@ -141,7 +141,7 @@ func TestCookiesAddAndSent(t *testing.T) {
 	s.open = false
 	a.openRequest(a.coll.Requests[0].ID)
 	tt.Frame()
-	if err := tt.Click("Send"); err != nil {
+	if err := tt.Click("发送"); err != nil {
 		t.Fatal(err)
 	}
 	var cookie string
@@ -183,7 +183,7 @@ func TestConsolePanelToggle(t *testing.T) {
 	}
 	a.openRequest(a.coll.Requests[0].ID)
 	tt.Frame()
-	if err := tt.Click("Send"); err != nil {
+	if err := tt.Click("发送"); err != nil {
 		t.Fatal(err)
 	}
 	if !tt.HasText("https://example.com/alpha") {

@@ -85,7 +85,7 @@ func TestSendShowsResponse(t *testing.T) {
 	a, tt, be := zhApp(t)
 	a.openRequest(a.coll.Requests[0].ID)
 	tt.Frame()
-	if err := tt.Click("Send"); err != nil {
+	if err := tt.Click("发送"); err != nil {
 		t.Fatal(err)
 	}
 	if len(be.sent) != 1 || be.sent[0].URL != "https://example.com/alpha" {
@@ -105,7 +105,7 @@ func TestSendFailureShowsError(t *testing.T) {
 	be.sendErr = os.ErrDeadlineExceeded
 	a.openRequest(a.coll.Requests[0].ID)
 	tt.Frame()
-	if err := tt.Click("Send"); err != nil {
+	if err := tt.Click("发送"); err != nil {
 		t.Fatal(err)
 	}
 	if !tt.HasText("无法发送请求") {

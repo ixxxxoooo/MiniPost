@@ -168,12 +168,13 @@ func (a *app) requestName(c *ui.Context, t *tab) {
 	ui.Spacer(c)
 }
 
-// urlBar 是地址栏：方法选择 + URL 输入（共用一个圆角边框）与 Send 按钮组。
+// urlBar 是地址栏（设计稿 2A 一体式）：方法选择、URL 输入与发送按钮组合成一个 34px 高的圆角控件，
+// 发送按钮以强调色块内嵌在右端，整体只有一圈边框。
 func (a *app) urlBar(c *ui.Context, t *tab) {
 	p := a.p
 	d := t.draft
-	ui.Row(c).FillWidth().Shrink(0).Padding(4, 12).Gap(8).AlignItems(ui.Center).Children(func() {
-		box := ui.Row(c.Key("urlbox")).Grow(1).Basis(0).Height(32).Radius(10).Background(p.surface).AlignItems(ui.Stretch)
+	ui.Row(c).FillWidth().Shrink(0).Padding(4, 12).AlignItems(ui.Center).Children(func() {
+		box := ui.Row(c.Key("urlbox")).Grow(1).Basis(0).Height(sizeURLBar).Radius(10).Background(p.surface).AlignItems(ui.Stretch)
 		bc := p.btnBorder
 		if box.FocusWithin() {
 			bc = p.accent
@@ -213,41 +214,43 @@ func (a *app) urlBar(c *ui.Context, t *tab) {
 				}
 			})
 			a.undefinedHint(c, t)
+			a.sendGroup(c, t)
 		})
-		a.sendGroup(c, t)
 	})
 }
 
-// sendGroup 是 112px 宽的发送按钮组：Send + 下拉（发送并下载）；发送中显示 Cancel。
+// sendGroup 是地址栏右端内嵌的发送按钮组：发送 + 下拉（发送并下载）；发送中显示取消。
+// 高度比地址栏小 6px（四周各留 3px），与设计稿一体式地址栏一致。
 func (a *app) sendGroup(c *ui.Context, t *tab) {
 	p := a.p
 	empty := strings.TrimSpace(t.draft.URL) == ""
+	h := float32(sizeURLBar - 8)
 	if t.sending {
-		bg := ui.RGB(230, 230, 230)
-		if p.dark {
-			bg = ui.RGB(68, 68, 68)
-		}
-		if a.button(c, btnOpts{w: 112, h: 30, radius: 8, bg: &bg, key: "cancel"}, func(bool) {
-			txt(c, "Cancel", fsLarge, p.fg, 500)
+		bg := p.surface2
+		if a.button(c, btnOpts{w: 88, h: h, radius: 7, bg: &bg, key: "cancel"}, func(bool) {
+			txt(c, a.t("取消", "Cancel"), fsBase, p.fg, 500)
 		}) {
 			a.be.CancelHTTPRequest(t.sendID)
 		}
 		return
 	}
-	box := ui.Row(c.Key("sendgrp")).Width(112).Height(30).Shrink(0).Radius(8).Background(p.accent).Clip()
+	box := ui.Row(c.Key("sendgrp")).Width(104).Height(h).Shrink(0).Radius(7).Background(p.accent).Clip().Margin(3, 3, 3, 0).Gap(0)
 	if empty {
 		box = box.Opacity(0.5)
 	}
 	box.Children(func() {
-		send := ui.ButtonBase(c.Key("send")).Grow(1).Basis(0).FillHeight().AlignItems(ui.Center).Justify(ui.Center).Disabled(empty).Tooltip("⌘↩")
+		send := ui.ButtonBase(c.Key("send")).Grow(1).Basis(0).FillHeight().AlignItems(ui.Center).Justify(ui.Center).Gap(5).Disabled(empty).Tooltip("⌘↩")
 		if send.Hovered() && !empty {
 			send = send.Background(p.accentHover)
 		}
-		send.Children(func() { txt(c, "Send", fsLarge, p.accentFg, 500) })
+		send.Children(func() {
+			icon(c, "send", 12, p.accentFg)
+			txt(c, a.t("发送", "Send"), fsBase, p.accentFg, 600)
+		})
 		if send.Clicked() {
 			a.later(func() { a.sendTab(t) })
 		}
-		arrow := ui.ButtonBase(c.Key("sendmore")).Width(28).FillHeight().Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Disabled(empty).
+		arrow := ui.ButtonBase(c.Key("sendmore")).Width(24).FillHeight().Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Disabled(empty).
 			PopoverMenuButton(func(m *ui.Menu) {
 				if m.Item("Send and Download").Chosen() {
 					a.later(func() {
@@ -260,7 +263,7 @@ func (a *app) sendGroup(c *ui.Context, t *tab) {
 			arrow = arrow.Background(p.accentHover)
 		}
 		arrow.Children(func() {
-			ui.Box(c).Width(1).Height(18).Background(ui.RGBA(255, 255, 255, 0.25)).Absolute()
+			ui.Box(c).Width(1).Height(14).Background(ui.RGBA(255, 255, 255, 0.28)).Absolute()
 			icon(c, "arrowDown", 10, p.accentFg)
 		})
 	})

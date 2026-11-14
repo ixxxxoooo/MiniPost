@@ -13,6 +13,7 @@ type overlays struct {
 	imp     importState
 	curl    curlState
 	cookies cookiesState
+	quick   quickState
 }
 
 // promptState 是单行文本输入对话框。

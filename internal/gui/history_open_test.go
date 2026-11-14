@@ -61,7 +61,7 @@ func TestSendCarriesSourceID(t *testing.T) {
 	target := a.coll.Requests[0]
 	a.openRequest(target.ID)
 	tt.Frame()
-	if err := tt.Click("Send"); err != nil {
+	if err := tt.Click("发送"); err != nil {
 		t.Fatal(err)
 	}
 	if len(be.sent) != 1 || be.sent[0].SourceID != target.ID {

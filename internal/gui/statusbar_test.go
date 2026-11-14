@@ -71,7 +71,7 @@ func TestStatusBarUpdatesAfterSend(t *testing.T) {
 	a.openRequest(a.coll.Requests[0].ID)
 	a.activeTab().draft.URL = "http://example.test/ok"
 	tt.Frame()
-	if err := tt.Click("Send"); err != nil {
+	if err := tt.Click("发送"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

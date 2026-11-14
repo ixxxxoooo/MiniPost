@@ -150,7 +150,7 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 				if t.env != nil {
 					icon(c, "globe", 11, p.accent).Shrink(0)
 				} else {
-					txtMono(c, t.draft.Method, 9, p.method(t.draft.Method), 700).Shrink(0)
+					txtMono(c, methodAbbr(t.draft.Method), 9, p.method(t.draft.Method), 700).Shrink(0)
 				}
 				col, w := p.fg2, 0
 				if active {

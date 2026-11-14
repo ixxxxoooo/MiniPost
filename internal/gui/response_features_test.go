@@ -19,7 +19,7 @@ func sendWith(t *testing.T, resp *model.HttpResponse) (*app, *ui.Tester, *fakeBa
 	be.resp = resp
 	a.openRequest(a.coll.Requests[0].ID)
 	tt.Frame()
-	if err := tt.Click("Send"); err != nil {
+	if err := tt.Click("发送"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -210,7 +210,7 @@ func TestResponseStateResetsOnNewResponse(t *testing.T) {
 	rs.view.filterOpen, rs.view.filterExpr, rs.view.mode = true, "$.msg", client.ModeRaw
 	tt.Frame()
 	be.resp = &model.HttpResponse{StatusCode: 200, ContentType: "application/json", Body: `{"x":1}`}
-	if err := tt.Click("Send"); err != nil {
+	if err := tt.Click("发送"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -323,7 +323,7 @@ func TestRequestErrorCardShowsDiagnosis(t *testing.T) {
 	be.sendErr = errors.New("[CONNECTION_REFUSED] 连接被拒绝: dial tcp 127.0.0.1:1: connection refused")
 	a.openRequest(a.coll.Requests[0].ID)
 	tt.Frame()
-	if err := tt.Click("Send"); err != nil {
+	if err := tt.Click("发送"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

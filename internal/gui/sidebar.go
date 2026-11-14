@@ -23,13 +23,44 @@ func (a *app) sidebar(c *ui.Context) {
 				a.envList(c)
 			default:
 				a.collectionView(c)
+				a.sideFooter(c)
 			}
 		})
 	})
 }
 
-// sideTabs 是 28px 高的标签条：三等分，样式与请求标签一致——方正、选中项只有顶部 2px 强调线、
-// 下边不画线并与下方列表连成一体；未选中项底色稍深。顶线由标签条自己画（被选中项的强调线盖住）。
+// kbdHint 是搜索框等处的快捷键提示小胶囊（如 ⌘K），仅作提示、不响应点击。
+func (a *app) kbdHint(c *ui.Context, s string) {
+	p := a.p
+	ui.Row(c.Key("kbd:"+s)).Height(16).PaddingX(4).Margin(0, 5, 0, 0).Radius(4).Background(p.surface2).AlignItems(ui.Center).Justify(ui.Center).Shrink(0).Children(func() {
+		txtMono(c, s, 9, p.muted, 0)
+	})
+}
+
+// treeCounts 返回当前项目的请求数与文件夹数（不含根目录）。
+func (a *app) treeCounts() (reqs, folders int) {
+	for _, n := range a.tree.nodes {
+		if n.folder {
+			folders++
+		} else {
+			reqs++
+		}
+	}
+	return
+}
+
+// sideFooter 是请求列表底部的统计行："N 个请求 · M 个文件夹"（设计稿 11px 次级信息）。
+func (a *app) sideFooter(c *ui.Context) {
+	p := a.p
+	reqs, folders := a.treeCounts()
+	ui.Row(c.Key("sidefooter")).FillWidth().Height(24).Shrink(0).PaddingX(12).Gap(6).AlignItems(ui.Center).Children(func() {
+		icon(c, "database", 11, p.muted)
+		txt(c, a.t(fmt.Sprintf("%d 个请求 · %d 个文件夹", reqs, folders), fmt.Sprintf("%d requests · %d folders", reqs, folders)), fsSmall, p.muted, 0)
+	})
+}
+
+// sideTabs 是侧栏顶部的分段控件（设计稿）：灰色轨道里三个等宽分段，选中项是凸起的内容色圆角块，
+// 图标与文字用强调色；整体高度与请求标签栏一致（sizeTabStrip），底边不画线。
 func (a *app) sideTabs(c *ui.Context) {
 	p := a.p
 	items := []struct{ icon, zh, en string }{
@@ -37,47 +68,44 @@ func (a *app) sideTabs(c *ui.Context) {
 		{"clock", "历史", "History"},
 		{"globe", "环境", "Environments"},
 	}
-	ui.Row(c).FillWidth().Height(sizeTabStrip).Shrink(0).AlignItems(ui.End).Children(func() {
-		stripTopLine(c, p.border)
-		for i, it := range items {
-			active := a.side.tab == i
-			col, weight := p.muted, 0
-			if active {
-				col, weight = p.fg, 500
+	ui.Row(c).FillWidth().Height(sizeTabStrip).Shrink(0).PaddingX(8).AlignItems(ui.Center).Children(func() {
+		track := ui.Row(c.Key("sidetabs")).Grow(1).Basis(0).Height(sizeTabStrip - 8).Padding(2).Gap(2).Radius(8).Background(p.hover).AlignItems(ui.Stretch)
+		track.Children(func() {
+			for i, it := range items {
+				active := a.side.tab == i
+				col, weight := p.fg2, 0
+				if active {
+					col, weight = p.accent, 600
+				}
+				b := ui.ButtonBase(c.Key("sidetab" + it.en)).Grow(1).Basis(0).Gap(5).Radius(6).AlignItems(ui.Center).Justify(ui.Center)
+				switch {
+				case active:
+					b = b.Background(p.surface).Border(1, p.border)
+				case b.Hovered():
+					b = b.Background(p.hover)
+				}
+				b.Children(func() {
+					icon(c, it.icon, 12, col)
+					txt(c, a.t(it.zh, it.en), fsBase, p.fg, weight)
+				})
+				if b.Clicked() {
+					a.side.tab = i
+				}
 			}
-			h := float32(sizeTabStrip - 1)
-			if active {
-				h = sizeTabStrip
-			}
-			b := ui.ButtonBase(c.Key("sidetab" + it.en)).Grow(1).Basis(0).Height(h).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
-			switch {
-			case active:
-				b = b.Background(p.sidebar).BorderWidth(tabAccentWidth, 0, 0, 0).BorderColor(p.tabActiveBorder)
-			case b.Hovered():
-				b = b.Background(p.hover)
-			default:
-				b = b.Background(p.sideHover)
-			}
-			b.Children(func() {
-				icon(c, it.icon, 12, col)
-				txt(c, a.t(it.zh, it.en), fsBase, col, weight)
-			})
-			if b.Clicked() {
-				a.side.tab = i
-			}
-			// 标签之间的竖分隔线。
-			if i < len(items)-1 {
-				ui.Box(c.Key("sidediv" + it.en)).Width(1).Height(sizeTabStrip - 1).Shrink(0).Background(p.tabDivider)
-			}
-		}
+		})
 	})
 }
 
 // searchRow 是请求标签顶部的搜索框与三个操作按钮（导入、新建文件夹、新建请求）。
 func (a *app) searchRow(c *ui.Context) {
 	p := a.p
-	ui.Row(c).FillWidth().Shrink(0).Padding(7.5, 8, 6, 8).Gap(4).AlignItems(ui.Center).Children(func() {
-		a.input(c, &a.side.query, a.t("搜索请求或内容...", "Search requests..."), fieldOpts{icon: "search", radius: radiusInput, key: "side-search"})
+	ui.Row(c).FillWidth().Shrink(0).Padding(4, 8, 6, 8).Gap(4).AlignItems(ui.Center).Children(func() {
+		a.input(c, &a.side.query, a.t("搜索请求…", "Search requests…"), fieldOpts{icon: "search", radius: radiusInput, key: "side-search", h: 26,
+			trail: func() {
+				if strings.TrimSpace(a.side.query) == "" {
+					a.kbdHint(c, "⌘K")
+				}
+			}})
 		if a.iconButton(c, "fileImport", a.t("导入", "Import"), 14, p.fg2) {
 			a.later(func() { a.openImport(importFile) })
 		}
@@ -259,7 +287,7 @@ func (a *app) nodeMoreButton(c *ui.Context, id string) {
 		Children(func() { icon(c, "more", 12, p.muted) })
 }
 
-// requestRow 绘制一个请求行：方法标签（9px 粗体，最小宽 28）与名称；当前标签高亮。
+// requestRow 绘制一个请求行：方法标签（9px 粗体，固定 32px 宽左对齐）与名称；当前标签高亮。
 func (a *app) requestRow(c *ui.Context, id string, depth int) {
 	n, ok := a.tree.nodes[id]
 	if !ok {
@@ -291,7 +319,7 @@ func (a *app) requestRow(c *ui.Context, id string, depth int) {
 			// 拖动经过请求：在行顶部画插入线，表示将放到它之前。
 			ui.Box(c).Absolute().Top(0).Left(0).Right(0).Height(2).Background(p.accent).ZIndex(1)
 		}
-		txtMono(c, n.method, 9, p.method(n.method), 700).MinWidth(28).Shrink(0)
+		txtMono(c, methodAbbr(n.method), 9, p.method(n.method), 700).Width(sizeMethodCol).Shrink(0)
 		col, w := p.fg, 0
 		if active {
 			col, w = p.accent, 500
@@ -501,8 +529,8 @@ func (a *app) historyRow(c *ui.Context, e historyItem) {
 		if method == "" {
 			method = "GET"
 		}
-		ui.Row(c).Width(40).Shrink(0).Justify(ui.End).Children(func() {
-			txtMono(c, method, 9, p.method(method), 700)
+		ui.Row(c).Width(sizeMethodCol).Shrink(0).Justify(ui.Start).Children(func() {
+			txtMono(c, methodAbbr(method), 9, p.method(method), 700)
 		})
 		ui.Box(c).Width(6).Shrink(0)
 		u := e.URL

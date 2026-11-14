@@ -3,6 +3,7 @@ package gui
 import (
 	"embed"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/egoist/mygo/ui"
@@ -19,18 +20,20 @@ var assetFS embed.FS
 
 // 尺寸常量（单位 DIP，与旧版 CSS 像素一致）。
 const (
-	sizeToolbar  = 38  // 顶部自绘标题栏高度（含 1px 底线）
-	sizeBottom   = 25  // 底栏高度
-	sizeTabStrip = 28  // 侧栏标签条与请求标签栏高度
-	sizeBtn      = 24  // 工具栏图标按钮
-	radiusBtn    = 7   // 按钮圆角
-	radiusInput  = 8   // 输入框圆角
-	radiusCard   = 10  // 卡片圆角
-	fsBase       = 12  // 基础字号
-	fsSmall      = 11  // 次级字号
-	fsTiny       = 10  // 微型字号
-	fsLarge      = 13  // 大字号（URL、响应标题）
-	sizeSideMin  = 180 // 侧栏最小宽度
+	sizeToolbar   = 38  // 顶部自绘标题栏高度（含 1px 底线）
+	sizeBottom    = 25  // 底栏高度
+	sizeTabStrip  = 28  // 侧栏标签条与请求标签栏高度
+	sizeURLBar    = 34  // 地址栏（一体式控件）高度
+	sizeMethodCol = 32  // 侧栏树与历史里方法列的固定宽度
+	sizeBtn       = 24  // 工具栏图标按钮
+	radiusBtn     = 7   // 按钮圆角
+	radiusInput   = 8   // 输入框圆角
+	radiusCard    = 10  // 卡片圆角
+	fsBase        = 12  // 基础字号
+	fsSmall       = 11  // 次级字号
+	fsTiny        = 10  // 微型字号
+	fsLarge       = 13  // 大字号（URL、响应标题）
+	sizeSideMin   = 180 // 侧栏最小宽度
 )
 
 // 旧版用 CSS 变量 --size-font-2xs/xs/sm 表示随「界面字体」设置缩放的字号（N、N+1、N+2，默认 N=12）；
@@ -198,6 +201,18 @@ func (p *palette) theme(fontSize float32) *ui.Theme {
 	th.FontSize = fontSize
 	th.ScrollbarWidth = 6
 	return th
+}
+
+// methodAbbr 返回树、标签与历史里用的方法缩写（设计稿：DELETE→DEL、OPTIONS→OPT，其余原样），
+// 保证最长 5 个字符，能在 32px 的方法列里对齐。
+func methodAbbr(m string) string {
+	switch strings.ToUpper(m) {
+	case "DELETE":
+		return "DEL"
+	case "OPTIONS":
+		return "OPT"
+	}
+	return m
 }
 
 // method 返回 HTTP 方法对应的颜色。
@@ -424,6 +439,8 @@ type fieldOpts struct {
 	bd *ui.Color
 	// iconSize/iconLeft/iconGap 覆盖搜索图标的尺寸、左边距与到文字的距离，0 表示默认（12/6/6）。
 	iconSize, iconLeft, iconGap float32
+	// trail 非 nil 时在输入框右端绘制附加内容（如 ⌘K 提示），不参与输入。
+	trail func()
 }
 
 // input 绘制 TablePlus 风格的输入框：圆角边框，获得焦点时边框变为强调色。返回内部输入框以便读取 Changed/Submitted。
@@ -483,6 +500,9 @@ func (a *app) input(c *ui.Context, v *string, ph string, o fieldOpts) ui.Element
 			Grow(1).Basis(0).FillHeight().PaddingX(pad)
 		if o.focus {
 			in = in.AutoFocus()
+		}
+		if o.trail != nil {
+			o.trail()
 		}
 	})
 	return in

@@ -164,6 +164,16 @@ func (a *app) respError(c *ui.Context, t *tab) {
 	})
 }
 
+// respStatusLabel 是状态胶囊里的文字，如 "200 OK"；状态说明已含状态码时不重复拼接。
+func respStatusLabel(code int, text string) string {
+	text = strings.TrimSpace(text)
+	prefix := fmt.Sprint(code)
+	if strings.HasPrefix(text, prefix) {
+		return text
+	}
+	return strings.TrimSpace(prefix + " " + text)
+}
+
 // statusInfo 返回状态行需要的字段，兼容流式进行中（只有响应头）与完成后两种状态。
 func (rs *respState) statusInfo() (code int, text, proto string) {
 	switch {
@@ -267,7 +277,7 @@ func (a *app) respMeta(c *ui.Context, rs *respState) {
 		return
 	}
 	resp := rs.resp
-	sep := func() { txt(c, "•", fsSmall, p.muted, 0).MarginX(0) }
+	sep := func() { txt(c, "·", fsSmall, p.muted, 0).MarginX(0) }
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
 		if len(resp.Warnings) > 0 {
 			ui.Row(c).Height(20).PaddingX(6).Radius(7).Background(ui.RGB(251, 242, 230)).AlignItems(ui.Center).Children(func() {
@@ -275,17 +285,27 @@ func (a *app) respMeta(c *ui.Context, rs *respState) {
 			})
 			sep()
 		}
+		// 设计稿 4A：状态胶囊（圆点 + 状态）+ 灰色度量（图标 + 数值，中点分隔）
 		fg, bg := a.statusBadge(code)
-		badge := ui.Row(c.Key("badge")).Height(20).PaddingX(6).Radius(7).Background(bg).AlignItems(ui.Center).Shrink(0)
-		badge.Children(func() { txtMono(c, strings.TrimSpace(fmt.Sprintf("%d %s", code, text)), fsTiny, fg, 600) })
+		badge := ui.Row(c.Key("badge")).Height(20).PaddingX(8).Gap(5).Radius(10).Background(bg).AlignItems(ui.Center).Shrink(0)
+		badge.Children(func() {
+			ui.Box(c).Size(6, 6).Radius(3).Background(fg).Shrink(0)
+			txtMono(c, respStatusLabel(code, text), fsTiny, fg, 600)
+		})
 		a.hoverCard(c, "status", badge, 340, func() { a.statusCard(c, code, text) })
-		sep()
-		timeEl := txt(c, formatDuration(resp.Duration), fsSmall, p.muted, 0).Tooltip("")
+		timeEl := ui.Row(c.Key("timeanchor")).Height(20).Gap(4).AlignItems(ui.Center).Shrink(0).Tooltip("")
+		timeEl.Children(func() {
+			icon(c, "clock", 11, p.muted)
+			txtMono(c, formatDuration(resp.Duration), fsSmall, p.muted, 0)
+		})
 		a.hoverCard(c, "time", timeEl, 460, func() { a.timingCard(c, resp) })
 		sep()
-		sizeEl := txt(c, formatSizeShort(resp.Size), fsSmall, p.muted, 0)
+		sizeEl := ui.Row(c.Key("sizeanchor")).Height(20).Gap(4).AlignItems(ui.Center).Shrink(0)
+		sizeEl.Children(func() {
+			icon(c, "database", 11, p.muted)
+			txtMono(c, formatSizeShort(resp.Size), fsSmall, p.muted, 0)
+		})
 		a.hoverCard(c, "size", sizeEl, 280, func() { a.sizeCard(c, resp) })
-		sep()
 		net := ui.Row(c.Key("netbtn")).Size(20, 20).Radius(6).AlignItems(ui.Center).Justify(ui.Center).Shrink(0)
 		net.Children(func() { icon(c, "globe", 13, p.muted) })
 		a.hoverCard(c, "net", net, 460, func() { a.networkCard(c, resp) })

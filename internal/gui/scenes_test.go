@@ -30,7 +30,7 @@ var sceneList = []scene{
 	{"hdrs", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "用户服务", "获取用户列表", "Headers") }},
 	{"body", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "用户服务", "获取用户列表", "Body") }},
 	{"auth", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "用户服务", "获取用户列表", "Auth") }},
-	{"resp", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "用户服务", "获取用户列表", "Send") }},
+	{"resp", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "用户服务", "获取用户列表", "发送") }},
 	{"hist", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "历史") }},
 	{"envtab", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "环境") }},
 	{"cookies", false, func(a *app, tt *ui.Tester) { sceneClick(tt, "Cookies") }},
@@ -43,7 +43,7 @@ var sceneList = []scene{
 	}},
 	{"curl", false, func(a *app, tt *ui.Tester) { a.openCurlDialog(); tt.Frame() }},
 	{"dreq", true, func(a *app, tt *ui.Tester) { sceneClick(tt, "用户服务", "获取用户列表") }},
-	{"dresp", true, func(a *app, tt *ui.Tester) { sceneClick(tt, "用户服务", "获取用户列表", "Send") }},
+	{"dresp", true, func(a *app, tt *ui.Tester) { sceneClick(tt, "用户服务", "获取用户列表", "发送") }},
 }
 
 // TestScenes 生成与旧版逐屏对照的截图（s_<名称>.png），仅在设置了 MINIPOST_SNAPSHOT_DIR 时落盘。
