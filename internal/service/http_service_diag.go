@@ -133,21 +133,40 @@ func estimateResponseHeaderBytes(resp *http.Response) int64 {
 	return size
 }
 
+// buildTimingBreakdown 把一次请求拆成首尾相接的 8 个阶段：
+// 准备 → Socket 初始化 → DNS → TCP → SSL → 等待首字节 → 下载 → 处理。
+// 每个阶段从上一个阶段的结束时刻开始，到自己的结束事件为止；没有发生的阶段（如复用连接没有 DNS/TCP/SSL）
+// 结束时刻等于上一阶段，耗时为 0；阶段之间没有被事件覆盖的空隙归入后一个阶段。
+// 因此各阶段之和恒等于总耗时，瀑布图上的色块也是顺序相接、不重叠不断开。
 func buildTimingBreakdown(trace requestTrace, bodyDone time.Time, done time.Time) model.TimingBreakdown {
-	prepareEnd := firstNonZero(trace.getConn, trace.dnsStart, trace.connectStart, trace.wroteRequest, trace.firstByte, bodyDone)
-	socketEnd := firstNonZero(trace.dnsStart, trace.connectStart, trace.gotConn, trace.wroteRequest, trace.firstByte, bodyDone)
-	waitingStart := firstNonZero(trace.wroteRequest, trace.gotConn, trace.connectDone, trace.dnsDone, trace.getConn, trace.requestStart)
-	downloadStart := firstNonZero(trace.firstByte, waitingStart)
+	prev := trace.requestStart
+	// next 返回当前阶段的结束时刻：事件缺失或早于上一阶段时，回退为上一阶段的结束时刻；晚于总结束时刻时截断。
+	next := func(candidates ...time.Time) time.Time {
+		end := firstNonZero(candidates...)
+		if end.IsZero() || end.Before(prev) {
+			end = prev
+		}
+		if !done.IsZero() && end.After(done) {
+			end = done
+		}
+		return end
+	}
+	phase := func(candidates ...time.Time) float64 {
+		end := next(candidates...)
+		ms := msBetween(prev, end)
+		prev = end
+		return ms
+	}
 
 	return model.TimingBreakdown{
-		Prepare:              msBetween(trace.requestStart, prepareEnd),
-		SocketInitialization: msBetween(trace.getConn, socketEnd),
-		DNSLookup:            msBetween(trace.dnsStart, trace.dnsDone),
-		TCPHandshake:         msBetween(trace.connectStart, trace.connectDone),
-		SSLHandshake:         msBetween(trace.tlsStart, trace.tlsDone),
-		WaitingTTFB:          msBetween(waitingStart, trace.firstByte),
-		Download:             msBetween(downloadStart, bodyDone),
-		Process:              msBetween(bodyDone, done),
+		Prepare:              phase(trace.getConn, trace.dnsStart, trace.connectStart, trace.wroteRequest, trace.firstByte, bodyDone),
+		SocketInitialization: phase(trace.dnsStart, trace.connectStart, trace.gotConn, trace.wroteRequest, trace.firstByte, bodyDone),
+		DNSLookup:            phase(trace.dnsDone),
+		TCPHandshake:         phase(trace.connectDone),
+		SSLHandshake:         phase(trace.tlsDone),
+		WaitingTTFB:          phase(trace.firstByte),
+		Download:             phase(bodyDone),
+		Process:              phase(done),
 		Total:                msBetween(trace.requestStart, done),
 	}
 }

@@ -46,19 +46,52 @@ func TestFormatPhaseMs(t *testing.T) {
 	}
 }
 
-// 时间轴色块：起点按累计耗时，极短阶段也有最小宽度，且不会越过右端。
-func TestTimelineBar(t *testing.T) {
-	off, w := timelineBar(0, 100, 1000, 231)
-	if off != 0 || w < 23 || w > 23.2 {
-		t.Fatalf("起点阶段: off=%v w=%v", off, w)
+// 时间轴排布：顺序相接、台阶式错开，合起来正好铺满。
+func TestTimelineLayoutSequential(t *testing.T) {
+	// 参考图数据：前四个阶段都极短，要各占一格、依次错开
+	vals := []float64{0.10, 0.27, 2.44, 0.27, 403, 3458, 0.63, 0}
+	total := 0.0
+	for _, v := range vals {
+		total += v
 	}
-	if _, w := timelineBar(10, 0, 1000, 231); w != 2.8 {
-		t.Fatalf("极短阶段应有最小宽度 2.8，实际 %v", w)
+	const zone = 231.0
+	bars := timelineLayout(vals, total, zone)
+	end := 0.0
+	for i, b := range bars {
+		if d := float64(b.off) - end; d > 0.001 || d < -0.001 {
+			t.Errorf("第 %d 段起点 %v 应紧接上一段终点 %v", i, b.off, end)
+		}
+		if b.w < timelineMinBar-0.001 {
+			t.Errorf("第 %d 段宽度 %v 小于最小宽度", i, b.w)
+		}
+		end = float64(b.off + b.w)
 	}
-	// 累计已超过总时长：色块贴着右端，不越界
-	off, w = timelineBar(1200, 50, 1000, 231)
-	if off+w > 231.001 || off < 0 {
-		t.Fatalf("不应越过时间轴: off=%v w=%v", off, w)
+	if end < zone-0.01 || end > zone+0.01 {
+		t.Fatalf("各段合起来应正好铺满 %v，实际 %v", zone, end)
+	}
+	// 前四个极短阶段各自错开：起点严格递增
+	for i := 1; i < 5; i++ {
+		if bars[i].off <= bars[i-1].off {
+			t.Errorf("第 %d 段起点 %v 应大于第 %d 段 %v", i, bars[i].off, i-1, bars[i-1].off)
+		}
+	}
+	// 最长的 TTFB 仍是最宽的一段，SSL 其次
+	if !(bars[5].w > bars[4].w && bars[4].w > bars[2].w) {
+		t.Errorf("TTFB/SSL 宽度顺序不对: %+v", bars)
+	}
+}
+
+// 没有多余长度（各段都比最小宽度宽）时，宽度就是严格按占比。
+func TestTimelineLayoutProportional(t *testing.T) {
+	bars := timelineLayout([]float64{100, 300, 600}, 1000, 200)
+	want := []float32{20, 60, 120}
+	for i, b := range bars {
+		if d := b.w - want[i]; d > 0.001 || d < -0.001 {
+			t.Errorf("第 %d 段宽度 %v，想要 %v", i, b.w, want[i])
+		}
+	}
+	if bars[2].off != 80 {
+		t.Errorf("第 3 段起点应为 80，实际 %v", bars[2].off)
 	}
 }
 

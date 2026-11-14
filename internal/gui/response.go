@@ -401,10 +401,13 @@ func (a *app) timingCard(c *ui.Context, resp *model.HttpResponse) {
 		total = 1
 	}
 	const zone = 231.0
-	cum := 0.0
-	for _, r := range rows {
-		off, w := timelineBar(cum, r.v, total, zone)
-		cum += r.v
+	vals := make([]float64, len(rows))
+	for i, r := range rows {
+		vals[i] = r.v
+	}
+	bars := timelineLayout(vals, total, zone)
+	for i, r := range rows {
+		off, w := bars[i].off, bars[i].w
 		ui.Row(c).FillWidth().Height(22).Gap(6).AlignItems(ui.Center).Children(func() {
 			txtE(c, r.label, fsTiny, p.fg2, 0).Width(120).Shrink(0)
 			ui.Row(c).Width(zone+2).Height(20).Shrink(0).AlignItems(ui.Center).BorderWidth(0, 1, 0, 1).BorderColor(p.border).Children(func() {
@@ -421,12 +424,40 @@ func (a *app) timingCard(c *ui.Context, resp *model.HttpResponse) {
 	}
 }
 
-// timelineBar 算出某个阶段在时间轴上的起点偏移与宽度（像素）：start 是它之前各阶段的累计耗时，
-// 宽度至少 2.8 保证极短的阶段也看得见；整条不会越过时间轴右端。
-func timelineBar(start, v, total, zone float64) (off, w float32) {
-	width := math.Max(v/total*zone, 2.8)
-	x := math.Min(start/total*zone, zone-width)
-	return float32(math.Max(x, 0)), float32(width)
+// barSpan 是某个阶段在时间轴上的起点偏移与宽度（像素）。
+type barSpan struct{ off, w float32 }
+
+// timelineMinBar 是色块的最小宽度：再短的阶段也要看得见。
+const timelineMinBar = 2.5
+
+// timelineLayout 把各阶段按顺序排到宽 zone 的时间轴上，像瀑布一样一级一级错开：
+// 后一段从前一段“画出来的右端”开始，各段合起来正好铺满时间轴。
+//   - 宽度按耗时占比，最短 timelineMinBar，保证极短的阶段（准备、Socket、DNS、TCP）也各占一格，
+//     不会全叠在同一个位置；
+//   - 最小宽度撑出的多余长度，由超过最小宽度的阶段按各自“多出来的部分”等比让出，
+//     所以最长的阶段（通常是等待首字节）会略微缩短，整条仍刚好到右端。
+func timelineLayout(vals []float64, total, zone float64) []barSpan {
+	n := len(vals)
+	ws := make([]float64, n)
+	sum, flex := 0.0, 0.0
+	for i, v := range vals {
+		ws[i] = math.Max(v/total*zone, timelineMinBar)
+		sum += ws[i]
+		flex += ws[i] - timelineMinBar
+	}
+	if over := sum - zone; over > 0 && flex > 0 {
+		k := math.Max(1-over/flex, 0)
+		for i := range ws {
+			ws[i] = timelineMinBar + (ws[i]-timelineMinBar)*k
+		}
+	}
+	out := make([]barSpan, n)
+	x := 0.0
+	for i, w := range ws {
+		out[i] = barSpan{off: float32(x), w: float32(w)}
+		x += w
+	}
+	return out
 }
 
 // sizeCard 是响应大小卡片：响应与请求各一组（头、体）。
