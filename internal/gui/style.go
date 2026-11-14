@@ -416,14 +416,6 @@ func (a *app) iconButton(c *ui.Context, name, tip string, isize float32, col ui.
 	})
 }
 
-// kbd 是快捷键小方块（⌘ N）。
-func (a *app) kbd(c *ui.Context, s string) {
-	p := a.p
-	ui.Row(c).Width(20).Height(20).Radius(5).Background(p.surface2).Border(1, p.border).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-		txt(c, s, fsTiny, p.muted, 0)
-	})
-}
-
 // fieldOpts 描述带边框的单行输入框外观。
 type fieldOpts struct {
 	w, h   float32 // w 为 0 时撑满剩余宽度
@@ -535,7 +527,7 @@ func (a *app) checkbox(c *ui.Context, key any, on *bool, disabled bool) bool {
 	return b.Changed()
 }
 
-// countZero 传给 pillTabs 表示「数量为 0 时也显示 0」（响应头 / Cookies 标签）。
+// countZero 传给 underlineTabs 表示「数量为 0 时也显示 0」（响应头 / Cookies 标签）。
 const countZero = -1
 
 // tabExtra 是标签名后的附加标记：badge 为等宽小标签（如 Body 的 JSON），lock 表示显示锁图标（Auth 已配置）。
@@ -544,13 +536,8 @@ type tabExtra struct {
 	lock  bool
 }
 
-// pillTabs 是设计稿的下划线标签（Params/Headers/Body/Auth、响应体/响应头等）：
-// 选中项加粗并带 2px 强调色下划线，数量显示为名称后的灰色小徽标。返回是否切换了选项。
-func (a *app) pillTabs(c *ui.Context, key string, sel *int, labels []string, counts []int) bool {
-	return a.underlineTabs(c, key, sel, labels, counts, nil, 30)
-}
-
-// underlineTabs 是 pillTabs 的完整形态：h 为标签高度（含 2px 下划线），extras 可为 nil。
+// underlineTabs 是设计稿的下划线标签（Params/Headers/Body/Auth、响应体/响应头等）：
+// 选中项加粗并带 2px 强调色下划线，数量显示为名称后的灰色小徽标；h 为标签高度（含 2px 下划线），extras 可为 nil。
 func (a *app) underlineTabs(c *ui.Context, key string, sel *int, labels []string, counts []int, extras []tabExtra, h float32) bool {
 	p := a.p
 	changed := false

@@ -466,15 +466,6 @@ func (a *app) projectCardMenu(m *ui.Menu, pr model.Project) {
 	}
 }
 
-// formatProjectTime 把 RFC3339 时间格式化为“月-日 时:分”，无法解析时显示 --。
-func formatProjectTime(s string) string {
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return "--"
-	}
-	return t.Local().Format("01-02 15:04")
-}
-
 // openProjectFromHome 打开项目：当前项目直接回到工作区，否则切换。
 func (a *app) openProjectFromHome(id string) {
 	if id == a.projectID {
