@@ -96,6 +96,10 @@ type consoleState struct {
 	entries []consoleEntry
 	list    ui.ListState
 	pct     float32 // 控制台高度占比
+	// 拖动上边缘调整高度时的状态：resizing 为拖动中；over 是指针越过高度上下限的距离，
+	// 指针折返时要先抵消它，面板才重新跟着指针走。
+	resizing bool
+	over     float32
 }
 
 // sideState 是左侧栏的状态：当前页签、搜索词、请求树与历史列表。

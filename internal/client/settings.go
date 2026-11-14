@@ -45,9 +45,16 @@ type Settings struct {
 }
 
 // DefaultSettings 返回与旧版一致的默认设置。
+// 控制台面板高度的取值范围与默认值（px），可在界面里拖动面板上边缘调整。
+const (
+	ConsoleMinHeight     = 80
+	ConsoleMaxHeight     = 1200
+	ConsoleDefaultHeight = 220
+)
+
 func DefaultSettings() Settings {
 	return Settings{
-		Theme: "system", FontSize: 12, SidebarWidth: 240, LayoutDirection: "vertical", ConsoleHeight: 220,
+		Theme: "system", FontSize: 12, SidebarWidth: 240, LayoutDirection: "vertical", ConsoleHeight: ConsoleDefaultHeight,
 		FollowRedirects: true, HTTPVersion: "auto", MaxResponseSizeMB: 50, SSLVerify: true, ScrollbarAutoHide: true,
 		ResponseFormatDetection: "auto", AutoBackupIntervalMinutes: 30, EnvByProject: map[string]string{},
 	}
@@ -78,7 +85,7 @@ func (s *Settings) Normalize() {
 	s.MaxResponseSizeMB = clampInt(s.MaxResponseSizeMB, 0, 2048)
 	s.AutoBackupIntervalMinutes = clampInt(s.AutoBackupIntervalMinutes, 5, 1440)
 	s.SidebarWidth = max(180, min(500, s.SidebarWidth))
-	s.ConsoleHeight = max(80, min(600, s.ConsoleHeight))
+	s.ConsoleHeight = max(ConsoleMinHeight, min(ConsoleMaxHeight, s.ConsoleHeight))
 	if s.AlwaysSaveUnsaved {
 		s.AlwaysDiscardUnsaved = false
 	}

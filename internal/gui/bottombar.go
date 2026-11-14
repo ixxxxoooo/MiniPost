@@ -12,9 +12,11 @@ func (a *app) bottomArea(c *ui.Context) {
 	p := a.p
 	ui.Column(c).FillWidth().Shrink(0).Children(func() {
 		if a.set.ConsoleOpen {
-			ui.Column(c).FillWidth().Height(a.set.ConsoleHeight).Shrink(0).Background(p.surface).Children(func() {
+			shown := a.consoleShownHeight(c)
+			ui.Column(c).FillWidth().Height(shown).Shrink(0).Background(p.surface).Children(func() {
 				hline(c, p.border)
 				a.consolePanel(c)
+				a.consoleGrip(c, shown)
 			})
 		}
 		a.bottomBar(c)
