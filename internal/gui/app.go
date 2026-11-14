@@ -59,8 +59,10 @@ type app struct {
 	deferred      []func() // 在本帧构建结束后执行的变更，避免在遍历数据时修改它
 	toastMsgs     []string
 	applied       appliedTheme
-	p             *palette // 当前亮/暗调色板
-	nav           navState // 标签访问历史
+	p             *palette  // 当前亮/暗调色板
+	th            *ui.Theme // 当前 MyGo 主题（每帧都要重新设置）
+	zoom          float32   // 已应用的界面缩放（FontSize/13）
+	nav           navState  // 标签访问历史
 	menuLocale    string
 	backupStop    chan struct{}
 }

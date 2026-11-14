@@ -160,3 +160,18 @@ func TestVisualHomeDialogs(t *testing.T) {
 	tt.Frame()
 	snapshot(t, tt, "v_close")
 }
+
+func TestVisualDark(t *testing.T) {
+	a, tt, _ := visualApp(t, true)
+	_ = tt.Click("用户服务")
+	_ = tt.Click("获取用户列表")
+	a.activeTab().draft.Name += " "
+	tt.Frame()
+	snapshot(t, tt, "v_dark_req")
+	_ = tt.Click("Send")
+	tt.Frame()
+	snapshot(t, tt, "v_dark_resp")
+	a.openPrefs()
+	tt.Frame()
+	snapshot(t, tt, "v_dark_prefs")
+}
