@@ -624,3 +624,32 @@ func TestBodyTabBadgeAndBeautify(t *testing.T) {
 		t.Fatalf("Body 页应有 格式化 与 urlencoded：%q", tt.Texts())
 	}
 }
+
+// 响应头表格：行尾有“复制值”按钮，点击把该行的值放进剪贴板。
+func TestRespHeadersCopyValue(t *testing.T) {
+	a, tt, _, rs := sendWith(t, jsonResp())
+	rs.sub = 1
+	tt.Frame()
+	snapshot(t, tt, "rb_headers")
+	if err := tt.Click("复制值"); err != nil {
+		t.Fatal(err)
+	}
+	if a.clipboard == "" {
+		t.Fatal("点击复制值后剪贴板不应为空")
+	}
+}
+
+// 底栏摘要（设计稿 p24）：方法 + 路径 → 状态 · 耗时；底栏不再重复显示环境。
+func TestBottomBarRequestSummary(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.con.entries = []consoleEntry{{method: "DELETE", url: "https://api.x.dev/users/1?soft=1", status: 204, ms: 41, done: true}}
+	tt.Frame()
+	for _, want := range []string{"DEL", "/users/1?soft=1", "→", "204 · 41ms"} {
+		if !tt.HasText(want) {
+			t.Errorf("底栏应显示 %q：%q", want, tt.Texts())
+		}
+	}
+	if _, ok := tt.Find("当前环境（点击管理环境）"); ok {
+		t.Error("环境选择已移到标题栏，底栏不应再有环境按钮")
+	}
+}

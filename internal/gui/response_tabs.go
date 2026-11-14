@@ -21,14 +21,14 @@ func (a *app) respCookies(rs *respState) []respCookie {
 	return out
 }
 
-// respTable 绘制响应头/Cookies 的只读表格：灰底大写表头，行间细线，等宽字体。
+// respTable 绘制响应头/Cookies 的只读表格：扁平灰字表头，行间细线，等宽字体，名称列着色，行尾可复制值。
 func (a *app) respTable(c *ui.Context, heads []string, widths []float32, rows [][]string) {
 	p := a.p
 	ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
-		ui.Column(c).FillWidth().Padding(8).Children(func() {
-			ui.Row(c).FillWidth().Background(p.surface2).BorderWidth(0, 0, 1, 0).BorderColor(p.btnBorder).Children(func() {
+		ui.Column(c).FillWidth().Padding(0, 8).Children(func() {
+			ui.Row(c).FillWidth().BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
 				for i, h := range heads {
-					cell := txt(c, strings.ToUpper(h), 10.4, p.fg2, 600).PaddingX(12).PaddingY(6)
+					cell := txt(c, h, fsSmall, p.muted, 500).PaddingX(12).PaddingY(6)
 					if widths[i] > 0 {
 						cell.Width(widths[i]).Shrink(0)
 					} else {
@@ -45,7 +45,7 @@ func (a *app) respTable(c *ui.Context, heads []string, widths []float32, rows []
 					for i, v := range r {
 						weight, col := 0, p.fg2
 						if i == 0 {
-							weight, col = 500, p.fg
+							weight, col = 500, p.info // 设计稿：名称列着色
 						}
 						cell := ui.Text(c, v).FontSize(fsV2xs).Font(monoFont).TextColor(col).Selectable().PaddingX(12).PaddingY(4)
 						if weight > 0 {
@@ -57,6 +57,12 @@ func (a *app) respTable(c *ui.Context, heads []string, widths []float32, rows []
 							cell.Grow(1).Basis(0)
 						}
 					}
+					// 行尾：复制该行的值（第二列）
+					ui.Row(c).Width(32).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
+						if len(r) > 1 && a.iconButton(c.Key("cp"), "copy", a.t("复制值", "Copy value"), 12, p.info) {
+							a.copyText(r[1], a.t("已复制", "Copied"))
+						}
+					})
 				})
 			}
 		})

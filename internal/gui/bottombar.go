@@ -112,26 +112,19 @@ func (a *app) lastRequestSummary() (text string, col ui.Color, ok bool) {
 // 点击环境名切到侧栏的“环境”页。
 func (a *app) statusInfo(c *ui.Context) {
 	p := a.p
+	text, col, ok := a.lastRequestSummary()
+	if !ok {
+		return
+	}
+	// 设计稿：「POST /post → 200 · 773ms」，方法着色，路径灰色，状态着色
 	ui.Box(c).Width(1).Height(12).Background(p.tabDivider).Shrink(0)
-	envTip := a.t("当前环境（点击管理环境）", "Active environment (click to manage)")
-	if a.button(c, btnOpts{gap: 4, noHover: true, tip: envTip, key: "foot:env"}, func(hover bool) {
-		col := p.fg2
-		if hover {
-			col = p.fg
-		}
-		icon(c, "globe", 11, col)
-		txtE(c, a.envLabel(), fsSmall, col, 0).MaxWidth(160)
-	}) {
-		a.later(func() {
-			a.set.SidebarCollapsed = false
-			a.side.tab = 2
-			a.saveSettings()
-		})
-	}
-	if text, col, ok := a.lastRequestSummary(); ok {
-		ui.Box(c).Width(1).Height(12).Background(p.tabDivider).Shrink(0)
-		txtMono(c, text, fsSmall, col, 0).Tooltip(a.t("最近一次请求", "Last request"))
-	}
+	last := a.con.entries[len(a.con.entries)-1]
+	ui.Row(c.Key("foot:last")).Gap(6).AlignItems(ui.Center).Shrink(1).Tooltip(a.t("最近一次请求", "Last request")).Children(func() {
+		txtMono(c, methodAbbr(last.method), fsSmall, p.method(last.method), 600)
+		txtEMono(c, urlPathQuery(last.url), fsSmall, p.muted, 0).MaxWidth(280)
+		txt(c, "→", fsSmall, p.muted, 0)
+		txtMono(c, text, fsSmall, col, 0)
+	})
 }
 
 // layoutGlyph 绘制底栏里 13×11 的小窗口示意图：圆角边框，内部放一条线或一个色块。

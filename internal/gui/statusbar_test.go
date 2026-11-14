@@ -48,23 +48,6 @@ func TestStatusBarLastRequestSummary(t *testing.T) {
 	}
 }
 
-// 点击底栏的环境名：展开侧栏并切到“环境”页。
-func TestStatusBarEnvClickOpensEnvPage(t *testing.T) {
-	a, tt, _ := zhApp(t)
-	a.envs = []model.Environment{{ID: "e1", Name: "预发环境"}}
-	a.envID = "e1"
-	a.set.SidebarCollapsed = true
-	tt.Frame()
-	// 标签栏右侧的环境选择器也显示同名文字，所以按底栏按钮的无障碍名称来点。
-	if err := tt.Click("当前环境（点击管理环境）"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if a.set.SidebarCollapsed || a.side.tab != 2 {
-		t.Fatalf("应展开侧栏并切到环境页: collapsed=%v tab=%d", a.set.SidebarCollapsed, a.side.tab)
-	}
-}
-
 // 真实发送一次请求后，底栏出现状态码摘要。
 func TestStatusBarUpdatesAfterSend(t *testing.T) {
 	a, tt, _ := zhApp(t)
