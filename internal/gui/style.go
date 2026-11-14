@@ -13,7 +13,7 @@ import (
 // 本文件是界面的设计系统：调色板、尺寸常量与基础控件，数值全部取自旧版
 // frontend/src/styles/globals.css 与各组件的实际渲染结果（TablePlus 风格）。
 
-//go:embed icons/*.svg icons/logo.png
+//go:embed icons/*.svg icons/logo.png icons/logo-dark.png
 var assetFS embed.FS
 
 // 尺寸常量（单位 DIP，与旧版 CSS 像素一致）。
@@ -216,22 +216,26 @@ func svgIcon(name string) *ui.SVG {
 }
 
 var (
-	logoOnce sync.Once
-	logoImg  ui.ImageSource
+	logoOnce [2]sync.Once
+	logoImgs [2]ui.ImageSource
 )
 
-// logoImage 返回应用图标（空状态使用）。
-func logoImage() ui.ImageSource {
-	logoOnce.Do(func() {
-		data, err := assetFS.ReadFile("icons/logo.png")
+// logoImage 返回应用图标（空状态、设置-关于使用）：深色主题用深色版，浅色主题用浅色版。
+func logoImage(dark bool) ui.ImageSource {
+	i, name := 0, "icons/logo.png"
+	if dark {
+		i, name = 1, "icons/logo-dark.png"
+	}
+	logoOnce[i].Do(func() {
+		data, err := assetFS.ReadFile(name)
 		if err == nil {
-			logoImg, err = ui.DecodeImage(data)
+			logoImgs[i], err = ui.DecodeImage(data)
 		}
 		if err != nil {
-			logger.Warn("加载应用图标失败", "error", err.Error())
+			logger.Warn("加载应用图标失败", "file", name, "error", err.Error())
 		}
 	})
-	return logoImg
+	return logoImgs[i]
 }
 
 // ---- 基础控件 ----

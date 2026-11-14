@@ -370,7 +370,7 @@ func (a *app) prefsAbout(c *ui.Context) {
 	p := a.p
 	ui.Column(c).FillWidth().Radius(11).Border(1, p.border).Padding(16).Gap(12).Children(func() {
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-			if img := logoImage(); img != nil {
+			if img := logoImage(p.dark); img != nil {
 				ui.Image(c, img).Size(36, 36).Fit(ui.Contain)
 			}
 			ui.Column(c).Children(func() {

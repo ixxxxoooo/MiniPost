@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <circle cx="780" cy="262" r="124" fill="none" stroke="#FFFFFF" stroke-width="18"/>
+  <circle cx="780" cy="262" r="80" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-opacity="0.6"/>
+  <path d="M600 640 Q620 626 640 640 Q660 654 680 640 Q700 626 720 640 Q740 654 760 640 Q780 626 800 640 Q820 654 840 640 Q860 626 880 640 Q900 654 920 640" fill="none" stroke="#FFFFFF" stroke-width="15" stroke-linecap="round"/>
+  <path d="M600 690 Q620 676 640 690 Q660 704 680 690 Q700 676 720 690 Q740 704 760 690 Q780 676 800 690 Q820 704 840 690 Q860 676 880 690 Q900 704 920 690" fill="none" stroke="#FFFFFF" stroke-width="15" stroke-linecap="round"/>
+  <path d="M600 740 Q620 726 640 740 Q660 754 680 740 Q700 726 720 740 Q740 754 760 740 Q780 726 800 740 Q820 754 840 740 Q860 726 880 740 Q900 754 920 740" fill="none" stroke="#FFFFFF" stroke-width="15" stroke-linecap="round"/>
+</svg>

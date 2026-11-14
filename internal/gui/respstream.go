@@ -231,15 +231,13 @@ func (a *app) streamView(c *ui.Context, rs *respState) {
 	})
 }
 
-// streamStatus 是工具栏右侧：接收中（主题色呼吸点）或已结束，加上消息条数与大小。
+// streamStatus 是工具栏右侧：接收中时一个主题色呼吸点（文字提示已在标签行右侧），加上消息条数与大小。
 func (a *app) streamStatus(c *ui.Context, rs *respState, count int, bytes int64) {
 	p := a.p
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
 		if rs.streaming {
 			c.AnimationFrame()
 			ui.Box(c).Size(7, 7).Radius(3.5).Background(p.accent.Alpha(dotPulse(time.Duration(time.Now().UnixNano()), 0)))
-			txt(c, a.t("接收中", "Receiving"), fsTiny, p.accent, 500)
-			txt(c, "·", fsTiny, p.muted, 0)
 		}
 		txtMono(c, a.t(fmt.Sprintf("%d 条", count), fmt.Sprintf("%d msgs", count))+" · "+formatSizeShort(bytes), fsTiny, p.muted, 0)
 	})

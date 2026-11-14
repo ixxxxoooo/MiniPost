@@ -10,7 +10,7 @@ func (a *app) emptyState(c *ui.Context) {
 	ui.Column(c).Grow(1).Basis(0).Background(p.surface).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
 		ui.Column(c).Width(300).Children(func() {
 			ui.Column(c).FillWidth().AlignItems(ui.Center).Children(func() {
-				if img := logoImage(); img != nil {
+				if img := logoImage(p.dark); img != nil {
 					ui.Image(c, img).Size(48, 48).Fit(ui.Contain)
 				}
 				ui.Box(c).Height(8)
