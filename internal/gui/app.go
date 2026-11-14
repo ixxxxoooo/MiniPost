@@ -102,6 +102,7 @@ type consoleState struct {
 type sideState struct {
 	tab           int             // 0 请求，1 历史，2 环境
 	query         string          // 侧栏搜索词
+	histQuery     string          // 历史搜索词（匹配方法、地址、名称、状态码，或 2xx/4xx 这样的状态段）
 	histCollapsed map[string]bool // 已折叠的历史日期分组
 	cardHot       string          // 当前保持显示的悬停卡片
 	outline       ui.OutlineState[string]

@@ -292,6 +292,16 @@ func (f *fakeBackend) ImportCurl(cmd string) (*model.SendRequestInput, error) {
 func (f *fakeBackend) GetHistory(pid string) ([]model.HistoryEntry, error) {
 	return f.history[pid], nil
 }
+func (f *fakeBackend) DeleteHistoryEntry(pid, id string) error {
+	var kept []model.HistoryEntry
+	for _, e := range f.history[pid] {
+		if e.ID != id {
+			kept = append(kept, e)
+		}
+	}
+	f.history[pid] = kept
+	return nil
+}
 func (f *fakeBackend) ClearHistory(pid string) error                { f.history[pid] = nil; return nil }
 func (f *fakeBackend) ExportProjectJSON(pid string) (string, error) { return "{}", nil }
 func (f *fakeBackend) PreviewImportFromFile(pid, format, content string) (*service.ImportPreview, error) {

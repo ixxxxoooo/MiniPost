@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -77,6 +78,38 @@ func (a *app) historyMenu(m *ui.Menu, e historyItem) {
 	if m.Item(a.t("复制地址", "Copy URL")).Disabled(e.URL == "").Chosen() {
 		a.later(func() { a.copyText(e.URL, a.t("已复制地址", "URL copied")) })
 	}
+	m.Separator()
+	if m.Item(a.t("删除此记录", "Delete this entry")).Danger().Chosen() {
+		a.later(func() { a.deleteHistoryEntry(e) })
+	}
+}
+
+// deleteHistoryEntry 删除单条历史记录并刷新列表。
+func (a *app) deleteHistoryEntry(e historyItem) {
+	if err := a.be.DeleteHistoryEntry(a.projectID, e.ID); err != nil {
+		a.fail(a.t("删除历史记录", "Delete history entry"), err)
+		return
+	}
+	a.reloadHistory()
+	logger.Info("已删除历史记录", "entryID", e.ID)
+}
+
+// historyMatch 判断历史记录是否匹配搜索词：方法、地址、名称、状态码都可以搜，
+// 也支持 2xx / 4xx / 5xx 这样的状态段。
+func historyMatch(e historyItem, q string) bool {
+	q = strings.ToLower(strings.TrimSpace(q))
+	if q == "" {
+		return true
+	}
+	if len(q) == 3 && q[1:] == "xx" && q[0] >= '1' && q[0] <= '5' {
+		return e.StatusCode/100 == int(q[0]-'0')
+	}
+	for _, f := range []string{e.Method, e.URL, e.Name, strconv.Itoa(e.StatusCode)} {
+		if strings.Contains(strings.ToLower(f), q) {
+			return true
+		}
+	}
+	return false
 }
 
 // sidebarEnvMenu 是环境行的右键菜单：编辑、设为当前/取消当前、删除。

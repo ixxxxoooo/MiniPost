@@ -256,6 +256,30 @@ func (fs *FileStore) AddHistory(projectID string, entry *model.HistoryEntry) err
 	return fs.writeJSON(path, &data)
 }
 
+// DeleteHistoryEntry 删除一条历史记录；记录不存在时不报错（视为已删除）。
+func (fs *FileStore) DeleteHistoryEntry(projectID, entryID string) error {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	path := fs.historyPath(projectID)
+	var data historyFile
+	if err := fs.readJSON(path, &data); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	kept := data.Entries[:0:0]
+	for _, e := range data.Entries {
+		if e.ID != entryID {
+			kept = append(kept, e)
+		}
+	}
+	data.Entries = kept
+	data.SchemaVersion = schemaVersion
+	return fs.writeJSON(path, &data)
+}
+
 func (fs *FileStore) ClearHistory(projectID string) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()

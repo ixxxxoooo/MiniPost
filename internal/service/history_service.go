@@ -29,3 +29,8 @@ func (s *HistoryService) AddEntry(projectID string, entry *model.HistoryEntry) e
 func (s *HistoryService) ClearHistory(projectID string) error {
 	return s.store.ClearHistory(projectID)
 }
+
+// DeleteEntry 删除单条历史记录。
+func (s *HistoryService) DeleteEntry(projectID, entryID string) error {
+	return s.store.DeleteHistoryEntry(projectID, entryID)
+}

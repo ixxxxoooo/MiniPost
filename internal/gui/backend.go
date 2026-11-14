@@ -48,6 +48,7 @@ type Backend interface {
 
 	// 历史
 	GetHistory(projectID string) ([]model.HistoryEntry, error)
+	DeleteHistoryEntry(projectID, entryID string) error
 	ClearHistory(projectID string) error
 
 	// 导入导出与备份

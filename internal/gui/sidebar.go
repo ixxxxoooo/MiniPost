@@ -412,7 +412,14 @@ func (a *app) historyView(c *ui.Context) {
 		a.sideHint(c, a.t("暂无历史记录", "No history yet"))
 		return
 	}
+	ui.Row(c).FillWidth().Shrink(0).Padding(2, 8, 6, 8).AlignItems(ui.Center).Children(func() {
+		a.input(c, &a.side.histQuery, a.t("搜索历史（方法 / 地址 / 状态码 / 4xx）", "Search history (method / URL / status / 4xx)"), fieldOpts{icon: "search", radius: radiusInput, key: "hist-search"})
+	})
 	groups, order := a.groupHistory()
+	if len(order) == 0 {
+		a.sideHint(c, a.t("无匹配结果", "No results"))
+		return
+	}
 	ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
 		ui.Column(c).FillWidth().Children(func() {
 			for _, label := range order {
@@ -468,7 +475,8 @@ func (a *app) historyRow(c *ui.Context, e historyItem) {
 	p := a.p
 	row := ui.ButtonBase(c.Key("h:" + e.ID)).FillWidth().Height(24).MarginX(4).PaddingStart(24).PaddingEnd(12).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start).
 		ContextMenu(func(m *ui.Menu) { a.historyMenu(m, e) })
-	if row.Hovered() {
+	hover := row.Hovered()
+	if hover {
 		row = row.Background(p.sideHover)
 	}
 	row.Children(func() {
@@ -488,7 +496,26 @@ func (a *app) historyRow(c *ui.Context, e historyItem) {
 		ui.Box(c).Width(4).Shrink(0)
 		txtMono(c, fmt.Sprint(e.StatusCode), fsTiny, a.statusTextColor(e.StatusCode), 0)
 		ui.Box(c).Width(6).Shrink(0)
-		txt(c, historyClock(e.Timestamp), fsTiny, p.muted, 0)
+		// 右侧固定宽度：时间在左、删除按钮在右。按钮始终存在（只在悬停时画图标），
+		// 这样按下鼠标的那一帧按钮不会因为悬停状态变化而消失；悬停时隐藏时间，宽度不变。
+		ui.Row(c).Width(46).Shrink(0).Justify(ui.End).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Width(30).Shrink(0).Justify(ui.End).Children(func() {
+				if !hover {
+					txt(c, historyClock(e.Timestamp), fsTiny, p.muted, 0)
+				}
+			})
+			if a.button(c, btnOpts{w: 16, h: 20, tip: a.t("删除此记录", "Delete this entry"), noHover: true, key: "hd:" + e.ID}, func(h bool) {
+				if hover {
+					col := p.muted
+					if h {
+						col = p.danger
+					}
+					icon(c, "delete", 12, col)
+				}
+			}) {
+				a.later(func() { a.deleteHistoryEntry(e) })
+			}
+		})
 	})
 	if row.Clicked() {
 		a.later(func() { a.openFromHistory(e) })
@@ -581,6 +608,9 @@ func (a *app) groupHistory() (map[string][]historyItem, []string) {
 	groups := map[string][]historyItem{}
 	var order []string
 	for _, e := range a.history {
+		if !historyMatch(e, a.side.histQuery) {
+			continue
+		}
 		key := historyDay(e.Timestamp, a)
 		if _, ok := groups[key]; !ok {
 			order = append(order, key)

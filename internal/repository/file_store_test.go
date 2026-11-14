@@ -372,3 +372,30 @@ func TestRestoreCollectionSubtree_RestoresDeletedFolder(t *testing.T) {
 		}
 	}
 }
+
+// 删除单条历史记录只影响这一条，且对不存在的记录是幂等的。
+func TestDeleteHistoryEntry(t *testing.T) {
+	store := newTestFileStore(t)
+	pid := uuid.New().String()
+	if err := store.SaveProject(&model.Project{ID: pid, Name: "历史", CreatedAt: "2026-06-13T00:00:00Z", UpdatedAt: "2026-06-13T00:00:00Z"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteHistoryEntry(pid, "none"); err != nil {
+		t.Fatalf("没有历史文件时删除应当无错误: %v", err)
+	}
+	for _, id := range []string{"a", "b", "c"} {
+		if err := store.AddHistory(pid, &model.HistoryEntry{ID: id, Method: "GET", URL: "https://x/" + id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.DeleteHistoryEntry(pid, "b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteHistoryEntry(pid, "b"); err != nil {
+		t.Fatalf("重复删除应当无错误: %v", err)
+	}
+	got, _ := store.GetHistory(pid)
+	if len(got) != 2 || got[0].ID != "c" || got[1].ID != "a" {
+		t.Fatalf("应剩 c, a: %+v", got)
+	}
+}

@@ -279,6 +279,15 @@ func (a *App) GetHistory(projectID string) ([]model.HistoryEntry, error) {
 	return entries, nil
 }
 
+func (a *App) DeleteHistoryEntry(projectID, entryID string) error {
+	if err := a.historySvc.DeleteEntry(projectID, entryID); err != nil {
+		logger.Error("删除历史记录失败", "projectID", projectID, "entryID", entryID, "error", err.Error())
+		return err
+	}
+	logger.Info("删除历史记录成功", "projectID", projectID, "entryID", entryID)
+	return nil
+}
+
 func (a *App) ClearHistory(projectID string) error {
 	if err := a.historySvc.ClearHistory(projectID); err != nil {
 		logger.Error("清除历史记录失败", "projectID", projectID, "error", err.Error())
