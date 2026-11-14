@@ -150,14 +150,26 @@ func (a *app) urlBar(c *ui.Context, t *tab) {
 				txtMono(c, d.Method, fsSmall, mc, 600)
 				icon(c, "arrowDown", 14, mc)
 			})
-			url := ui.TextInputBase(c.Key("url"), &d.URL).Placeholder(a.t("输入请求 URL...", "Enter request URL...")).PlaceholderColor(p.muted).
-				FontSize(fsVXs).Font(monoFont).TextColor(p.fg).Grow(1).Basis(0).FillHeight().Padding(0, 12, 2, 12)
-			if url.Changed() {
-				d.Params = client.SyncParamsWithURL(d.URL, d.Params)
-			}
-			if url.Submitted() && !t.sending {
-				a.later(func() { a.sendTab(t) })
-			}
+			wrap := ui.Row(c.Key("urlwrap")).Grow(1).Basis(0).FillHeight()
+			refs := client.FindTemplateRefs(d.URL, a.vars())
+			hl := len(refs) > 0 && !wrap.FocusWithin()
+			wrap.Children(func() {
+				url := ui.TextInputBase(c.Key("url"), &d.URL).Placeholder(a.t("输入请求 URL...", "Enter request URL...")).PlaceholderColor(p.muted).
+					FontSize(fsVXs).Font(monoFont).TextColor(p.fg).Grow(1).Basis(0).FillHeight().Padding(0, 12, 2, 12)
+				if hl {
+					url = url.TextColor(ui.RGBA(0, 0, 0, 0))
+				}
+				if url.Changed() {
+					d.Params = client.SyncParamsWithURL(d.URL, d.Params)
+				}
+				if url.Submitted() && !t.sending {
+					a.later(func() { a.sendTab(t) })
+				}
+				if hl {
+					a.urlOverlay(c, d.URL, refs)
+				}
+			})
+			a.undefinedHint(c, t)
 		})
 		a.sendGroup(c, t)
 	})

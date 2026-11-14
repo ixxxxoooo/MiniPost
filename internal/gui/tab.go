@@ -14,6 +14,11 @@ import (
 type bodyEditor struct {
 	st     *editor.State
 	synced uint64
+
+	// 未定义变量标注的缓存键：文本版本与环境变量集合不变时不重算
+	diagInit bool
+	diagVer  uint64
+	diagSig  string
 }
 
 func newBodyEditor(text, filename string) *bodyEditor {

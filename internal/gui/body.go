@@ -42,8 +42,10 @@ func (a *app) bodyTab(c *ui.Context, t *tab) {
 		})
 		switch d.Body.Type {
 		case client.BodyJSON:
+			a.markUndefinedInEditor(t.jsonEd)
 			a.codeView(c, t.jsonEd.st).Grow(1).FillWidth()
 		case client.BodyRaw:
+			a.markUndefinedInEditor(t.rawEd)
 			a.codeView(c, t.rawEd.st).Grow(1).FillWidth()
 		case client.BodyFormData:
 			a.formTable(c, &d.Body.FormData)

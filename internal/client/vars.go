@@ -50,3 +50,48 @@ func EnsureProtocol(input string) string {
 	}
 	return "http://" + value
 }
+
+// TemplateRef 是文本里的一处 {{name}} 引用，Start/End 为字节偏移（含花括号）。
+type TemplateRef struct {
+	Start, End int
+	Name       string // 去掉首尾空白后的变量名
+	Defined    bool   // 当前环境中是否定义了该变量
+}
+
+// FindTemplateRefs 按出现顺序返回 input 中所有 {{name}} 引用，并标注是否已在 vars 中定义。
+// 变量名为空白的 {{ }} 不算引用。
+func FindTemplateRefs(input string, vars []Var) []TemplateRef {
+	if !strings.Contains(input, "{{") {
+		return nil
+	}
+	known := make(map[string]bool, len(vars))
+	for _, v := range vars {
+		if k := strings.TrimSpace(v.Key); k != "" {
+			known[k] = true
+		}
+	}
+	var out []TemplateRef
+	for _, m := range templatePattern.FindAllStringSubmatchIndex(input, -1) {
+		name := strings.TrimSpace(input[m[2]:m[3]])
+		if name == "" {
+			continue
+		}
+		out = append(out, TemplateRef{Start: m[0], End: m[1], Name: name, Defined: known[name]})
+	}
+	return out
+}
+
+// UndefinedVarNames 汇总 inputs 中引用了、但 vars 里没有定义的变量名（去重，保持首次出现顺序）。
+func UndefinedVarNames(vars []Var, inputs ...string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, in := range inputs {
+		for _, r := range FindTemplateRefs(in, vars) {
+			if !r.Defined && !seen[r.Name] {
+				seen[r.Name] = true
+				out = append(out, r.Name)
+			}
+		}
+	}
+	return out
+}

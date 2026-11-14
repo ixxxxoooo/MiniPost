@@ -180,3 +180,44 @@ func DraftFromSendInput(in model.SendRequestInput, name, projectID, folderID str
 	}
 	return DraftFromItem(it)
 }
+
+// TemplateTexts 列出发送时会做 {{变量}} 替换的所有文本：地址、启用的参数与请求头、
+// 当前请求体类型对应的内容，以及当前鉴权方式用到的字段。
+func (d *Draft) TemplateTexts() []string {
+	out := []string{d.URL}
+	addRows := func(rows []*Row) {
+		for _, r := range rows {
+			if r.Enabled {
+				out = append(out, r.Key, r.Value)
+			}
+		}
+	}
+	addRows(d.Params)
+	addRows(d.Headers)
+	switch d.Body.Type {
+	case BodyJSON:
+		out = append(out, d.Body.JSON)
+	case BodyRaw:
+		out = append(out, d.Body.Raw)
+	case BodyURLEncoded:
+		addRows(d.Body.URLEncoded)
+	case BodyFormData:
+		for _, r := range d.Body.FormData {
+			if r.Enabled {
+				out = append(out, r.Key)
+				if r.Type != "file" {
+					out = append(out, r.Value)
+				}
+			}
+		}
+	}
+	switch d.Auth.Type {
+	case AuthBasic:
+		out = append(out, d.Auth.Username, d.Auth.Password)
+	case AuthBearer:
+		out = append(out, d.Auth.Token)
+	case AuthAPIKey:
+		out = append(out, d.Auth.APIKeyName, d.Auth.APIKeyValue)
+	}
+	return out
+}
