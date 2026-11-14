@@ -228,30 +228,6 @@ func (a *app) redraw() {
 	}
 }
 
-// toastAction 登记一条带按钮的提示，下一帧显示；点按钮时在本帧构建结束后执行 fn。
-func (a *app) toastAction(msg, label string, fn func()) {
-	a.toastActs = append(a.toastActs, toastAct{msg, label, fn})
-	a.redraw()
-}
-
-type toastAct struct {
-	msg, label string
-	fn         func()
-}
-
-// showToasts 把登记的提示交给 MyGo 显示。
-func (a *app) showToasts(c *ui.Context) {
-	for _, m := range a.toastMsgs {
-		c.Toast(m)
-	}
-	a.toastMsgs = nil
-	for _, t := range a.toastActs {
-		fn := t.fn
-		c.ToastAction(t.msg, t.label, func() { a.later(fn) })
-	}
-	a.toastActs = nil
-}
-
 // updateChip 是标题栏右侧的更新提示：下载中显示进度，下载好了「重启更新」，点一下就更新。
 // 没有更新、正在检查时什么也不画。
 func (a *app) updateChip(c *ui.Context) {

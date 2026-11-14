@@ -336,7 +336,7 @@ func (a *app) addCookieDomain() {
 // addBlankCookie 在域名下新增一条空白 Cookie 供编辑。
 func (a *app) addBlankCookie(domain string) {
 	if domain == "" {
-		a.toast(a.t("请先输入或选择域名", "Please choose or enter a domain first"))
+		a.toastWarn(a.t("请先输入或选择域名", "Please choose or enter a domain first"))
 		return
 	}
 	a.jar.Add(client.Cookie{Domain: domain, Path: "/", Enabled: true})

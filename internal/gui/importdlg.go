@@ -36,7 +36,7 @@ var importStrategies = []string{service.ImportStrategyCopy, service.ImportStrate
 // openImport 打开导入对话框并切到指定方式。
 func (a *app) openImport(mode int) {
 	if a.projectID == "" {
-		a.toast(a.t("请先选择项目", "Select a project first"))
+		a.toastWarn(a.t("请先选择项目", "Select a project first"))
 		return
 	}
 	a.overlays.imp = importState{open: true, mode: mode}
@@ -349,7 +349,7 @@ func (a *app) runImport(p *service.ImportPreview, strategy string) {
 	}
 	a.reloadCollection()
 	a.reloadEnvs()
-	a.toast(a.t("导入完成", "Import finished"))
+	a.toastOK(a.t("导入完成", "Import finished"))
 	logger.Info("导入完成", "kind", p.Kind, "strategy", strategy)
 }
 

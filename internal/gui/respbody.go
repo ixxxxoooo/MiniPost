@@ -364,7 +364,7 @@ func (a *app) copyBody(rs *respState) {
 	if a.native && a.win != nil {
 		time.AfterFunc(copiedLinger+50*time.Millisecond, a.win.Invalidate)
 	}
-	a.toast(a.t("已复制响应体", "Response body copied"))
+	a.toastOK(a.t("已复制响应体", "Response body copied"))
 	logger.Info("已复制响应体", "bytes", len(rs.view.display))
 }
 

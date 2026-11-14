@@ -50,9 +50,9 @@ type app struct {
 	showHome   bool
 	splitPct   float32
 	overlays   overlays
-	deferred   []func() // 在本帧构建结束后执行的变更，避免在遍历数据时修改它
-	toastMsgs  []string
-	toastActs  []toastAct // 带按钮的提示（更新提示等）
+	deferred   []func()    // 在本帧构建结束后执行的变更，避免在遍历数据时修改它
+	toastMsgs  []toastNote // 待显示的提示（见 toast.go）
+	toastActs  []toastAct  // 带按钮的提示（更新提示等）
 	applied    appliedTheme
 	p          *palette  // 当前亮/暗调色板
 	th         *ui.Theme // 当前 MyGo 主题（每帧都要重新设置）
@@ -125,16 +125,13 @@ func (a *app) runDeferred() {
 	}
 }
 
-// toast 登记一条在下一帧显示的提示。
-func (a *app) toast(msg string) { a.toastMsgs = append(a.toastMsgs, msg) }
-
 // fail 记录错误日志并提示用户。
 func (a *app) fail(what string, err error) {
 	if err == nil {
 		return
 	}
 	logger.Warn(what+"失败", "error", err.Error())
-	a.toast(what + a.t("失败：", " failed: ") + err.Error())
+	a.toastErr(what + a.t("失败：", " failed: ") + err.Error())
 }
 
 func (a *app) saveSettings() {

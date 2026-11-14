@@ -358,7 +358,7 @@ func TestInstallSamplesSwitchesToFirstNewProject(t *testing.T) {
 	be.sampleNames = nil
 	a.toastMsgs = nil
 	a.installSamples()
-	if a.projectID != cur || len(a.toastMsgs) == 0 || !strings.Contains(a.toastMsgs[0], "已存在") {
+	if a.projectID != cur || len(a.toastMsgs) == 0 || !strings.Contains(a.toastMsgs[0].msg, "已存在") {
 		t.Fatalf("已存在时应只提示，实际 %q 项目 %s", a.toastMsgs, a.projectID)
 	}
 }

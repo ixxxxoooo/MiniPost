@@ -246,7 +246,7 @@ func (a *app) streamDetail(c *ui.Context, rs *respState, e model.StreamChunk) {
 			}) {
 				a.later(func() {
 					a.writeClipboard(text)
-					a.toast(a.t("已复制", "Copied"))
+					a.toastOK(a.t("已复制", "Copied"))
 				})
 			}
 		})

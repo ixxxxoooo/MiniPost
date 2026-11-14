@@ -48,7 +48,7 @@ func TestHistoryOpenMissingRequestToasts(t *testing.T) {
 			if len(a.tabs) != 0 {
 				t.Fatalf("不应打开标签，实际 %d 个", len(a.tabs))
 			}
-			if len(a.toastMsgs) != 1 || !strings.Contains(a.toastMsgs[0], "已被删除") {
+			if len(a.toastMsgs) != 1 || !strings.Contains(a.toastMsgs[0].msg, "已被删除") {
 				t.Fatalf("应提示已被删除，实际 %v", a.toastMsgs)
 			}
 		})

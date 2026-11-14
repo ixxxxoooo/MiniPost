@@ -65,7 +65,7 @@ func (a *app) formatBody(t *tab) {
 		t.flush()
 		var out bytes.Buffer
 		if err := json.Indent(&out, []byte(t.draft.Body.Raw), "", "  "); err != nil {
-			a.toast(a.t("不是合法的 JSON：", "Invalid JSON: ") + err.Error())
+			a.toastWarn(a.t("不是合法的 JSON：", "Invalid JSON: ") + err.Error())
 			return
 		}
 		t.rawEd.st.Buffer.Set(out.String())
@@ -79,7 +79,7 @@ func (a *app) formatJSON(t *tab) {
 	t.flush()
 	var out bytes.Buffer
 	if err := json.Indent(&out, []byte(t.draft.Body.JSON), "", "  "); err != nil {
-		a.toast(a.t("不是合法的 JSON：", "Invalid JSON: ") + err.Error())
+		a.toastWarn(a.t("不是合法的 JSON：", "Invalid JSON: ") + err.Error())
 		return
 	}
 	t.jsonEd.st.Buffer.Set(out.String())

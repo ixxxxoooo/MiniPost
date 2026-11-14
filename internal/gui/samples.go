@@ -20,7 +20,7 @@ func (a *app) installSamples() {
 				return
 			}
 			logger.Info("已添加示例项目", "count", len(created))
-			a.toast(a.t(fmt.Sprintf("已添加 %d 个示例项目", len(created)), fmt.Sprintf("Added %d sample projects", len(created))))
+			a.toastOK(a.t(fmt.Sprintf("已添加 %d 个示例项目", len(created)), fmt.Sprintf("Added %d sample projects", len(created))))
 			for _, p := range a.projects {
 				if p.Name == created[0] {
 					a.showHome = false

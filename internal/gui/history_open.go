@@ -42,5 +42,5 @@ func (a *app) openFromHistory(e historyItem) {
 		return
 	}
 	logger.Info("历史记录找不到对应请求", "entryID", e.ID, "hasRequestID", e.RequestID != "")
-	a.toast(a.t("该请求已被删除", "This request no longer exists"))
+	a.toastWarn(a.t("该请求已被删除", "This request no longer exists"))
 }

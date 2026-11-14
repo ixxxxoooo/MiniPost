@@ -411,7 +411,7 @@ func (a *app) backupNow() {
 				a.fail(a.t("创建备份", "Back up"), err)
 				return
 			}
-			a.toast(a.t("备份已创建：", "Backup created: ") + path)
+			a.toastOK(a.t("备份已创建：", "Backup created: ") + path)
 		}
 	})
 }
@@ -434,7 +434,7 @@ func (a *app) restoreBackup() {
 						return
 					}
 					a.reloadAll()
-					a.toast(a.t("已从备份恢复", "Restored from backup"))
+					a.toastOK(a.t("已从备份恢复", "Restored from backup"))
 				})
 		}
 	})

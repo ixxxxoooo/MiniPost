@@ -40,7 +40,7 @@ func (a *app) copyCurlOf(id string) {
 		return
 	}
 	a.writeClipboard(cmd)
-	a.toast(a.t("已复制 cURL 命令", "cURL command copied"))
+	a.toastOK(a.t("已复制 cURL 命令", "cURL command copied"))
 	logger.Info("已复制 cURL", "requestID", id)
 }
 
@@ -90,7 +90,7 @@ func (a *app) exportNodeOf(id string) {
 // copyText 复制一段文本并提示。
 func (a *app) copyText(s, tip string) {
 	a.writeClipboard(s)
-	a.toast(tip)
+	a.toastOK(tip)
 }
 
 // historyMenu 是历史记录行的右键菜单。

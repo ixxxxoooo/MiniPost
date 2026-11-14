@@ -206,7 +206,7 @@ func (a *app) saveEnvTab(t *tab) bool {
 	d := ed.env
 	d.Name = strings.TrimSpace(d.Name)
 	if d.Name == "" {
-		a.toast(a.t("环境名称不能为空", "Environment name is required"))
+		a.toastWarn(a.t("环境名称不能为空", "Environment name is required"))
 		return false
 	}
 	vars := make([]model.Variable, 0, len(d.Variables))
@@ -225,7 +225,7 @@ func (a *app) saveEnvTab(t *tab) bool {
 	ed.env.Name = d.Name
 	ed.base = ed.fingerprint()
 	a.reloadEnvs()
-	a.toast(a.t("环境已保存", "Environment saved"))
+	a.toastOK(a.t("环境已保存", "Environment saved"))
 	logger.Info("环境已保存", "envID", d.ID, "variables", len(vars))
 	return true
 }

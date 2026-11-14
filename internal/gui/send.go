@@ -21,7 +21,7 @@ func (a *app) sendTab(t *tab) {
 	t.flush()
 	d := t.draft
 	if strings.TrimSpace(d.URL) == "" {
-		a.toast(a.t("请先输入请求地址", "Enter a request URL first"))
+		a.toastWarn(a.t("请先输入请求地址", "Enter a request URL first"))
 		return
 	}
 	reqID := uuid.NewString()
@@ -89,7 +89,7 @@ func (a *app) copyCurl(t *tab) {
 	t.flush()
 	cmd, _ := client.RuntimeCurl(t.draft, a.vars(), a.set, a.jar)
 	a.writeClipboard(cmd)
-	a.toast(a.t("已复制 cURL 命令", "cURL command copied"))
+	a.toastOK(a.t("已复制 cURL 命令", "cURL command copied"))
 }
 
 // writeClipboard 写入系统剪贴板。
