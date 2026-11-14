@@ -52,10 +52,13 @@ func shimmerAlpha(t *tab, now time.Time) float32 {
 	return float32(math.Max(0, math.Min(1, float64(a))))
 }
 
-// sendShimmer 在响应区顶部绘制扫光线与光晕；不在等待中则什么也不画。颜色取自当前项目主题色。
+// sendShimmer 在响应区顶部绘制扫光线与光晕；颜色取自当前项目主题色。
+// 不在等待中时仍保留同一个 key 的空占位：它是响应区的第一个子元素，若直接消失，
+// 后面兄弟元素的位置会整体前移，恰好落在按下与松开之间的点击就会丢失。
 func (a *app) sendShimmer(c *ui.Context, t *tab) {
 	now := time.Now()
 	if !shimmerActive(t, now) {
+		ui.Box(c.Key("shimmer")).Absolute().Top(0).Left(0).Right(0).Height(0)
 		return
 	}
 	c.AnimationFrame()

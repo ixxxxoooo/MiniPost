@@ -161,7 +161,7 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 				// 未保存圆点：位置始终预留（不脏时透明），避免编辑时标签宽度变化。
 				dot := ui.Box(c).Size(6, 6).Radius(3).Shrink(0)
 				if t.dirty {
-					dot = dot.Background(p.accent)
+					dot.Background(p.accent) // Element 是节点句柄，原地生效，无需回写
 				}
 				closeCol := p.muted
 				cb := ui.ButtonBase(c.Key("tc:"+t.draft.ID)).Size(16, 16).Radius(4).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).

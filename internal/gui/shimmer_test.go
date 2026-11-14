@@ -216,3 +216,24 @@ func TestThemeButtonKeepsContentWidth(t *testing.T) {
 		t.Fatalf("按钮右侧 80px 处仍是按钮底色，说明被拉满整行: %v %v", inside, far)
 	}
 }
+
+// 等待动画恰好在“按下”与“松开”之间到期时，点击不能丢：
+// 动画元素是响应区的第一个子元素，消失时不能让后面的兄弟元素换位置，否则按钮的按下状态会被丢掉。
+// （真实时间的 shimmerMin 窗口在 -race 这类慢环境下曾让响应区的点击测试随机失败。）
+func TestClickSurvivesShimmerExpiry(t *testing.T) {
+	a, tt, _, rs := sendWith(t, jsonResp())
+	tb := a.activeTab()
+	tb.sendAt = time.Now() // 动画仍在最短展示期内
+	tt.Frame()
+	r, ok := tt.Find("过滤")
+	if !ok {
+		t.Fatalf("应有过滤按钮，实际 %q", tt.Texts())
+	}
+	x, y := r.X+r.W/2, r.Y+r.H/2
+	tb.sendAt = time.Now().Add(-time.Hour) // 动画在下一帧到期并从界面上消失
+	tt.Press(x, y)
+	tt.Release(x, y)
+	if !rs.view.filterOpen {
+		t.Fatal("动画在按下与松开之间到期后，点击仍应生效")
+	}
+}

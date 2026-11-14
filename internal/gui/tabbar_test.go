@@ -317,10 +317,14 @@ func TestTabWidthsDoNotJitter(t *testing.T) {
 	check("切换到第二个标签")
 
 	// 未保存圆点出现（不改标题和方法，只标脏）
-	a.tabs[1].dirty = true
+	orig := a.tabs[1].draft.URL
+	a.tabs[1].draft.URL = orig + "?changed=1" // dirty 每帧由草稿指纹重新计算，必须真的改草稿
 	tt.Frame()
+	if !a.tabs[1].dirty {
+		t.Fatal("改动草稿后应为未保存状态")
+	}
 	check("出现未保存圆点")
-	a.tabs[1].dirty = false
+	a.tabs[1].draft.URL = orig
 	tt.Frame()
 	check("圆点消失")
 
@@ -349,5 +353,44 @@ func TestAdaptiveTabsAreContiguous(t *testing.T) {
 	start := sw + int(a.tabs[0].shownW) + 1
 	if px(img, start, y) != acc || px(img, start-2, y) == acc {
 		t.Fatalf("选中的第二个标签应从 x=%d 开始", start)
+	}
+}
+
+// 标签有未保存修改时必须画出主题色圆点：改动草稿（dirty 每帧由草稿指纹重新计算）后，
+// 标签栏区域的画面应有差异；改回去后圆点消失、画面恢复。
+func TestTabDirtyDotIsDrawn(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openRequest(a.coll.Requests[0].ID)
+	tt.Frame()
+	if a.tabs[0].dirty {
+		t.Fatal("刚打开的请求不应是未保存状态")
+	}
+	strip := func() *image.RGBA {
+		img := tt.Image()
+		r := image.Rect(int(a.set.SidebarWidth), sizeToolbar, img.Bounds().Dx(), sizeToolbar+sizeTabStrip)
+		dst := image.NewRGBA(image.Rect(0, 0, r.Dx(), r.Dy()))
+		for y := 0; y < r.Dy(); y++ {
+			for x := 0; x < r.Dx(); x++ {
+				dst.Set(x, y, img.At(r.Min.X+x, r.Min.Y+y))
+			}
+		}
+		return dst
+	}
+	same := func(x, y *image.RGBA) bool { return string(x.Pix) == string(y.Pix) }
+
+	clean := strip()
+	orig := a.tabs[0].draft.URL
+	a.tabs[0].draft.URL = orig + "?changed=1"
+	tt.Frame()
+	if !a.tabs[0].dirty {
+		t.Fatal("改动草稿后应为未保存状态")
+	}
+	if same(clean, strip()) {
+		t.Fatal("标脏后标签栏画面没有变化，未保存圆点没有画出来")
+	}
+	a.tabs[0].draft.URL = orig
+	tt.Frame()
+	if !same(clean, strip()) {
+		t.Fatal("改回原值后圆点应消失，标签栏应恢复原样")
 	}
 }
