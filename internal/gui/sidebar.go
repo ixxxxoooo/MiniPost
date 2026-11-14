@@ -53,11 +53,11 @@ func (a *app) sideTabs(c *ui.Context) {
 			b := ui.ButtonBase(c.Key("sidetab" + it.en)).Grow(1).Basis(0).Height(h).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
 			switch {
 			case active:
-				right := float32(1)
+				right := float32(tabAccentWidth)
 				if i == len(items)-1 {
 					right = 0
 				}
-				b = b.Background(p.sidebar).BorderWidth(1, right, 0, 1).BorderColor(p.tabActiveBorder)
+				b = b.Background(p.sidebar).BorderWidth(tabAccentWidth, right, 0, tabAccentWidth).BorderColor(p.tabActiveBorder)
 			case b.Hovered():
 				b = b.Background(p.hover)
 			default:

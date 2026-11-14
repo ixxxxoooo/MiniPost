@@ -92,7 +92,7 @@ func TestTabStripHasSingleTopLine(t *testing.T) {
 	}{
 		{"请求标签条空白处", img.Bounds().Max.X - 300, rgb(p.border)},
 		{"未选中的请求标签", sw + 60, rgb(p.border)},
-		{"选中的请求标签", sw + 148 + 70, rgb(p.tabActiveBorder)},
+		{"选中的请求标签", sw + tabWidth + 70, rgb(p.tabActiveBorder)},
 		{"侧栏选中的标签", 60, rgb(p.tabActiveBorder)},
 		{"侧栏未选中的标签", 150, rgb(p.border)},
 	}
@@ -103,8 +103,18 @@ func TestTabStripHasSingleTopLine(t *testing.T) {
 		if above, line := px(img, c.x, y-1), px(img, c.x, y); above == line {
 			t.Errorf("%s：线的上一行（标题栏）也是线色 %v，出现了两条线", c.name, above)
 		}
-		if below := px(img, c.x, y+1); below == px(img, c.x, y) {
-			t.Errorf("%s：线的下一行仍是线色 %v，线变粗了", c.name, below)
+		// 选中项的强调色边框恰好 tabAccentWidth 行；其余位置的线只有 1 行。
+		thick := 1
+		if c.want == rgb(p.tabActiveBorder) {
+			thick = tabAccentWidth
+		}
+		for k := 1; k < thick; k++ {
+			if px(img, c.x, y+k) != c.want {
+				t.Errorf("%s：强调色边框应有 %d 行，第 %d 行颜色不对", c.name, thick, k+1)
+			}
+		}
+		if below := px(img, c.x, y+thick); below == c.want {
+			t.Errorf("%s：线比预期的 %d 行更粗", c.name, thick)
 		}
 	}
 }
@@ -135,12 +145,46 @@ func TestTabStripNoThickVerticalLines(t *testing.T) {
 	if activeLeft < 0 || activeRight-activeLeft < 100 {
 		t.Fatalf("没找到选中标签的左右边框: %d %d", activeLeft, activeRight)
 	}
-	for _, x := range []int{activeLeft, activeRight} {
-		for _, dx := range []int{-1, 1} {
-			n := px(img, x+dx, y)
-			if n != bg && n != rgb(a.p.surface) {
-				t.Errorf("选中标签边框 x=%d 旁边的像素 %v 不是背景色，叠出了第二条线", x, n)
-			}
+	// 左右边框各自恰好 tabAccentWidth 列宽，紧挨着的外侧/内侧像素是背景（外侧可能是标签条底色或内容区），没有第二条线。
+	outer := []int{activeLeft - 1, activeRight + 1}
+	inner := []int{activeLeft + tabAccentWidth, activeRight - tabAccentWidth}
+	for _, x := range append(outer, inner...) {
+		n := px(img, x, y)
+		if n != bg && n != rgb(a.p.surface) {
+			t.Errorf("选中标签边框旁 x=%d 的像素 %v 不是背景色，边框变粗或叠出了第二条线", x, n)
 		}
+	}
+	for k := 0; k < tabAccentWidth; k++ {
+		if px(img, activeLeft+k, y) != rgb(a.p.tabActiveBorder) || px(img, activeRight-k, y) != rgb(a.p.tabActiveBorder) {
+			t.Errorf("左右边框应各为 %d 列强调色", tabAccentWidth)
+		}
+	}
+}
+
+// 切换选中标签时每个标签的宽度不变（选中项字重更粗，不能让标签突然变宽/变窄）。
+func TestTabWidthStableOnSwitch(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openRequest(a.coll.Requests[0].ID)
+	a.openRequest(a.coll.Requests[1].ID)
+	a.tabs[0].draft.Name = "一个很长很长很长很长很长很长很长很长很长的标签标题 (long title)"
+	a.tabs[1].draft.Name = "另一个同样很长很长很长很长很长很长很长很长的标题 (long title)"
+	sw := int(a.set.SidebarWidth)
+	a.activate(0)
+	tt.Frame()
+	tt.Frame()
+	y := sizeToolbar - 1 + sizeTabStrip - 4
+	img0 := tt.Image()
+	// 选中第一个标签时，第二个标签从 sw+tabWidth 开始（第一个标签 + 无分隔线）；
+	// 选中第二个标签时，它的左边框也应从同一列开始。
+	a.activate(1)
+	tt.Frame()
+	tt.Frame()
+	img1 := tt.Image()
+	acc := rgb(a.p.tabActiveBorder)
+	if px(img1, sw+tabWidth, y) != acc {
+		t.Errorf("选中第二个标签时左边框应在 x=%d", sw+tabWidth)
+	}
+	if px(img0, sw+tabWidth-1, y) != acc {
+		t.Errorf("选中第一个标签时右边框应在 x=%d", sw+tabWidth-1)
 	}
 }

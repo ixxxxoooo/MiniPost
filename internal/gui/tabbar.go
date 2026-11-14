@@ -52,6 +52,12 @@ func (a *app) tabAction(c *ui.Context, name, tip string, size float32) bool {
 	})
 }
 
+// tabWidth 是请求标签的固定宽度；tabAccentWidth 是选中标签强调色边框的粗细（与旧版 2px 的强调线一致）。
+const (
+	tabWidth       = 220
+	tabAccentWidth = 2
+)
+
 // stripTopLine 画标签条顶部的 1px 横线（铺满整条，作为最底层）。
 // 选中的标签从这一行开始，用自己的强调色上边框把线盖住，所以同一个位置永远只有一条线；
 // 其余标签从线下面一行开始。标题栏本身不再画底线，避免与这条线叠成两条。
@@ -70,7 +76,8 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 	if active {
 		h = sizeTabStrip // 选中的标签从顶线所在行开始，用自己的上边框盖住它
 	}
-	cell := ui.Row(c.Key("tab:" + t.draft.ID)).Height(h).MinWidth(148).MaxWidth(230).Shrink(0).
+	// 宽度固定：选中项的字重更粗，按内容算宽度的话切换时标签会突然变宽变窄。
+	cell := ui.Row(c.Key("tab:" + t.draft.ID)).Height(h).Width(tabWidth).Shrink(0).
 		ContextMenu(func(m *ui.Menu) { a.tabMenu(m, i) }).
 		HandleInput(func(ev ui.InputEvent) bool {
 			// 中键按下时接管这次点按，抬起时关闭（和浏览器标签页的习惯一致）。
@@ -86,11 +93,11 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 	hover := cell.Hovered()
 	switch {
 	case active:
-		left := float32(1)
+		left := float32(tabAccentWidth)
 		if i == 0 && !a.set.SidebarCollapsed {
 			left = 0 // 左边就是侧栏的分隔线
 		}
-		cell = cell.Background(p.surface).BorderWidth(1, 1, 0, left).BorderColor(p.tabActiveBorder)
+		cell = cell.Background(p.surface).BorderWidth(tabAccentWidth, tabAccentWidth, 0, left).BorderColor(p.tabActiveBorder)
 	case hover:
 		cell = cell.Background(p.hover)
 	}
