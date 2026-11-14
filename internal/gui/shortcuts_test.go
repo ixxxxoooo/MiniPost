@@ -157,3 +157,38 @@ func TestHistoryAndEnvMenus(t *testing.T) {
 		t.Fatal("应已设为当前环境")
 	}
 }
+
+// 文本输入对话框里的输入框必须有实际高度（曾因 Grow 方向错误塌成一条线，看不到文字）：
+// 聚焦时强调色的上、下边框是两条长横线，它们之间要相隔输入框的高度。
+func TestPromptInputHasHeight(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.renameNode(a.coll.Requests[0].ID)
+	tt.Frame()
+	tt.Frame()
+	img := tt.Image()
+	acc := a.p.accent
+	b := img.Bounds()
+	top, bottom := -1, -1
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		run, best := 0, 0
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if p := img.RGBAAt(x, y); p.R == acc.R && p.G == acc.G && p.B == acc.B {
+				run++
+				if run > best {
+					best = run
+				}
+			} else {
+				run = 0
+			}
+		}
+		if best >= 250 { // 输入框宽约 390px，按钮只有几十像素
+			if top < 0 {
+				top = y
+			}
+			bottom = y
+		}
+	}
+	if top < 0 || bottom-top < 25 {
+		t.Fatalf("输入框高度塌缩：上边框 y=%d，下边框 y=%d", top, bottom)
+	}
+}

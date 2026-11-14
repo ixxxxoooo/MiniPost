@@ -67,10 +67,13 @@ func (a *app) promptView(c *ui.Context) {
 			if pr.label != "" {
 				ui.Text(c, pr.label).FontSize(fsBase).TextColor(p.fg2)
 			}
-			in := a.input(c, &pr.value, "", fieldOpts{h: 32, radius: radiusInput, fs: fsBase, key: "prompt-in", focus: true})
-			if in.Submitted() {
-				ok = true
-			}
+			// 输入框在 Row 里横向撑满；直接放进 Column 时它的 Grow 是纵向的，高度会塌成 0。
+			ui.Row(c).FillWidth().Children(func() {
+				in := a.input(c, &pr.value, "", fieldOpts{h: 32, radius: radiusInput, fs: fsBase, key: "prompt-in", focus: true})
+				if in.Submitted() {
+					ok = true
+				}
+			})
 		})
 	}, func() {
 		if a.dlgButton(c, "prompt-cancel", a.t("取消", "Cancel"), dlgNormal, false) {

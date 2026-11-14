@@ -406,7 +406,8 @@ func (a *app) input(c *ui.Context, v *string, ph string, o fieldOpts) ui.Element
 	if o.bg != nil {
 		bg = *o.bg
 	}
-	wrap := ui.Row(c).Height(o.h).AlignItems(ui.Center).Radius(o.radius).Background(bg).Shrink(1)
+	// MinHeight 兜底：放进 Column 时 Grow/Basis(0) 是纵向的，没有它高度会塌成 0。
+	wrap := ui.Row(c).Height(o.h).MinHeight(o.h).AlignItems(ui.Center).Radius(o.radius).Background(bg).Shrink(1)
 	if o.w > 0 {
 		wrap = wrap.Width(o.w).Shrink(0)
 	} else {
