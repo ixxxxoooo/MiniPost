@@ -79,8 +79,12 @@ func shouldIncludeInBackup(relPath string) bool {
 func (a *App) CreateBackup() (string, error) {
 	baseDir := a.store.BaseDir()
 	backupsDir := filepath.Join(baseDir, backupDirName)
-	if err := os.MkdirAll(backupsDir, 0o755); err != nil {
+	if err := os.MkdirAll(backupsDir, 0o700); err != nil {
 		return "", fmt.Errorf("创建备份目录失败: %w", err)
+	}
+	// 备份里有环境变量、Cookie 等私密数据：目录之前以更宽的权限创建过时也收紧。
+	if err := os.Chmod(backupsDir, 0o700); err != nil {
+		logger.Warn("收紧备份目录权限失败", "error", err.Error())
 	}
 
 	backupPath := filepath.Join(backupsDir, time.Now().Format(backupFilenameFmt))
@@ -96,7 +100,7 @@ func (a *App) CreateBackup() (string, error) {
 }
 
 func createBackupArchive(baseDir, backupPath string) error {
-	output, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	output, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("创建备份文件失败: %w", err)
 	}
@@ -211,13 +215,13 @@ func extractBackupArchive(backupPath, targetDir string) error {
 		}
 
 		if file.FileInfo().IsDir() {
-			if err := os.MkdirAll(cleanTargetPath, 0o755); err != nil {
+			if err := os.MkdirAll(cleanTargetPath, 0o700); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(cleanTargetPath), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(cleanTargetPath), 0o700); err != nil {
 			return err
 		}
 

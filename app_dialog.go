@@ -116,7 +116,8 @@ func (a *App) saveTextTo(parent *mygo.Window, title, defaultName string, filters
 }
 
 func writeSelectedFile(path string, data []byte) error {
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	// 导出内容可能含令牌、Cookie，只对当前用户可读写。
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		logger.Error("写入文件失败", "error", err.Error())
 		return err
 	}

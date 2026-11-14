@@ -6,7 +6,7 @@
 
 ---
 
-## 2. Go 后端日志规范
+## 2. 日志规范
 
 ### 日志工具
 使用 `minipost/internal/pkg/logger` 包，禁止直接使用 `fmt.Println`、`log.Fatal` 或 `log.Println`。
@@ -37,32 +37,7 @@
 
 ---
 
-## 3. 前端日志规范
-
-### 日志工具
-使用 `@/lib/logger` 模块，提供 debug/info/warn/error 四个函数。
-
-### 调用格式
-```typescript
-import { info, error as logError } from "@/lib/logger"
-info("ModuleName", "操作描述", { key: value })
-logError("ModuleName", "错误描述", { error: String(err) })
-```
-
-### 必须打日志的关键节点
-1. **应用启动**: main.tsx 中的初始化流程
-2. **全局错误**: 通过 initGlobalErrorHandlers 自动捕获 unhandled error 和 rejection
-3. **Store 操作**: 项目加载、切换、创建等关键状态变更
-4. **HTTP 请求**: 发送和响应
-5. **错误边界**: ErrorBoundary 捕获的渲染崩溃
-
-### 日志级别
-- 开发模式默认 DEBUG
-- 生产模式默认 INFO
-
----
-
-## 4. 错误处理与边界
+## 3. 错误处理与边界
 
 ### Go 后端
 - 所有 error 必须记录日志后再返回
@@ -76,7 +51,7 @@ logError("ModuleName", "错误描述", { error: String(err) })
 
 ---
 
-## 5. 新增代码时的检查清单
+## 4. 新增代码时的检查清单
 每次新增或修改代码时，自查以下事项：
 - [ ] 新增的 `main.App` 后端方法是否在调用入口和结果处打了日志
 - [ ] 新增的 `a.async` 操作失败分支是否记录了日志
@@ -86,8 +61,7 @@ logError("ModuleName", "错误描述", { error: String(err) })
 
 ---
 
-## 6. 禁止事项
+## 5. 禁止事项
 - 禁止在 Go 后端使用 `fmt.Println` / `log.Fatal` / `log.Println` 输出日志
-- 禁止在前端使用裸 `console.log` 输出业务日志（调试临时使用后必须清理）
 - 禁止日志中输出敏感信息（密码、token 等，应脱敏处理）
 - 禁止在循环体内打 INFO 级别日志（应使用 DEBUG 或汇总后打一条）

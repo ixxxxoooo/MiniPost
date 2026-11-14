@@ -48,14 +48,14 @@ func Init() error {
 	}
 
 	logDir := filepath.Join(home, ".minipost", "logs")
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(logDir, 0o700); err != nil {
 		return fmt.Errorf("创建日志目录失败: %w", err)
 	}
 
 	logFileName := fmt.Sprintf("minipost-%s.log", time.Now().Format("2006-01-02"))
 	logPath = filepath.Join(logDir, logFileName)
 
-	logFile, err = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	logFile, err = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return fmt.Errorf("打开日志文件失败: %w", err)
 	}

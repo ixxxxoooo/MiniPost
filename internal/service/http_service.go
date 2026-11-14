@@ -900,6 +900,10 @@ func (s *HttpService) transportFor(options requestOptions) *http.Transport {
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if !options.sslVerify || keyLog {
+		if !options.sslVerify {
+			// 只在用户明确关闭「SSL 证书验证」时才跳过校验；这里不记录目标地址，避免泄露内网信息。
+			logger.Warn("已关闭 SSL 证书验证，本次连接不校验服务端证书")
+		}
 		cfg := &tls.Config{InsecureSkipVerify: !options.sslVerify}
 		if keyLog {
 			cfg.KeyLogWriter = s.keyLogWriter()

@@ -83,3 +83,28 @@ func TestCleanupOldLogs(t *testing.T) {
 		t.Fatal("非日志文件不应被删除")
 	}
 }
+
+// 日志目录和文件只对当前用户可读写。
+func TestInitUsesPrivatePermissions(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer Close()
+	logDir := filepath.Join(home, ".minipost", "logs")
+	di, err := os.Stat(logDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if di.Mode().Perm() != 0o700 {
+		t.Fatalf("日志目录权限应为 0700，实际 %o", di.Mode().Perm())
+	}
+	fi, err := os.Stat(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("日志文件权限应为 0600，实际 %o", fi.Mode().Perm())
+	}
+}
