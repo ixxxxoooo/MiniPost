@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"minipost/internal/model"
+	"minipost/internal/pkg/logger"
 )
 
 const (
@@ -27,8 +28,12 @@ func NewFileStoreWithDir(baseDir string) (*FileStore, error) {
 	if strings.TrimSpace(baseDir) == "" {
 		return nil, fmt.Errorf("数据目录不能为空")
 	}
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
+	// 数据里有环境变量、Cookie 等私密内容：目录只对当前用户开放，已存在的旧目录也收紧。
+	if err := os.MkdirAll(baseDir, 0o700); err != nil {
 		return nil, fmt.Errorf("创建数据目录失败: %w", err)
+	}
+	if err := os.Chmod(baseDir, 0o700); err != nil {
+		logger.Warn("收紧数据目录权限失败", "error", err.Error())
 	}
 	return &FileStore{baseDir: baseDir}, nil
 }
@@ -84,7 +89,7 @@ func (fs *FileStore) ListProjects() ([]model.Project, error) {
 	defer fs.mu.RUnlock()
 
 	projectsDir := filepath.Join(fs.baseDir, "projects")
-	if err := os.MkdirAll(projectsDir, 0755); err != nil {
+	if err := os.MkdirAll(projectsDir, 0o700); err != nil {
 		return nil, err
 	}
 
@@ -125,7 +130,7 @@ func (fs *FileStore) SaveProject(project *model.Project) error {
 
 	project.SchemaVersion = schemaVersion
 	projDir := filepath.Join(fs.baseDir, "projects", project.ID)
-	if err := os.MkdirAll(projDir, 0755); err != nil {
+	if err := os.MkdirAll(projDir, 0o700); err != nil {
 		return err
 	}
 	return fs.writeJSON(filepath.Join(projDir, "project.json"), project)
@@ -270,7 +275,7 @@ func (fs *FileStore) readJSON(path string, v interface{}) error {
 
 func (fs *FileStore) writeJSON(path string, v interface{}) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 
@@ -281,7 +286,7 @@ func (fs *FileStore) writeJSON(path string, v interface{}) error {
 
 	// 先写临时文件再 rename，避免写入中断导致 JSON 损坏。
 	tmpPath := path + ".tmp"
-	file, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	file, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}

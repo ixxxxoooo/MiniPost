@@ -107,7 +107,7 @@ func (a *app) footLink(c *ui.Context, iconName, label string, badge int) bool {
 // errorCount 返回控制台里失败请求的数量。
 func (a *app) errorCount() int {
 	n := 0
-	for _, e := range a.console {
+	for _, e := range a.con.entries {
 		if e.err != "" {
 			n++
 		}

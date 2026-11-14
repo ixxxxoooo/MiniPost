@@ -24,16 +24,16 @@ const maxConsoleEntries = 500
 
 // logRequest 记录一次请求开始。
 func (a *app) logRequest(method, url string) {
-	a.console = append(a.console, consoleEntry{at: time.Now(), method: method, url: url})
-	if len(a.console) > maxConsoleEntries {
-		a.console = a.console[len(a.console)-maxConsoleEntries:]
+	a.con.entries = append(a.con.entries, consoleEntry{at: time.Now(), method: method, url: url})
+	if len(a.con.entries) > maxConsoleEntries {
+		a.con.entries = a.con.entries[len(a.con.entries)-maxConsoleEntries:]
 	}
 }
 
 // logResponse 把最近一条同请求的日志标记为完成。
 func (a *app) logResponse(method, url string, status int, ms float64, errMsg string) {
-	for i := len(a.console) - 1; i >= 0; i-- {
-		e := &a.console[i]
+	for i := len(a.con.entries) - 1; i >= 0; i-- {
+		e := &a.con.entries[i]
 		if !e.done && e.method == method && e.url == url {
 			e.status, e.ms, e.err, e.done = status, ms, errMsg, true
 			return
@@ -50,7 +50,7 @@ func (a *app) consolePanel(c *ui.Context) {
 		head.Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				txt(c, "Console", fsSmall, p.fg, 500)
-				if n := len(a.console); n > 0 {
+				if n := len(a.con.entries); n > 0 {
 					txt(c, itoa(n), fsTiny, p.muted, 0)
 				}
 			})
@@ -58,7 +58,7 @@ func (a *app) consolePanel(c *ui.Context) {
 				if a.button(c, btnOpts{h: 20, radius: 4, padX: 6, key: "console-clear", tip: a.t("清空", "Clear")}, func(bool) {
 					txt(c, a.t("清空", "Clear"), fsTiny, p.muted, 0)
 				}) {
-					a.later(func() { a.console = nil })
+					a.later(func() { a.con.entries = nil })
 				}
 				if a.button(c, btnOpts{w: 20, h: 20, radius: 4, key: "console-close", tip: a.t("关闭", "Close")}, func(bool) {
 					icon(c, "clear", 10, p.muted)
@@ -67,21 +67,21 @@ func (a *app) consolePanel(c *ui.Context) {
 				}
 			})
 		})
-		if len(a.console) == 0 {
+		if len(a.con.entries) == 0 {
 			ui.Row(c).Grow(1).Basis(0).FillWidth().Justify(ui.Center).Padding(32, 0, 0, 0).Children(func() {
 				txt(c, a.t("暂无请求日志", "No request logs yet"), fsSmall, p.muted, 0)
 			})
 			return
 		}
-		a.consoleList.FollowEnd = true
-		ui.List(c, &a.consoleList, len(a.console), func(i int) { a.consoleRow(c, i) }).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible())
+		a.con.list.FollowEnd = true
+		ui.List(c, &a.con.list, len(a.con.entries), func(i int) { a.consoleRow(c, i) }).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible())
 	})
 }
 
 // consoleRow 绘制一条日志：箭头、方法、地址、状态/耗时、时间；点击展开详情。失败行为红底，慢/告警行为橙底。
 func (a *app) consoleRow(c *ui.Context, i int) {
 	p := a.p
-	e := &a.console[i]
+	e := &a.con.entries[i]
 	row := ui.Row(c.Key(i)).FillWidth().PaddingX(12).PaddingY(6).Gap(8).AlignItems(ui.Center).Shrink(0)
 	switch {
 	case e.err != "":
@@ -111,8 +111,8 @@ func (a *app) consoleRow(c *ui.Context, i int) {
 	if row.Clicked() {
 		idx := i
 		a.later(func() {
-			if idx < len(a.console) {
-				a.console[idx].open = !a.console[idx].open
+			if idx < len(a.con.entries) {
+				a.con.entries[idx].open = !a.con.entries[idx].open
 			}
 		})
 	}

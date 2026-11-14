@@ -232,7 +232,7 @@ func extractBackupArchive(backupPath, targetDir string) error {
 
 		mode := file.Mode().Perm()
 		if mode == 0 {
-			mode = 0o644
+			mode = 0o600
 		}
 		outputFile, err := os.OpenFile(cleanTargetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 		if err != nil {
@@ -303,7 +303,7 @@ func copyDir(srcDir, dstDir string) error {
 		}
 		mode := info.Mode().Perm()
 		if mode == 0 {
-			mode = 0o644
+			mode = 0o600
 		}
 		return copyFile(path, targetPath, mode)
 	})
@@ -383,7 +383,7 @@ func (a *App) RestoreBackup(backupPath string) error {
 		}
 	}
 	if configExists {
-		if err = copyFile(configSrc, filepath.Join(baseDir, backupConfigFile), 0o644); err != nil {
+		if err = copyFile(configSrc, filepath.Join(baseDir, backupConfigFile), 0o600); err != nil {
 			return fmt.Errorf("恢复配置文件失败: %w", err)
 		}
 	}

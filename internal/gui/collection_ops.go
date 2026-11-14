@@ -25,7 +25,7 @@ func (a *app) newFolder(parentID string) {
 			return
 		}
 		a.reloadCollection()
-		a.outline.Open.Add(f.ID)
+		a.side.outline.Open.Add(f.ID)
 		logger.Info("已创建文件夹", "folderID", f.ID)
 	})
 }
@@ -98,7 +98,7 @@ func (a *app) deleteNode(id string) {
 			return
 		}
 		a.closeTabsFor(ids)
-		a.outRow = -1
+		a.side.outRow = -1
 		a.reloadCollection()
 		logger.Info("已删除节点", "nodeID", id)
 	})
@@ -120,6 +120,6 @@ func (a *app) moveNode(id, target string) {
 	}
 	a.reloadCollection()
 	if target != "" {
-		a.outline.Open.Add(target)
+		a.side.outline.Open.Add(target)
 	}
 }

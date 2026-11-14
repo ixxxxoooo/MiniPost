@@ -30,70 +30,78 @@ type app struct {
 	projectID string
 	coll      model.CollectionData
 	tree      treeIndex
-	outline   ui.OutlineState[string]
-	outRow    int
 	envs      []model.Environment
 	envID     string
 	history   []model.HistoryEntry
-	histRow   int
-
-	console     []consoleEntry
-	consoleList ui.ListState
-	consolePct  float32
 
 	tabs   []*tab
 	active int
 
-	sideTab       int               // 0 请求，1 历史，2 环境
-	sideQuery     string            // 侧栏搜索词
-	histCollapsed map[string]bool   // 已折叠的历史日期分组
-	cardHot       string            // 当前保持显示的悬停卡片
-	homeName      string            // 项目主页“新建项目”输入框
-	themePick     string            // 正在选择主题色的项目 ID
-	descDraft     map[string]string // 项目描述的编辑草稿
-	bulk          map[string]string // 处于批量编辑模式的键值表及其文本
-	showHome      bool
-	splitPct      float32
-	syncSel       bool // 下一帧让侧栏选中与当前标签一致
-	overlays      overlays
-	deferred      []func() // 在本帧构建结束后执行的变更，避免在遍历数据时修改它
-	toastMsgs     []string
-	toastActs     []toastAct // 带按钮的提示（更新提示等）
-	applied       appliedTheme
-	p             *palette  // 当前亮/暗调色板
-	th            *ui.Theme // 当前 MyGo 主题（每帧都要重新设置）
-	nav           navState  // 标签访问历史
-	menuLocale    string
-	stopBackup    func()        // 停止自动备份的周期任务
-	upd           updateState   // 自动更新状态（updates.go）
-	updater       updateBackend // 更新后端；测试里替换为假实现
-	stopUpdate    func()        // 停止后台检查更新
-	relaunch      func()        // 重启应用；测试里替换
-	projMenu      projMenuState // 工具栏项目下拉面板状态
-	scrollAt      time.Time     // 最近一次滚动输入的时间（滚动条自动隐藏用）
+	homeName   string            // 项目主页“新建项目”输入框
+	themePick  string            // 正在选择主题色的项目 ID
+	descDraft  map[string]string // 项目描述的编辑草稿
+	bulk       map[string]string // 处于批量编辑模式的键值表及其文本
+	showHome   bool
+	splitPct   float32
+	overlays   overlays
+	deferred   []func() // 在本帧构建结束后执行的变更，避免在遍历数据时修改它
+	toastMsgs  []string
+	toastActs  []toastAct // 带按钮的提示（更新提示等）
+	applied    appliedTheme
+	p          *palette  // 当前亮/暗调色板
+	th         *ui.Theme // 当前 MyGo 主题（每帧都要重新设置）
+	nav        navState  // 标签访问历史
+	menuLocale string
+	stopBackup func()        // 停止自动备份的周期任务
+	upd        updateState   // 自动更新状态（updates.go）
+	updater    updateBackend // 更新后端；测试里替换为假实现
+	stopUpdate func()        // 停止后台检查更新
+	relaunch   func()        // 重启应用；测试里替换
+	con        consoleState  // 控制台（console.go）
+	side       sideState     // 侧栏（sidebar.go）
+	projMenu   projMenuState // 工具栏项目下拉面板状态
+	scrollAt   time.Time     // 最近一次滚动输入的时间（滚动条自动隐藏用）
 }
 
 func newApp(be Backend) *app {
 	base := be.BaseDir()
 	a := &app{
-		be:         be,
-		setStore:   client.NewSettingsStore(base),
-		sessions:   client.NewSessionStore(base),
-		jar:        client.NewJar(filepath.Join(base, "cookies.json")),
-		outRow:     -1,
-		nav:        navState{idx: -1},
-		histRow:    -1,
-		bulk:       map[string]string{},
-		descDraft:  map[string]string{},
-		splitPct:   55,
-		consolePct: 72,
-		updater:    mygoUpdater{},
-		relaunch:   func() { mygo.App.Relaunch() },
+		be:        be,
+		setStore:  client.NewSettingsStore(base),
+		sessions:  client.NewSessionStore(base),
+		jar:       client.NewJar(filepath.Join(base, "cookies.json")),
+		nav:       navState{idx: -1},
+		con:       consoleState{pct: 72},
+		side:      sideState{outRow: -1, histRow: -1},
+		bulk:      map[string]string{},
+		descDraft: map[string]string{},
+		splitPct:  55,
+		updater:   mygoUpdater{},
+		relaunch:  func() { mygo.App.Relaunch() },
 	}
 	a.set = a.setStore.Load()
 	a.loadProjects()
 	a.restoreProject()
 	return a
+}
+
+// consoleState 是底部控制台的状态。
+type consoleState struct {
+	entries []consoleEntry
+	list    ui.ListState
+	pct     float32 // 控制台高度占比
+}
+
+// sideState 是左侧栏的状态：当前页签、搜索词、请求树与历史列表。
+type sideState struct {
+	tab           int             // 0 请求，1 历史，2 环境
+	query         string          // 侧栏搜索词
+	histCollapsed map[string]bool // 已折叠的历史日期分组
+	cardHot       string          // 当前保持显示的悬停卡片
+	outline       ui.OutlineState[string]
+	outRow        int
+	histRow       int
+	syncSel       bool // 下一帧让侧栏选中与当前标签一致
 }
 
 // later 登记一个在本帧构建结束后执行的变更。
@@ -164,8 +172,8 @@ func (a *app) selectProject(id string) {
 	}
 	a.projectID = id
 	a.showHome = id == ""
-	a.tabs, a.active, a.outRow = nil, 0, -1
-	a.outline = ui.OutlineState[string]{}
+	a.tabs, a.active, a.side.outRow = nil, 0, -1
+	a.side.outline = ui.OutlineState[string]{}
 	a.set.LastProjectID = id
 	a.saveSettings()
 	if id == "" {

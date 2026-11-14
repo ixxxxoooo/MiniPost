@@ -94,8 +94,8 @@ func TestSendShowsResponse(t *testing.T) {
 	if !tt.HasText("200 OK") {
 		t.Fatalf("应显示状态码，实际 %q", tt.Texts())
 	}
-	if len(a.console) != 1 || !a.console[0].done || a.console[0].status != 200 {
-		t.Fatalf("控制台应记录完成的请求，实际 %+v", a.console)
+	if len(a.con.entries) != 1 || !a.con.entries[0].done || a.con.entries[0].status != 200 {
+		t.Fatalf("控制台应记录完成的请求，实际 %+v", a.con.entries)
 	}
 	snapshot(t, tt, "sent")
 }

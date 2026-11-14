@@ -138,7 +138,7 @@ func TestVisualCookiesConsole(t *testing.T) {
 	a.jar.Add(client.Cookie{Domain: "api.example.com", Name: "sid", Value: "abc123", Path: "/", Enabled: true, HTTPOnly: true})
 	a.jar.Add(client.Cookie{Domain: "example.org", Name: "theme", Value: "dark", Path: "/", Enabled: true})
 	a.setConsoleOpen(true)
-	a.console[0].open = true
+	a.con.entries[0].open = true
 	tt.Frame()
 	snapshot(t, tt, "v_console")
 	a.openCookies()

@@ -144,13 +144,13 @@ func (a *app) openRequest(id string) {
 
 func (a *app) activate(i int) {
 	a.active = i
-	a.syncSel = true
+	a.side.syncSel = true
 	if a.tabs[i].env != nil {
 		return
 	}
 	a.navRecord(a.tabs[i].draft.ID)
 	for p := a.tree.nodes[a.tabs[i].draft.ID].parent; p != ""; p = a.tree.nodes[p].parent {
-		a.outline.Open.Add(p)
+		a.side.outline.Open.Add(p)
 	}
 }
 
@@ -205,7 +205,7 @@ func (a *app) removeTab(i int) {
 	case a.active > i, a.active >= len(a.tabs):
 		a.active = max(0, a.active-1)
 	}
-	a.syncSel = true
+	a.side.syncSel = true
 }
 
 // closeTabsFor 关闭属于给定请求集合的所有标签（请求被删除时使用，不再询问）。

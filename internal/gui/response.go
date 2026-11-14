@@ -295,7 +295,7 @@ func (a *app) respMeta(c *ui.Context, rs *respState) {
 // hoverCard 在锚点被悬停时，于其下方（右对齐）弹出详情卡片；鼠标移入卡片时保持显示。
 func (a *app) hoverCard(c *ui.Context, key string, anchor ui.Element, w float32, build func()) {
 	p := a.p
-	open := anchor.Hovered() || a.cardHot == key
+	open := anchor.Hovered() || a.side.cardHot == key
 	hot := false
 	ui.PopoverBase(c, anchor, &open, func(panel ui.Element) {
 		panel = panel.AttachTo(anchor, ui.AnchorBottomRight, ui.AnchorTopRight).Margin(6, 0, 0, 0).Width(w).Radius(10).Background(p.surface).Border(1, p.border).Padding(10, 12)
@@ -305,9 +305,9 @@ func (a *app) hoverCard(c *ui.Context, key string, anchor ui.Element, w float32,
 		ui.Column(c).FillWidth().Children(build)
 	})
 	if hot {
-		a.cardHot = key
-	} else if a.cardHot == key && !anchor.Hovered() {
-		a.cardHot = ""
+		a.side.cardHot = key
+	} else if a.side.cardHot == key && !anchor.Hovered() {
+		a.side.cardHot = ""
 	}
 }
 

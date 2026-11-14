@@ -16,7 +16,7 @@ func (a *app) sidebar(c *ui.Context) {
 	ui.Row(c).Fill().Children(func() {
 		ui.Column(c).Grow(1).Basis(0).FillHeight().Background(p.sidebar).Children(func() {
 			a.sideTabs(c)
-			switch a.sideTab {
+			switch a.side.tab {
 			case 1:
 				a.historyView(c)
 			case 2:
@@ -38,7 +38,7 @@ func (a *app) sideTabs(c *ui.Context) {
 	}
 	ui.Row(c).FillWidth().Height(sizeTabStrip - 1).Shrink(0).Children(func() {
 		for i, it := range items {
-			active := a.sideTab == i
+			active := a.side.tab == i
 			col, weight := p.muted, 0
 			if active {
 				col, weight = p.fg, 500
@@ -54,7 +54,7 @@ func (a *app) sideTabs(c *ui.Context) {
 				txt(c, a.t(it.zh, it.en), fsBase, col, weight)
 			})
 			if b.Clicked() {
-				a.sideTab = i
+				a.side.tab = i
 			}
 		}
 	})
@@ -65,7 +65,7 @@ func (a *app) sideTabs(c *ui.Context) {
 func (a *app) searchRow(c *ui.Context) {
 	p := a.p
 	ui.Row(c).FillWidth().Shrink(0).Padding(7.5, 8, 6, 8).Gap(4).AlignItems(ui.Center).Children(func() {
-		a.input(c, &a.sideQuery, a.t("搜索请求...", "Search requests..."), fieldOpts{icon: "search", radius: radiusInput, key: "side-search"})
+		a.input(c, &a.side.query, a.t("搜索请求...", "Search requests..."), fieldOpts{icon: "search", radius: radiusInput, key: "side-search"})
 		if a.iconButton(c, "fileImport", a.t("导入", "Import"), 14, p.fg2) {
 			a.later(func() { a.openImport(importFile) })
 		}
@@ -92,7 +92,7 @@ func (a *app) rootMenu(m *ui.Menu) {
 func (a *app) collectionView(c *ui.Context) {
 	p := a.p
 	a.searchRow(c)
-	q := strings.ToLower(strings.TrimSpace(a.sideQuery))
+	q := strings.ToLower(strings.TrimSpace(a.side.query))
 	ui.Scroll(c).Grow(1).Basis(0).ContextMenu(a.rootMenu).Scrollbars(a.scrollbarsVisible()).Children(func() {
 		ui.Column(c).FillWidth().Children(func() {
 			if q == "" {
@@ -187,7 +187,7 @@ func (a *app) treeNode(c *ui.Context, id string, depth int) {
 		return
 	}
 	p := a.p
-	open := a.outline.Open.Has(id)
+	open := a.side.outline.Open.Has(id)
 	row := ui.ButtonBase(c.Key("f:" + id)).Height(28).MarginX(4).PaddingStart(8 + float32(depth)*12).PaddingEnd(8).Radius(radiusBtn).Gap(4).
 		AlignItems(ui.Center).Justify(ui.Start).ContextMenu(func(m *ui.Menu) { a.nodeMenu(m, id) })
 	hover := row.Hovered()
@@ -216,9 +216,9 @@ func (a *app) treeNode(c *ui.Context, id string, depth int) {
 	if row.Clicked() {
 		a.later(func() {
 			if open {
-				a.outline.Open.Remove(id)
+				a.side.outline.Open.Remove(id)
 			} else {
-				a.outline.Open.Add(id)
+				a.side.outline.Open.Add(id)
 			}
 		})
 	}
@@ -358,7 +358,7 @@ func (a *app) historyView(c *ui.Context) {
 		ui.Column(c).FillWidth().Children(func() {
 			for _, label := range order {
 				entries := groups[label]
-				collapsed := a.histCollapsed[label]
+				collapsed := a.side.histCollapsed[label]
 				head := ui.ButtonBase(c.Key("hg:" + label)).FillWidth().Height(23).PaddingX(12).Gap(4).AlignItems(ui.Center).Justify(ui.Start)
 				if head.Hovered() {
 					head = head.Background(p.sideHover)
@@ -374,10 +374,10 @@ func (a *app) historyView(c *ui.Context) {
 				})
 				if head.Clicked() {
 					a.later(func() {
-						if a.histCollapsed == nil {
-							a.histCollapsed = map[string]bool{}
+						if a.side.histCollapsed == nil {
+							a.side.histCollapsed = map[string]bool{}
 						}
-						a.histCollapsed[label] = !collapsed
+						a.side.histCollapsed[label] = !collapsed
 					})
 				}
 				if collapsed {
