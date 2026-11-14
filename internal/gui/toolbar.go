@@ -51,7 +51,9 @@ func (a *app) titleBar(c *ui.Context) {
 			}
 		})
 	})
-	hline(c, p.border)
+	if a.showHome || a.projectID == "" {
+		hline(c, p.border) // 其余页面的这条线由标签条和侧栏标签条各自画在顶部
+	}
 }
 
 // workspaceHeader 是标题栏中部：后退、前进、主页按钮与项目选择器。

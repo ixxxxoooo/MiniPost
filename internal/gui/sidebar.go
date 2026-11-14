@@ -28,7 +28,9 @@ func (a *app) sidebar(c *ui.Context) {
 	})
 }
 
-// sideTabs 是 28px 高的标签条：三等分，当前项有 2px 强调色下划线。
+// sideTabs 是 28px 高的标签条：三等分，样式与请求标签一致——方正、选中项左/上/右强调色边框、
+// 下边不画线并与下方列表连成一体；未选中项底色稍深。顶线由标签条自己画（被选中项的边框盖住），
+// 选中项最右侧紧贴侧栏分隔线时不画右边框，避免两条竖线叠在一起。
 func (a *app) sideTabs(c *ui.Context) {
 	p := a.p
 	items := []struct{ icon, zh, en string }{
@@ -36,19 +38,31 @@ func (a *app) sideTabs(c *ui.Context) {
 		{"clock", "历史", "History"},
 		{"globe", "环境", "Environments"},
 	}
-	ui.Row(c).FillWidth().Height(sizeTabStrip - 1).Shrink(0).Children(func() {
+	ui.Row(c).FillWidth().Height(sizeTabStrip).Shrink(0).AlignItems(ui.End).Children(func() {
+		stripTopLine(c, p.border)
 		for i, it := range items {
 			active := a.side.tab == i
 			col, weight := p.muted, 0
 			if active {
 				col, weight = p.fg, 500
 			}
-			line := ui.Color{}
+			h := float32(sizeTabStrip - 1)
 			if active {
-				line = p.accent
+				h = sizeTabStrip
 			}
-			b := ui.ButtonBase(c.Key("sidetab"+it.en)).Grow(1).Basis(0).Height(26).Gap(6).AlignItems(ui.Center).Justify(ui.Center).
-				BorderWidth(0, 0, 2, 0).BorderColor(line)
+			b := ui.ButtonBase(c.Key("sidetab" + it.en)).Grow(1).Basis(0).Height(h).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
+			switch {
+			case active:
+				right := float32(1)
+				if i == len(items)-1 {
+					right = 0
+				}
+				b = b.Background(p.sidebar).BorderWidth(1, right, 0, 1).BorderColor(p.tabActiveBorder)
+			case b.Hovered():
+				b = b.Background(p.hover)
+			default:
+				b = b.Background(p.sideHover)
+			}
 			b.Children(func() {
 				icon(c, it.icon, 12, col)
 				txt(c, a.t(it.zh, it.en), fsBase, col, weight)
@@ -56,9 +70,12 @@ func (a *app) sideTabs(c *ui.Context) {
 			if b.Clicked() {
 				a.side.tab = i
 			}
+			// 未选中项之间的竖分隔线；选中项自带边框，两侧不再画。
+			if i < len(items)-1 && !active && a.side.tab != i+1 {
+				ui.Box(c.Key("sidediv" + it.en)).Width(1).Height(sizeTabStrip - 1).Shrink(0).Background(p.tabDivider)
+			}
 		}
 	})
-	hline(c, p.border)
 }
 
 // searchRow 是请求标签顶部的搜索框与三个操作按钮（导入、新建文件夹、新建请求）。

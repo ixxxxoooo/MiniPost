@@ -8,6 +8,7 @@ import (
 func (a *app) tabBar(c *ui.Context) {
 	p := a.p
 	ui.Row(c).FillWidth().Height(sizeTabStrip).Shrink(0).Background(p.tabStrip).AlignItems(ui.Stretch).Children(func() {
+		stripTopLine(c, p.border)
 		if len(a.tabs) == 0 {
 			// 无标签时“+”独占一格，右侧带分隔线
 			ui.Row(c).Width(35).PaddingX(6).AlignItems(ui.Center).Children(func() {
@@ -21,7 +22,7 @@ func (a *app) tabBar(c *ui.Context) {
 					a.tabItem(c, i, t)
 				}
 				if len(a.tabs) > 0 {
-					ui.Row(c).Height(sizeTabStrip).MarginStart(4).AlignItems(ui.Center).Children(func() {
+					ui.Row(c).Height(sizeTabStrip - 1).MarginStart(4).AlignItems(ui.Center).Children(func() {
 						a.tabAction(c, "add", a.t("新建请求", "New request"), 13)
 					})
 				}
@@ -51,83 +52,91 @@ func (a *app) tabAction(c *ui.Context, name, tip string, size float32) bool {
 	})
 }
 
-// tabBleed 是选中标签向下多出并被裁掉的高度。
-const tabBleed = 8
-
-// tabHeight 是标签本身的高度（标签栏顶部留 2px 空隙）。
-const tabHeight = sizeTabStrip - 2
+// stripTopLine 画标签条顶部的 1px 横线（铺满整条，作为最底层）。
+// 选中的标签从这一行开始，用自己的强调色上边框把线盖住，所以同一个位置永远只有一条线；
+// 其余标签从线下面一行开始。标题栏本身不再画底线，避免与这条线叠成两条。
+func stripTopLine(c *ui.Context, col ui.Color) {
+	ui.Box(c).Absolute().Top(0).Left(0).Right(0).Height(1).Background(col).ZIndex(-1)
+}
 
 // tabItem 绘制一个请求标签：方法、标题、未保存圆点与悬停时出现的关闭按钮。
-// 选中的标签只在左、上、右画一圈强调色边框，下边不画线，背景和下方内容区一致，看起来与内容区连成一体；
-// 为此标签比外层多出一截并被裁掉，底部的圆角和边线就不会露出来。鼠标中键点击标签可关闭它。
+// 标签是方正的：选中的标签只在左、上、右画强调色边框，下边不画线，背景和下方内容区一致，看起来与内容区连成一体。
+// 相邻标签之间只有一条竖分隔线；选中标签自带左右边框，它两侧不再画分隔线；
+// 第一个标签紧贴侧栏的分隔线时不再画左边框，避免两条竖线叠在一起。鼠标中键点击标签可关闭它。
 func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 	p := a.p
 	active := i == a.active && !a.showHome
-	ui.Column(c.Key("tabw:" + t.draft.ID)).Height(tabHeight).Shrink(0).Clip().Children(func() {
-		cell := ui.Row(c.Key("tab:" + t.draft.ID)).Height(tabHeight + tabBleed).MinWidth(148).MaxWidth(230).Shrink(0).
-			ContextMenu(func(m *ui.Menu) { a.tabMenu(m, i) }).
-			HandleInput(func(ev ui.InputEvent) bool {
-				// 中键按下时接管这次点按，抬起时关闭（和浏览器标签页的习惯一致）。
-				switch {
-				case ev.Kind == ui.InputPointerDown && ev.Button == 2:
-					return true
-				case ev.Kind == ui.InputPointerUp && ev.Button == 2 && !ev.Canceled:
-					a.later(func() { a.closeTab(a.tabIndex(t)) })
-					return true
-				}
-				return false
-			})
-		hover := cell.Hovered()
-		switch {
-		case active:
-			cell = cell.Background(p.surface).Radius(7).BorderWidth(1, 1, 0, 1).BorderColor(p.tabActiveBorder)
-		case hover:
-			cell = cell.Background(p.hover).Radius(5)
+	h := float32(sizeTabStrip - 1) // 未选中的标签在顶线下面
+	if active {
+		h = sizeTabStrip // 选中的标签从顶线所在行开始，用自己的上边框盖住它
+	}
+	cell := ui.Row(c.Key("tab:" + t.draft.ID)).Height(h).MinWidth(148).MaxWidth(230).Shrink(0).
+		ContextMenu(func(m *ui.Menu) { a.tabMenu(m, i) }).
+		HandleInput(func(ev ui.InputEvent) bool {
+			// 中键按下时接管这次点按，抬起时关闭（和浏览器标签页的习惯一致）。
+			switch {
+			case ev.Kind == ui.InputPointerDown && ev.Button == 2:
+				return true
+			case ev.Kind == ui.InputPointerUp && ev.Button == 2 && !ev.Canceled:
+				a.later(func() { a.closeTab(a.tabIndex(t)) })
+				return true
+			}
+			return false
+		})
+	hover := cell.Hovered()
+	switch {
+	case active:
+		left := float32(1)
+		if i == 0 && !a.set.SidebarCollapsed {
+			left = 0 // 左边就是侧栏的分隔线
 		}
-		cell.Children(func() {
-			ui.Column(c).Grow(1).Basis(0).Height(tabHeight).Children(func() {
-				ui.Row(c).Grow(1).Basis(0).FillWidth().PaddingX(8).Gap(4).AlignItems(ui.Center).Children(func() {
-					if t.env != nil {
-						icon(c, "globe", 11, p.accent).Shrink(0)
-					} else {
-						txtMono(c, t.draft.Method, 9, p.method(t.draft.Method), 700).Shrink(0)
-					}
-					col, w := p.fg2, 0
-					if active {
-						col, w = p.fg, 500
-					}
-					txtE(c, t.title(), fsV2xs, col, w).Grow(1).Basis(0)
-					if t.dirty {
-						ui.Box(c).Size(6, 6).Radius(3).Background(p.accent).Shrink(0)
-					}
-					closeCol := p.muted
-					cb := ui.ButtonBase(c.Key("tc:"+t.draft.ID)).Size(16, 16).Radius(4).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
-						Tooltip(a.t("关闭 (⌘W)", "Close (⌘W)")).Label(a.t("关闭 (⌘W)", "Close (⌘W)"))
-					if cb.Hovered() {
-						cb = cb.Background(p.hover)
-						closeCol = p.fg
-					}
-					cb.Children(func() {
-						if hover || active {
-							icon(c, "clear", 10, closeCol)
-						}
-					})
-					if cb.Clicked() {
-						a.later(func() { a.closeTab(i) })
+		cell = cell.Background(p.surface).BorderWidth(1, 1, 0, left).BorderColor(p.tabActiveBorder)
+	case hover:
+		cell = cell.Background(p.hover)
+	}
+	cell.Children(func() {
+		ui.Column(c).Grow(1).Basis(0).FillHeight().Children(func() {
+			ui.Row(c).Grow(1).Basis(0).FillWidth().PaddingX(8).Gap(4).AlignItems(ui.Center).Children(func() {
+				if t.env != nil {
+					icon(c, "globe", 11, p.accent).Shrink(0)
+				} else {
+					txtMono(c, t.draft.Method, 9, p.method(t.draft.Method), 700).Shrink(0)
+				}
+				col, w := p.fg2, 0
+				if active {
+					col, w = p.fg, 500
+				}
+				txtE(c, t.title(), fsV2xs, col, w).Grow(1).Basis(0)
+				if t.dirty {
+					ui.Box(c).Size(6, 6).Radius(3).Background(p.accent).Shrink(0)
+				}
+				closeCol := p.muted
+				cb := ui.ButtonBase(c.Key("tc:"+t.draft.ID)).Size(16, 16).Radius(4).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
+					Tooltip(a.t("关闭 (⌘W)", "Close (⌘W)")).Label(a.t("关闭 (⌘W)", "Close (⌘W)"))
+				if cb.Hovered() {
+					cb = cb.Background(p.hover)
+					closeCol = p.fg
+				}
+				cb.Children(func() {
+					if hover || active {
+						icon(c, "clear", 10, closeCol)
 					}
 				})
+				if cb.Clicked() {
+					a.later(func() { a.closeTab(i) })
+				}
 			})
 		})
-		if cell.Clicked() && !active {
-			a.later(func() {
-				a.showHome = false
-				a.activate(i)
-			})
-		}
 	})
+	if cell.Clicked() && !active {
+		a.later(func() {
+			a.showHome = false
+			a.activate(i)
+		})
+	}
 	// 标签之间的竖分隔线：选中标签自带边框，它两侧不再画。
 	if !active && !(i+1 == a.active && !a.showHome) {
-		ui.Box(c.Key("tabdiv:" + t.draft.ID)).Width(1).Height(tabHeight).Shrink(0).Background(p.tabDivider)
+		ui.Box(c.Key("tabdiv:" + t.draft.ID)).Width(1).Height(sizeTabStrip - 1).Shrink(0).Background(p.tabDivider)
 	}
 }
 
