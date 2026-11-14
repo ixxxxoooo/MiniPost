@@ -77,7 +77,7 @@ func (a *app) sideTabs(c *ui.Context) {
 func (a *app) searchRow(c *ui.Context) {
 	p := a.p
 	ui.Row(c).FillWidth().Shrink(0).Padding(7.5, 8, 6, 8).Gap(4).AlignItems(ui.Center).Children(func() {
-		a.input(c, &a.side.query, a.t("搜索名称、地址、请求体...", "Search name, URL, body..."), fieldOpts{icon: "search", radius: radiusInput, key: "side-search"})
+		a.input(c, &a.side.query, a.t("搜索请求或内容...", "Search requests..."), fieldOpts{icon: "search", radius: radiusInput, key: "side-search"})
 		if a.iconButton(c, "fileImport", a.t("导入", "Import"), 14, p.fg2) {
 			a.later(func() { a.openImport(importFile) })
 		}

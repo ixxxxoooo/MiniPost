@@ -362,3 +362,54 @@ func TestInstallSamplesSwitchesToFirstNewProject(t *testing.T) {
 		t.Fatalf("已存在时应只提示，实际 %q 项目 %s", a.toastMsgs, a.projectID)
 	}
 }
+
+func TestTruncateForDisplay(t *testing.T) {
+	if s, cut := truncateForDisplay("abc", 10); s != "abc" || cut {
+		t.Fatalf("未超限不应截断: %q %v", s, cut)
+	}
+	if s, cut := truncateForDisplay("abcdef", 3); s != "abc" || !cut {
+		t.Fatalf("应截到 3 字节: %q %v", s, cut)
+	}
+	// "你好" 每个字 3 字节；限制 4 字节时不能把第二个字劈成两半
+	if s, cut := truncateForDisplay("你好", 4); s != "你" || !cut {
+		t.Fatalf("应落在 UTF-8 边界上: %q %v", s, cut)
+	}
+}
+
+// 小响应：不出现截断提示；文本响应也能“保存到文件”（保存的是完整原始响应体）。
+func TestSaveTextResponseToFile(t *testing.T) {
+	a, tt, be, rs := sendWith(t, jsonResp())
+	if rs.view.truncated || tt.HasText("保存完整响应") {
+		t.Fatal("小响应不应有截断提示")
+	}
+	a.saveResponse(rs.resp, rs.view.filename)
+	if len(be.saved) != 1 || be.saved[0].content != jsonResp().Body {
+		t.Fatalf("应保存完整响应体: %+v", be.saved)
+	}
+}
+
+// 大响应：视图只载入开头并出现提示条；点“保存完整响应”保存的仍是完整内容，复制也是完整内容。
+func TestLargeResponseTruncatedWithBanner(t *testing.T) {
+	big := strings.Repeat("0123456789abcdef\n", bodyDisplayLimit/16+4096)
+	a, tt, be, rs := sendWith(t, &model.HttpResponse{StatusCode: 200, ContentType: "text/plain", Body: big, Size: int64(len(big))})
+	if !rs.view.truncated {
+		t.Fatal("超过上限的响应应被标记为截断")
+	}
+	if n := rs.bodyEd.Buffer.Len(); n > bodyDisplayLimit {
+		t.Fatalf("编辑器只应载入开头 %d 字节，实际 %d", bodyDisplayLimit, n)
+	}
+	if !tt.HasText("保存完整响应") {
+		t.Fatalf("应出现截断提示条: %q", tt.Texts())
+	}
+	if err := tt.Click("保存完整响应"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(be.saved) != 1 || len(be.saved[0].content) != len(big) {
+		t.Fatalf("应保存完整响应（%d 字节）: %d 条", len(big), len(be.saved))
+	}
+	a.copyBody(rs)
+	if len(a.clipboard) != len(rs.view.display) || len(a.clipboard) <= bodyDisplayLimit {
+		t.Fatalf("复制应得到完整内容: %d", len(a.clipboard))
+	}
+}

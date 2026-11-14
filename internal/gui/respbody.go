@@ -15,6 +15,22 @@ import (
 	"minipost/internal/pkg/logger"
 )
 
+// bodyDisplayLimit 是响应体在代码视图里最多展示的字节数；更大的响应只展示开头，
+// 完整内容可复制或保存到文件，避免超大文本拖垮编辑器。
+const bodyDisplayLimit = 1 << 20
+
+// truncateForDisplay 把 s 截到不超过 limit 字节（落在合法的 UTF-8 边界上），并报告是否发生了截断。
+func truncateForDisplay(s string, limit int) (string, bool) {
+	if len(s) <= limit {
+		return s, false
+	}
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut], true
+}
+
 // copiedLinger 是复制成功后图标保持强调色的时长（同旧版 1.2s）。
 const copiedLinger = 1200 * time.Millisecond
 
@@ -29,6 +45,7 @@ type bodyViewState struct {
 	filterExpr string
 	download   bool // 显示「下载文件」卡片而非文本
 	copiedAt   time.Time
+	truncated  bool  // 展示内容被截断（超过 bodyDisplayLimit）
 	path       []any // JSON 预览的钻取路径
 
 	// 以下为派生缓存
@@ -103,6 +120,10 @@ func (a *app) syncBody(rs *respState, t *tab) {
 	if text == "" {
 		text = a.t("(空响应)", "(empty response)")
 	}
+	text, v.truncated = truncateForDisplay(text, bodyDisplayLimit)
+	if v.truncated {
+		logger.Info("响应体过大，视图只展示开头", "total", len(v.display), "shown", len(text))
+	}
 	rs.bodyEd.Buffer.Reset(text)
 	rs.bodyEd.Buffer.SetLanguage(editor.LanguageFor(client.BodyLanguageFile(mode)))
 }
@@ -123,6 +144,9 @@ func (a *app) bodyView(c *ui.Context, t *tab, rs *respState) {
 		a.bodyToolbar(c, rs, canPreview)
 		if v.filterOpen && !v.download && !v.isImage {
 			a.filterBar(c, rs)
+		}
+		if v.truncated && !v.download && !v.isImage {
+			a.truncatedBanner(c, rs)
 		}
 		switch {
 		case v.isImage:
@@ -269,11 +293,31 @@ func (a *app) bodyToolbar(c *ui.Context, rs *respState, canPreview bool) {
 				a.later(func() { a.copyBody(rs) })
 			}
 		}
+		// 任何文本响应都可以保存为文件（二进制响应在上面的下载卡片里处理）
+		sep()
+		tip := a.t("保存到文件", "Save to file")
 		if preferDownload {
-			sep()
-			if tb("download", a.t("下载文件", "Download file"), false, "tb-download") {
-				a.later(func() { a.saveResponse(resp, v.filename) })
-			}
+			tip = a.t("下载文件", "Download file")
+		}
+		if tb("download", tip, false, "tb-download") {
+			a.later(func() { a.saveResponse(resp, v.filename) })
+		}
+	})
+}
+
+// truncatedBanner 提示响应体过大、视图只展示了开头，并给出保存完整响应的入口。
+func (a *app) truncatedBanner(c *ui.Context, rs *respState) {
+	p := a.p
+	resp, v := rs.resp, &rs.view
+	ui.Row(c.Key("trunc-banner")).FillWidth().Shrink(0).Margin(0, 12, 4, 12).Padding(5, 10).Radius(8).Gap(8).AlignItems(ui.Center).
+		Background(p.warning.Alpha(0.12)).Children(func() {
+		icon(c, "info", 12, p.warning)
+		txtE(c, a.t("响应较大（", "Large response (")+formatSize(resp.Size)+a.t("），仅显示前 ", "), showing only the first ")+formatSize(int64(bodyDisplayLimit))+
+			a.t("。复制或保存可获取完整内容。", ". Copy or save to get everything."), fsTiny, p.fg2, 0).Grow(1)
+		if a.button(c, btnOpts{h: 22, radius: 6, padX: 8, key: "trunc-save"}, func(bool) {
+			txt(c, a.t("保存完整响应", "Save full response"), fsTiny, p.accent, 0)
+		}) {
+			a.later(func() { a.saveResponse(resp, v.filename) })
 		}
 	})
 }
