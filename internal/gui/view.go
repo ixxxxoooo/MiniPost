@@ -11,10 +11,7 @@ func (a *app) view(c *ui.Context) {
 	if a.native && a.menuLocale != a.locale() {
 		a.installMenu()
 	}
-	for _, m := range a.toastMsgs {
-		c.Toast(m)
-	}
-	a.toastMsgs = nil
+	a.showToasts(c)
 
 	if t := a.activeTab(); t != nil {
 		t.refreshDirty() // 标签栏先于编辑区绘制，需要先算出本帧的未保存状态

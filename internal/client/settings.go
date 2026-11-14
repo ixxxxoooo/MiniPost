@@ -38,6 +38,8 @@ type Settings struct {
 	AutoBackupEnabled         bool `json:"autoBackupEnabled"`
 	AutoBackupIntervalMinutes int  `json:"autoBackupIntervalMinutes"`
 
+	NoAutoUpdate bool `json:"noAutoUpdate,omitempty"` // 发现新版本后不自动下载（默认自动下载）
+
 	LastProjectID string            `json:"lastProjectId"`
 	EnvByProject  map[string]string `json:"envByProject"`
 }

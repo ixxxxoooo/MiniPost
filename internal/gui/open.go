@@ -13,6 +13,7 @@ func Open(be Backend) *mygo.Window {
 	a := newApp(be)
 	a.native = true
 	a.restartBackupTimer()
+	a.startUpdater()
 	win := mygo.NewWindow(mygo.WindowOptions{
 		Title:     "MiniPost",
 		Width:     1280,
@@ -28,7 +29,10 @@ func Open(be Backend) *mygo.Window {
 	a.win = win
 	// 关闭窗口或退出前保存标签会话（含未保存的修改），下次启动时恢复。
 	win.OnClose(func(*mygo.CloseEvent) { a.persistSession() })
-	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { a.persistSession() })
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+		a.persistSession()
+		a.stopUpdater()
+	})
 	logger.Info("原生主窗口已创建")
 	return win
 }

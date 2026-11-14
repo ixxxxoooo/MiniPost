@@ -28,6 +28,7 @@ func (a *app) titleBar(c *ui.Context) {
 		ui.Spacer(c)
 
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+			a.updateChip(c)
 			if a.iconButton(c, "fileImport", a.t("导入 cURL", "Import cURL")+" (⌘I)", 14, p.fg2) {
 				a.later(a.openCurlDialog)
 			}

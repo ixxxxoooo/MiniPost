@@ -373,13 +373,14 @@ func (a *app) prefsAbout(c *ui.Context) {
 			}
 			ui.Column(c).Children(func() {
 				txt(c, "MiniPost", 14, p.fg, 600)
-				txt(c, "Version 1.0.0", fsSmall, p.muted, 0)
+				txt(c, "Version "+a.appVersion(), fsSmall, p.muted, 0)
 			})
 		})
 		ui.Text(c, a.t("MiniPost 是一个轻量 HTTP 请求调试工具，支持多项目、环境变量、历史记录、响应预览与 Cookie 管理。",
 			"MiniPost is a lightweight HTTP debugging client with multi-project support, environment variables, history, response preview, and cookie management.")).
 			FontSize(fsBase).FixedLineHeight(24).TextColor(p.fg2)
 	})
+	a.updateCard(c)
 }
 
 func indexOf(values []string, v string) int {
@@ -453,30 +454,19 @@ func (a *app) reloadAll() {
 
 // restartBackupTimer 按设置启停定时自动备份。
 func (a *app) restartBackupTimer() {
-	if a.backupStop != nil {
-		close(a.backupStop)
-		a.backupStop = nil
+	if a.stopBackup != nil {
+		a.stopBackup()
+		a.stopBackup = nil
 	}
 	if !a.set.AutoBackupEnabled || !a.native {
 		return
 	}
-	stop := make(chan struct{})
-	a.backupStop = stop
 	interval := time.Duration(a.set.AutoBackupIntervalMinutes) * time.Minute
-	go func() {
-		t := time.NewTicker(interval)
-		defer t.Stop()
-		for {
-			select {
-			case <-stop:
-				return
-			case <-t.C:
-				if path, err := a.be.CreateBackup(); err != nil {
-					logger.Warn("自动备份失败", "error", err.Error())
-				} else {
-					logger.Info("自动备份完成", "path", path)
-				}
-			}
+	a.stopBackup = startPeriodic(interval, interval, func() {
+		if path, err := a.be.CreateBackup(); err != nil {
+			logger.Warn("自动备份失败", "error", err.Error())
+		} else {
+			logger.Info("自动备份完成", "path", path)
 		}
-	}()
+	})
 }

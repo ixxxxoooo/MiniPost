@@ -58,12 +58,17 @@ type app struct {
 	overlays      overlays
 	deferred      []func() // 在本帧构建结束后执行的变更，避免在遍历数据时修改它
 	toastMsgs     []string
+	toastActs     []toastAct // 带按钮的提示（更新提示等）
 	applied       appliedTheme
 	p             *palette  // 当前亮/暗调色板
 	th            *ui.Theme // 当前 MyGo 主题（每帧都要重新设置）
 	nav           navState  // 标签访问历史
 	menuLocale    string
-	backupStop    chan struct{}
+	stopBackup    func()        // 停止自动备份的周期任务
+	upd           updateState   // 自动更新状态（updates.go）
+	updater       updateBackend // 更新后端；测试里替换为假实现
+	stopUpdate    func()        // 停止后台检查更新
+	relaunch      func()        // 重启应用；测试里替换
 	projMenu      projMenuState // 工具栏项目下拉面板状态
 	scrollAt      time.Time     // 最近一次滚动输入的时间（滚动条自动隐藏用）
 }
@@ -82,6 +87,8 @@ func newApp(be Backend) *app {
 		descDraft:  map[string]string{},
 		splitPct:   55,
 		consolePct: 72,
+		updater:    mygoUpdater{},
+		relaunch:   func() { mygo.App.Relaunch() },
 	}
 	a.set = a.setStore.Load()
 	a.loadProjects()
