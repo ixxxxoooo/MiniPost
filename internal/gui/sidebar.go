@@ -28,9 +28,8 @@ func (a *app) sidebar(c *ui.Context) {
 	})
 }
 
-// sideTabs 是 28px 高的标签条：三等分，样式与请求标签一致——方正、选中项左/上/右强调色边框、
-// 下边不画线并与下方列表连成一体；未选中项底色稍深。顶线由标签条自己画（被选中项的边框盖住），
-// 选中项最右侧紧贴侧栏分隔线时不画右边框，避免两条竖线叠在一起。
+// sideTabs 是 28px 高的标签条：三等分，样式与请求标签一致——方正、选中项只有顶部 2px 强调线、
+// 下边不画线并与下方列表连成一体；未选中项底色稍深。顶线由标签条自己画（被选中项的强调线盖住）。
 func (a *app) sideTabs(c *ui.Context) {
 	p := a.p
 	items := []struct{ icon, zh, en string }{
@@ -53,11 +52,7 @@ func (a *app) sideTabs(c *ui.Context) {
 			b := ui.ButtonBase(c.Key("sidetab" + it.en)).Grow(1).Basis(0).Height(h).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
 			switch {
 			case active:
-				right := float32(tabAccentWidth)
-				if i == len(items)-1 {
-					right = 0
-				}
-				b = b.Background(p.sidebar).BorderWidth(tabAccentWidth, right, 0, tabAccentWidth).BorderColor(p.tabActiveBorder)
+				b = b.Background(p.sidebar).BorderWidth(tabAccentWidth, 0, 0, 0).BorderColor(p.tabActiveBorder)
 			case b.Hovered():
 				b = b.Background(p.hover)
 			default:
@@ -70,8 +65,8 @@ func (a *app) sideTabs(c *ui.Context) {
 			if b.Clicked() {
 				a.side.tab = i
 			}
-			// 未选中项之间的竖分隔线；选中项自带边框，两侧不再画。
-			if i < len(items)-1 && !active && a.side.tab != i+1 {
+			// 标签之间的竖分隔线。
+			if i < len(items)-1 {
 				ui.Box(c.Key("sidediv" + it.en)).Width(1).Height(sizeTabStrip - 1).Shrink(0).Background(p.tabDivider)
 			}
 		}
@@ -262,10 +257,8 @@ func (a *app) requestRow(c *ui.Context, id string, depth int) {
 		return
 	}
 	p := a.p
-	active := false
-	if t := a.activeTab(); t != nil && t.draft.ID == id {
-		active = true
-	}
+	// 侧栏只高亮一行：选中的节点（点过的文件夹/请求，没有时是当前标签对应的请求）。
+	active := a.selectedNode() == id
 	row := ui.ButtonBase(c.Key("r:" + id)).Height(28).MarginX(4).PaddingStart(20 + float32(depth)*12).PaddingEnd(8).Radius(radiusBtn).Gap(4).
 		AlignItems(ui.Center).Justify(ui.Start).ContextMenu(func(m *ui.Menu) { a.nodeMenu(m, id) })
 	hover := row.Hovered()

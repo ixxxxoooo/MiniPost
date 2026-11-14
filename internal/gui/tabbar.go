@@ -52,7 +52,7 @@ func (a *app) tabAction(c *ui.Context, name, tip string, size float32) bool {
 	})
 }
 
-// tabWidth 是请求标签的固定宽度；tabAccentWidth 是选中标签强调色边框的粗细（与旧版 2px 的强调线一致）。
+// tabWidth 是请求标签的固定宽度；tabAccentWidth 是选中标签顶部强调线的粗细（与旧版 2px 的强调线一致）。
 const (
 	tabWidth       = 220
 	tabAccentWidth = 2
@@ -66,9 +66,8 @@ func stripTopLine(c *ui.Context, col ui.Color) {
 }
 
 // tabItem 绘制一个请求标签：方法、标题、未保存圆点与悬停时出现的关闭按钮。
-// 标签是方正的：选中的标签只在左、上、右画强调色边框，下边不画线，背景和下方内容区一致，看起来与内容区连成一体。
-// 相邻标签之间只有一条竖分隔线；选中标签自带左右边框，它两侧不再画分隔线；
-// 第一个标签紧贴侧栏的分隔线时不再画左边框，避免两条竖线叠在一起。鼠标中键点击标签可关闭它。
+// 标签是方正的：选中的标签只在顶部画一条 2px 强调线，背景和下方内容区一致，看起来与内容区连成一体。
+// 相邻标签之间只有一条 1px 竖分隔线。鼠标中键点击标签可关闭它。
 func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 	p := a.p
 	active := i == a.active && !a.showHome
@@ -93,11 +92,7 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 	hover := cell.Hovered()
 	switch {
 	case active:
-		left := float32(tabAccentWidth)
-		if i == 0 && !a.set.SidebarCollapsed {
-			left = 0 // 左边就是侧栏的分隔线
-		}
-		cell = cell.Background(p.surface).BorderWidth(tabAccentWidth, tabAccentWidth, 0, left).BorderColor(p.tabActiveBorder)
+		cell = cell.Background(p.surface).BorderWidth(tabAccentWidth, 0, 0, 0).BorderColor(p.tabActiveBorder)
 	case hover:
 		cell = cell.Background(p.hover)
 	}
@@ -141,8 +136,8 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 			a.activate(i)
 		})
 	}
-	// 标签之间的竖分隔线：选中标签自带边框，它两侧不再画。
-	if !active && !(i+1 == a.active && !a.showHome) {
+	// 标签右侧的竖分隔线（选中标签只有顶部强调线，两侧照常画分隔线）。
+	{
 		ui.Box(c.Key("tabdiv:" + t.draft.ID)).Width(1).Height(sizeTabStrip - 1).Shrink(0).Background(p.tabDivider)
 	}
 }

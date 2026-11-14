@@ -119,45 +119,34 @@ func TestTabStripHasSingleTopLine(t *testing.T) {
 	}
 }
 
-// 相邻标签之间不会叠出加粗的竖线：沿标签条中部横扫，任何一条竖线都只有 1px 宽。
-func TestTabStripNoThickVerticalLines(t *testing.T) {
+// 选中标签只有顶部有强调色，左右没有；标签之间的竖分隔线都只有 1px 宽，不会叠成粗线。
+func TestTabStripNoSideHighlightAndThinDividers(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	a.openRequest(a.coll.Requests[0].ID)
 	a.openRequest(a.coll.Requests[1].ID)
 	a.activate(0)
-	a.openRequest(a.coll.Requests[1].ID) // 三种状态：选中在中间、前后各有未选中
+	a.openRequest(a.coll.Requests[1].ID) // 选中第二个，前后各有分隔线
 	tt.Frame()
 	tt.Frame()
 	img := tt.Image()
-	y := sizeToolbar - 1 + sizeTabStrip - 4 // 标签条靠下的一行，避开文字
-	bg := px(img, img.Bounds().Max.X-300, y)
+	y := sizeToolbar - 1 + sizeTabStrip - 4 // 标签条靠下的一行，避开文字和顶部强调线
+	acc, div := rgb(a.p.tabActiveBorder), rgb(a.p.tabDivider)
 	sw := int(a.set.SidebarWidth)
-	// 选中标签两侧：左右各一条强调色线，且紧邻的像素不是第二条线。
-	activeLeft, activeRight := -1, -1
-	for x := sw + 2; x < img.Bounds().Max.X; x++ {
-		if px(img, x, y) == rgb(a.p.tabActiveBorder) {
-			if activeLeft < 0 {
-				activeLeft = x
+	dividers := 0
+	for x := sw; x < img.Bounds().Max.X; x++ {
+		got := px(img, x, y)
+		if got == acc {
+			t.Fatalf("x=%d：选中标签的左右不应有强调色", x)
+		}
+		if got == div {
+			dividers++
+			if px(img, x+1, y) == div {
+				t.Errorf("x=%d：分隔线比 1px 更粗", x)
 			}
-			activeRight = x
 		}
 	}
-	if activeLeft < 0 || activeRight-activeLeft < 100 {
-		t.Fatalf("没找到选中标签的左右边框: %d %d", activeLeft, activeRight)
-	}
-	// 左右边框各自恰好 tabAccentWidth 列宽，紧挨着的外侧/内侧像素是背景（外侧可能是标签条底色或内容区），没有第二条线。
-	outer := []int{activeLeft - 1, activeRight + 1}
-	inner := []int{activeLeft + tabAccentWidth, activeRight - tabAccentWidth}
-	for _, x := range append(outer, inner...) {
-		n := px(img, x, y)
-		if n != bg && n != rgb(a.p.surface) {
-			t.Errorf("选中标签边框旁 x=%d 的像素 %v 不是背景色，边框变粗或叠出了第二条线", x, n)
-		}
-	}
-	for k := 0; k < tabAccentWidth; k++ {
-		if px(img, activeLeft+k, y) != rgb(a.p.tabActiveBorder) || px(img, activeRight-k, y) != rgb(a.p.tabActiveBorder) {
-			t.Errorf("左右边框应各为 %d 列强调色", tabAccentWidth)
-		}
+	if dividers < 2 {
+		t.Errorf("应至少有 2 条标签分隔线，实际 %d", dividers)
 	}
 }
 
@@ -172,7 +161,7 @@ func TestTabWidthStableOnSwitch(t *testing.T) {
 	a.activate(0)
 	tt.Frame()
 	tt.Frame()
-	y := sizeToolbar - 1 + sizeTabStrip - 4
+	y := sizeToolbar - 1 // 顶部强调线所在行
 	img0 := tt.Image()
 	// 选中第一个标签时，第二个标签从 sw+tabWidth 开始（第一个标签 + 无分隔线）；
 	// 选中第二个标签时，它的左边框也应从同一列开始。
@@ -181,10 +170,11 @@ func TestTabWidthStableOnSwitch(t *testing.T) {
 	tt.Frame()
 	img1 := tt.Image()
 	acc := rgb(a.p.tabActiveBorder)
-	if px(img1, sw+tabWidth, y) != acc {
-		t.Errorf("选中第二个标签时左边框应在 x=%d", sw+tabWidth)
+	// 第一个标签占 [sw, sw+tabWidth)，分隔线在 sw+tabWidth，第二个标签从 sw+tabWidth+1 开始。
+	if px(img1, sw+tabWidth+1, y) != acc || px(img1, sw+tabWidth, y) == acc {
+		t.Errorf("选中第二个标签时顶部强调线应从 x=%d 开始", sw+tabWidth+1)
 	}
-	if px(img0, sw+tabWidth-1, y) != acc {
-		t.Errorf("选中第一个标签时右边框应在 x=%d", sw+tabWidth-1)
+	if px(img0, sw+tabWidth-1, y) != acc || px(img0, sw+tabWidth, y) == acc {
+		t.Errorf("选中第一个标签时顶部强调线应在 x=%d 结束", sw+tabWidth-1)
 	}
 }

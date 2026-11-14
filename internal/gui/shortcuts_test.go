@@ -192,3 +192,30 @@ func TestPromptInputHasHeight(t *testing.T) {
 		t.Fatalf("输入框高度塌缩：上边框 y=%d，下边框 y=%d", top, bottom)
 	}
 }
+
+// 侧栏同一时间只高亮一行：选中了别的节点后，当前标签对应的请求不再高亮。
+func TestSidebarHighlightsSingleRow(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	alpha, beta := a.coll.Requests[0].ID, a.coll.Requests[1].ID
+	a.openRequest(alpha)
+	tt.Frame()
+	r, ok := tt.Find("beta")
+	if !ok {
+		t.Fatal("侧栏里应有 beta")
+	}
+	y := int(r.Y + r.H/2)
+	img := tt.Image()
+	hi := rgb(a.p.sidebar) // 未高亮行的底色
+	if px(img, 12, y-28) == px(img, 12, y) {
+		t.Fatal("初始只有当前标签 alpha 一行高亮，alpha 与 beta 的底色应不同")
+	}
+	a.selectNode(beta)
+	tt.Frame()
+	img = tt.Image()
+	if px(img, 12, y-28) != hi {
+		t.Fatalf("选中 beta 后 alpha 不应再高亮: %v", px(img, 12, y-28))
+	}
+	if px(img, 12, y) == hi {
+		t.Fatal("选中 beta 后 beta 应高亮")
+	}
+}
