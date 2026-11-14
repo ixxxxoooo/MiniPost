@@ -1,5 +1,8 @@
 package model
 
+// BinarySavePrefix 标记待保存内容为 base64 编码的二进制数据。
+const BinarySavePrefix = "__MINIPOST_BASE64__:"
+
 type TimingBreakdown struct {
 	Prepare              float64 `json:"prepare"`
 	SocketInitialization float64 `json:"socketInitialization"`

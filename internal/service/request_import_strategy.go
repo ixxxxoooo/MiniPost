@@ -368,3 +368,12 @@ func (s *RequestService) PreviewSwaggerConflicts(projectID string, raw []byte, s
 	}
 	return s.findImportConflicts(projectID, incoming)
 }
+
+// ImportPreview 导入预检结果：包含与已有请求的 URL 冲突信息
+type ImportPreview struct {
+	Kind          string           `json:"kind"`
+	Content       string           `json:"content"`
+	ResolvedURL   string           `json:"resolvedURL"`
+	ConflictCount int              `json:"conflictCount"`
+	Conflicts     []ImportConflict `json:"conflicts"`
+}

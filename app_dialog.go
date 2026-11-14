@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"minipost/internal/model"
 	appErrors "minipost/internal/pkg/errors"
 	"minipost/internal/pkg/logger"
 )
@@ -96,8 +97,8 @@ func (a *App) SaveResponseToFile(parent *mygo.Window, defaultFilename, content s
 		return err
 	}
 	data := []byte(content)
-	if strings.HasPrefix(content, binarySavePrefix) {
-		decoded, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(content, binarySavePrefix))
+	if strings.HasPrefix(content, model.BinarySavePrefix) {
+		decoded, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(content, model.BinarySavePrefix))
 		if err != nil {
 			return appErrors.Wrap("INVALID_BINARY_PAYLOAD", "下载内容解析失败", err)
 		}

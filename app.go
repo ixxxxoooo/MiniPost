@@ -22,9 +22,6 @@ type App struct {
 	store      *repository.FileStore
 }
 
-// binarySavePrefix 标记待保存内容为 base64 编码的二进制数据
-const binarySavePrefix = "__MINIPOST_BASE64__:"
-
 // NewApp 初始化存储与各服务，存储初始化失败时直接终止进程。
 func NewApp() *App {
 	logger.Info("正在初始化存储...")

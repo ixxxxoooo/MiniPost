@@ -229,3 +229,87 @@ func TestDraftRoundTripKeepsDisabledRows(t *testing.T) {
 		t.Fatal("fingerprint should be stable across round trip")
 	}
 }
+
+func TestWantsStreaming(t *testing.T) {
+	d := baseDraft()
+	if WantsStreaming(d) {
+		t.Fatal("plain request must not stream")
+	}
+	d.Headers = []*Row{row("Accept", "text/event-stream", true)}
+	if !WantsStreaming(d) {
+		t.Fatal("Accept event-stream should stream")
+	}
+	d = baseDraft()
+	d.Body.Type, d.Body.JSON = BodyJSON, "{ // c\n \"stream\": true }"
+	if !WantsStreaming(d) {
+		t.Fatal("stream:true body should stream")
+	}
+}
+
+func TestParseStreamStart(t *testing.T) {
+	s, ok := ParseStreamStart(`{"statusCode":200,"statusText":"OK","headers":{"A":["b"]},"contentType":"text/event-stream","headerBytes":12}`)
+	if !ok || s.StatusCode != 200 || !IsEventStream(s.ContentType) || s.HeaderBytes != 12 {
+		t.Fatalf("parse: %+v %v", s, ok)
+	}
+	if _, ok := ParseStreamStart("not json"); ok {
+		t.Fatal("invalid payload must fail")
+	}
+}
+
+func TestAutoHeadersListAndToggle(t *testing.T) {
+	tr := func(zh, en string) string { return en }
+	d := NewDraft("p", "", "r")
+	d.Body.Type = BodyJSON
+	d.Body.JSON = `{"a":1}`
+	set := DefaultSettings()
+	set.SendPostmanTokenHeader = true
+
+	has := func(items []AutoHeader, key string) (AutoHeader, bool) {
+		for _, it := range items {
+			if it.Key == key {
+				return it, true
+			}
+		}
+		return AutoHeader{}, false
+	}
+	items := AutoHeaders(d, set, nil, nil, tr)
+	for _, k := range []string{"MiniPost-Token", "Content-Type", "Content-Length", "Host", "User-Agent", "Accept"} {
+		if it, ok := has(items, k); !ok || !it.Enabled {
+			t.Fatalf("应包含启用的自动 Header %s", k)
+		}
+	}
+	if ct, _ := has(items, "Content-Type"); ct.Value != "application/json" {
+		t.Fatalf("Content-Type 应为 application/json，实际 %q", ct.Value)
+	}
+
+	// 手写同名 Header 后不再作为自动 Header 列出
+	custom := NewRow()
+	custom.Key, custom.Value = "accept", "text/html"
+	d.Headers = append([]*Row{custom}, d.Headers...)
+	if _, ok := has(AutoHeaders(d, set, nil, nil, tr), "Accept"); ok {
+		t.Fatalf("手写 Accept 后不应再列出自动 Accept")
+	}
+
+	// 关闭与重新开启
+	SetAutoHeaderEnabled(d, "User-Agent", false)
+	if it, _ := has(AutoHeaders(d, set, nil, nil, tr), "User-Agent"); it.Enabled {
+		t.Fatalf("关闭后应标记为未启用")
+	}
+	if !SuppressedAutoHeaders(d.Headers)["user-agent"] {
+		t.Fatalf("应写入关闭标记行")
+	}
+	SetAutoHeaderEnabled(d, "User-Agent", false)
+	count := 0
+	for _, h := range d.Headers {
+		if IsAutoHeaderMarker(h.Key) {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("重复关闭不应产生多个标记行，实际 %d", count)
+	}
+	SetAutoHeaderEnabled(d, "User-Agent", true)
+	if SuppressedAutoHeaders(d.Headers)["user-agent"] {
+		t.Fatalf("重新开启后应移除标记行")
+	}
+}

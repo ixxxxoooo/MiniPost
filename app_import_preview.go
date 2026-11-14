@@ -16,17 +16,9 @@ import (
 
 var swaggerUIURLPattern = regexp.MustCompile(`(?i)\burl\s*:\s*["']([^"']+)["']`)
 
-type ImportPreview struct {
-	Kind          string                   `json:"kind"`
-	Content       string                   `json:"content"`
-	ResolvedURL   string                   `json:"resolvedURL"`
-	ConflictCount int                      `json:"conflictCount"`
-	Conflicts     []service.ImportConflict `json:"conflicts"`
-}
-
 const importPreviewMaxConflictSamples = 20
 
-func (a *App) buildImportPreview(projectID, format, content, sourceURL string) (*ImportPreview, error) {
+func (a *App) buildImportPreview(projectID, format, content, sourceURL string) (*service.ImportPreview, error) {
 	kind, normalizedContent, err := resolveImportKind(format, content)
 	if err != nil {
 		return nil, err
@@ -47,7 +39,7 @@ func (a *App) buildImportPreview(projectID, format, content, sourceURL string) (
 		return nil, err
 	}
 
-	preview := &ImportPreview{
+	preview := &service.ImportPreview{
 		Kind:          kind,
 		ResolvedURL:   sourceURL,
 		ConflictCount: len(conflicts),
@@ -61,12 +53,12 @@ func (a *App) buildImportPreview(projectID, format, content, sourceURL string) (
 }
 
 // PreviewImportFromFile 预检文件导入内容与项目中已有请求的 URL 冲突
-func (a *App) PreviewImportFromFile(projectID, format, content string) (*ImportPreview, error) {
+func (a *App) PreviewImportFromFile(projectID, format, content string) (*service.ImportPreview, error) {
 	return a.buildImportPreview(projectID, format, content, "")
 }
 
 // PreviewImportFromURL 拉取远程导入内容并预检 URL 冲突；返回内容供后续导入复用，避免二次拉取
-func (a *App) PreviewImportFromURL(projectID, format, sourceURL string) (*ImportPreview, error) {
+func (a *App) PreviewImportFromURL(projectID, format, sourceURL string) (*service.ImportPreview, error) {
 	trimmedURL := strings.TrimSpace(sourceURL)
 	if trimmedURL == "" {
 		return nil, fmt.Errorf("导入地址不能为空")

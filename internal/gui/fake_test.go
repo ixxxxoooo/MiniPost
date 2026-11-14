@@ -1,0 +1,273 @@
+package gui
+
+import (
+	"errors"
+	"fmt"
+	"sync"
+	"testing"
+
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+
+	"minipost/internal/model"
+	"minipost/internal/service"
+)
+
+// fakeBackend 是测试用的内存后端，记录调用并返回预设响应。
+type fakeBackend struct {
+	mu       sync.Mutex
+	dir      string
+	projects []model.Project
+	colls    map[string]*model.CollectionData
+	envs     map[string][]model.Environment
+	history  map[string][]model.HistoryEntry
+	seq      int
+
+	sent     []model.SendRequestInput
+	resp     *model.HttpResponse
+	sendErr  error
+	canceled []string
+}
+
+func newFakeBackend(t *testing.T) *fakeBackend {
+	return &fakeBackend{
+		dir:     t.TempDir(),
+		colls:   map[string]*model.CollectionData{},
+		envs:    map[string][]model.Environment{},
+		history: map[string][]model.HistoryEntry{},
+		resp: &model.HttpResponse{
+			StatusCode: 200, StatusText: "OK", ContentType: "application/json",
+			Headers: map[string][]string{"Content-Type": {"application/json"}},
+			Body:    `{"hello":"world"}`, Duration: 12, Size: 17,
+		},
+	}
+}
+
+func (f *fakeBackend) id(prefix string) string {
+	f.seq++
+	return fmt.Sprintf("%s%d", prefix, f.seq)
+}
+
+// seedProject 预置一个带若干请求的项目。
+func (f *fakeBackend) seedProject(name string, requestNames ...string) string {
+	pid := f.id("p")
+	f.projects = append(f.projects, model.Project{ID: pid, Name: name})
+	cd := &model.CollectionData{}
+	f.colls[pid] = cd
+	for i, n := range requestNames {
+		rid := f.id("r")
+		cd.Requests = append(cd.Requests, model.RequestItem{ID: rid, Name: n, Method: "GET", URL: "https://example.com/" + n, ProjectID: pid, Body: model.RequestBody{Type: "none"}, Auth: model.AuthConfig{Type: "none"}})
+		cd.TreeNodes = append(cd.TreeNodes, model.CollectionNode{NodeID: rid, NodeType: model.CollectionNodeTypeRequest, ProjectID: pid, SortOrder: i})
+	}
+	return pid
+}
+
+func (f *fakeBackend) BaseDir() string { return f.dir }
+func (f *fakeBackend) ListProjects() ([]model.Project, error) {
+	return append([]model.Project(nil), f.projects...), nil
+}
+func (f *fakeBackend) CreateProject(name string) (*model.Project, error) {
+	p := model.Project{ID: f.id("p"), Name: name}
+	f.projects = append(f.projects, p)
+	f.colls[p.ID] = &model.CollectionData{}
+	return &p, nil
+}
+func (f *fakeBackend) RenameProject(id, name string) (*model.Project, error) {
+	for i := range f.projects {
+		if f.projects[i].ID == id {
+			f.projects[i].Name = name
+			return &f.projects[i], nil
+		}
+	}
+	return nil, errors.New("not found")
+}
+func (f *fakeBackend) UpdateProjectDescription(id, d string) (*model.Project, error) {
+	for i := range f.projects {
+		if f.projects[i].ID == id {
+			f.projects[i].Description = d
+			return &f.projects[i], nil
+		}
+	}
+	return nil, errors.New("not found")
+}
+func (f *fakeBackend) UpdateProjectTheme(id, c string) (*model.Project, error) {
+	for i := range f.projects {
+		if f.projects[i].ID == id {
+			f.projects[i].ThemeColor = c
+			return &f.projects[i], nil
+		}
+	}
+	return nil, errors.New("not found")
+}
+func (f *fakeBackend) DeleteProject(id string) error {
+	for i := range f.projects {
+		if f.projects[i].ID == id {
+			f.projects = append(f.projects[:i], f.projects[i+1:]...)
+			return nil
+		}
+	}
+	return errors.New("not found")
+}
+func (f *fakeBackend) GetCollectionData(pid string) (*model.CollectionData, error) {
+	cd := *f.colls[pid]
+	return &cd, nil
+}
+func (f *fakeBackend) MoveCollectionNode(pid, nodeID string, kind model.CollectionNodeType, target string, idx int) error {
+	cd := f.colls[pid]
+	for i := range cd.TreeNodes {
+		if cd.TreeNodes[i].NodeID == nodeID {
+			cd.TreeNodes[i].ParentFolderID = target
+			cd.TreeNodes[i].SortOrder = idx + 1000
+		}
+	}
+	return nil
+}
+func (f *fakeBackend) CreateFolder(pid, parent, name string) (*model.Folder, error) {
+	cd := f.colls[pid]
+	fo := model.Folder{ID: f.id("f"), Name: name, ProjectID: pid, ParentID: parent}
+	cd.Folders = append(cd.Folders, fo)
+	cd.TreeNodes = append(cd.TreeNodes, model.CollectionNode{NodeID: fo.ID, NodeType: model.CollectionNodeTypeFolder, ProjectID: pid, ParentFolderID: parent, SortOrder: len(cd.TreeNodes)})
+	return &fo, nil
+}
+func (f *fakeBackend) RenameFolder(pid, id, name string) error {
+	cd := f.colls[pid]
+	for i := range cd.Folders {
+		if cd.Folders[i].ID == id {
+			cd.Folders[i].Name = name
+		}
+	}
+	return nil
+}
+func (f *fakeBackend) DeleteFolder(pid, id string) error { return f.removeNode(pid, id) }
+func (f *fakeBackend) DuplicateFolder(pid, id string) (*model.Folder, error) {
+	return f.CreateFolder(pid, "", "copy")
+}
+func (f *fakeBackend) CreateRequestItem(pid, folder, name string) (*model.RequestItem, error) {
+	cd := f.colls[pid]
+	it := model.RequestItem{ID: f.id("r"), Name: name, Method: "GET", ProjectID: pid, FolderID: folder, Body: model.RequestBody{Type: "none"}, Auth: model.AuthConfig{Type: "none"}}
+	cd.Requests = append(cd.Requests, it)
+	cd.TreeNodes = append(cd.TreeNodes, model.CollectionNode{NodeID: it.ID, NodeType: model.CollectionNodeTypeRequest, ProjectID: pid, ParentFolderID: folder, SortOrder: len(cd.TreeNodes)})
+	return &it, nil
+}
+func (f *fakeBackend) SaveRequestItem(r model.RequestItem) error {
+	cd := f.colls[r.ProjectID]
+	for i := range cd.Requests {
+		if cd.Requests[i].ID == r.ID {
+			cd.Requests[i] = r
+			return nil
+		}
+	}
+	return errors.New("request not found")
+}
+func (f *fakeBackend) DeleteRequestItem(pid, id string) error { return f.removeNode(pid, id) }
+func (f *fakeBackend) removeNode(pid, id string) error {
+	cd := f.colls[pid]
+	for i := range cd.Requests {
+		if cd.Requests[i].ID == id {
+			cd.Requests = append(cd.Requests[:i], cd.Requests[i+1:]...)
+			break
+		}
+	}
+	for i := range cd.Folders {
+		if cd.Folders[i].ID == id {
+			cd.Folders = append(cd.Folders[:i], cd.Folders[i+1:]...)
+			break
+		}
+	}
+	for i := range cd.TreeNodes {
+		if cd.TreeNodes[i].NodeID == id {
+			cd.TreeNodes = append(cd.TreeNodes[:i], cd.TreeNodes[i+1:]...)
+			break
+		}
+	}
+	return nil
+}
+func (f *fakeBackend) RenameRequest(pid, id, name string) error {
+	cd := f.colls[pid]
+	for i := range cd.Requests {
+		if cd.Requests[i].ID == id {
+			cd.Requests[i].Name = name
+		}
+	}
+	return nil
+}
+func (f *fakeBackend) DuplicateRequest(pid, id string) (*model.RequestItem, error) {
+	return f.CreateRequestItem(pid, "", "copy")
+}
+func (f *fakeBackend) ListEnvironments(pid string) ([]model.Environment, error) {
+	return append([]model.Environment(nil), f.envs[pid]...), nil
+}
+func (f *fakeBackend) CreateEnvironment(pid, name string) (*model.Environment, error) {
+	e := model.Environment{ID: f.id("e"), Name: name, ProjectID: pid}
+	f.envs[pid] = append(f.envs[pid], e)
+	return &e, nil
+}
+func (f *fakeBackend) SaveEnvironment(env model.Environment) error {
+	for i := range f.envs[env.ProjectID] {
+		if f.envs[env.ProjectID][i].ID == env.ID {
+			f.envs[env.ProjectID][i] = env
+		}
+	}
+	return nil
+}
+func (f *fakeBackend) DeleteEnvironment(pid, id string) error {
+	es := f.envs[pid]
+	for i := range es {
+		if es[i].ID == id {
+			f.envs[pid] = append(es[:i], es[i+1:]...)
+		}
+	}
+	return nil
+}
+func (f *fakeBackend) SendRequestWithEnv(in model.SendRequestInput, pid, envID string) (*model.HttpResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sent = append(f.sent, in)
+	if f.sendErr != nil {
+		return nil, f.sendErr
+	}
+	return f.resp, nil
+}
+func (f *fakeBackend) SendRequestWithEnvStream(in model.SendRequestInput, pid, envID string, emit func(model.StreamChunk)) (*model.HttpResponse, error) {
+	return f.SendRequestWithEnv(in, pid, envID)
+}
+func (f *fakeBackend) CancelHTTPRequest(id string) bool {
+	f.canceled = append(f.canceled, id)
+	return true
+}
+func (f *fakeBackend) ImportCurl(cmd string) (*model.SendRequestInput, error) {
+	return &model.SendRequestInput{Method: "POST", URL: "https://curl.example/x", Body: model.RequestBody{Type: "raw", Raw: "hi"}}, nil
+}
+func (f *fakeBackend) GetHistory(pid string) ([]model.HistoryEntry, error) {
+	return f.history[pid], nil
+}
+func (f *fakeBackend) ClearHistory(pid string) error                { f.history[pid] = nil; return nil }
+func (f *fakeBackend) ExportProjectJSON(pid string) (string, error) { return "{}", nil }
+func (f *fakeBackend) PreviewImportFromFile(pid, format, content string) (*service.ImportPreview, error) {
+	return &service.ImportPreview{Kind: "postman", Content: content}, nil
+}
+func (f *fakeBackend) PreviewImportFromURL(pid, format, u string) (*service.ImportPreview, error) {
+	return &service.ImportPreview{Kind: "swagger", ResolvedURL: u}, nil
+}
+func (f *fakeBackend) ImportCollectionWithStrategy(pid, format, content, u, strategy string) error {
+	return nil
+}
+func (f *fakeBackend) CreateBackup() (string, error)   { return "/tmp/backup", nil }
+func (f *fakeBackend) RestoreBackup(path string) error { return nil }
+func (f *fakeBackend) OpenFileDialogJSON(*mygo.Window) (string, error) {
+	return "", nil
+}
+func (f *fakeBackend) OpenFileDialogAny(*mygo.Window) (string, error) { return "", nil }
+func (f *fakeBackend) SaveFileDialogJSON(*mygo.Window, string, string) error {
+	return nil
+}
+func (f *fakeBackend) SaveTextFile(*mygo.Window, string, string) error       { return nil }
+func (f *fakeBackend) SaveResponseToFile(*mygo.Window, string, string) error { return nil }
+
+// newTestApp 创建测试用的应用状态与 UI 测试器（不创建真实窗口）。
+func newTestApp(t *testing.T, be *fakeBackend) (*app, *ui.Tester) {
+	t.Helper()
+	a := newApp(be)
+	tt := ui.NewTester(a.view, 1200, 760)
+	return a, tt
+}
