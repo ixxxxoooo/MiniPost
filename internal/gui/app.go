@@ -48,6 +48,9 @@ type app struct {
 	sideQuery     string            // 侧栏搜索词
 	histCollapsed map[string]bool   // 已折叠的历史日期分组
 	cardHot       string            // 当前保持显示的悬停卡片
+	homeName      string            // 项目主页“新建项目”输入框
+	themePick     string            // 正在选择主题色的项目 ID
+	descDraft     map[string]string // 项目描述的编辑草稿
 	bulk          map[string]string // 处于批量编辑模式的键值表及其文本
 	showHome      bool
 	splitPct      float32
@@ -73,6 +76,7 @@ func newApp(be Backend) *app {
 		nav:        navState{idx: -1},
 		histRow:    -1,
 		bulk:       map[string]string{},
+		descDraft:  map[string]string{},
 		splitPct:   55,
 		consolePct: 72,
 	}

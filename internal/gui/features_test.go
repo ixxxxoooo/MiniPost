@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"minipost/internal/client"
 	"minipost/internal/model"
 	"minipost/internal/service"
 )
@@ -124,13 +125,18 @@ func TestCookiesAddAndSent(t *testing.T) {
 	a, tt, be := zhApp(t)
 	a.openCookies()
 	s := &a.overlays.cookies
-	s.adding.Domain, s.adding.Name, s.adding.Value = "example.com", "sid", "abc"
+	s.domInput = "example.com"
 	tt.Frame()
-	if err := tt.Click("添加"); err != nil {
+	if err := tt.Click("添加"); err != nil { // 添加域名，同时建一条空白 Cookie
 		t.Fatal(err)
 	}
-	if got := a.jar.All(); len(got) != 1 || got[0].Name != "sid" {
-		t.Fatalf("应添加 Cookie，实际 %+v", got)
+	if s.domain != "example.com" || len(a.jar.All()) != 1 {
+		t.Fatalf("应选中并添加域名，实际 domain=%q cookies=%+v", s.domain, a.jar.All())
+	}
+	id := a.jar.All()[0].ID
+	a.jar.Update(id, func(x *client.Cookie) { x.Name, x.Value = "sid", "abc" })
+	if got := a.jar.All(); len(got) != 1 || got[0].Name != "sid" || !got[0].Enabled {
+		t.Fatalf("应编辑 Cookie，实际 %+v", got)
 	}
 	s.open = false
 	a.openRequest(a.coll.Requests[0].ID)
@@ -157,9 +163,12 @@ func TestImportPreviewAppliesStrategy(t *testing.T) {
 		t.Fatalf("应列出冲突，实际 %q", tt.Texts())
 	}
 	a.overlays.imp.strategy = 1
-	if err := tt.Click("导入"); err != nil {
-		t.Fatal(err)
+	tt.Frame()
+	r, ok := tt.Find("取消") // 底部按钮：取消在左，导入在右
+	if !ok {
+		t.Fatalf("应显示底部按钮，实际 %q", tt.Texts())
 	}
+	tt.ClickAt(r.X+r.W+8+30, r.Y+r.H/2)
 	if be.importedStrategy != service.ImportStrategyUpdate {
 		t.Fatalf("应按所选策略导入，实际 %q", be.importedStrategy)
 	}
@@ -169,7 +178,7 @@ func TestConsolePanelToggle(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	a.setConsoleOpen(true)
 	tt.Frame()
-	if !tt.HasText("发送请求后会在这里显示记录") {
+	if !tt.HasText("暂无请求日志") {
 		t.Fatalf("打开控制台后应显示面板，实际 %q", tt.Texts())
 	}
 	a.openRequest(a.coll.Requests[0].ID)

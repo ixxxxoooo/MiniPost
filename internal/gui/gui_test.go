@@ -43,7 +43,7 @@ func TestHomeShownWhenNoProject(t *testing.T) {
 	a := newApp(be)
 	a.set.Locale = localeZH
 	tt := ui.NewTester(a.view, 1200, 760)
-	if !tt.HasText("项目") || !tt.HasText("新建项目") {
+	if !tt.HasText("项目主页") || !tt.HasText("新建项目") {
 		t.Fatalf("没有项目时应显示项目首页，实际文本 %q", tt.Texts())
 	}
 }
@@ -53,11 +53,9 @@ func TestCreateProjectFromHome(t *testing.T) {
 	a := newApp(be)
 	a.set.Locale = localeZH
 	tt := ui.NewTester(a.view, 1200, 760)
+	a.homeName = "我的项目"
+	tt.Frame()
 	if err := tt.Click("新建项目"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Type("我的项目")
-	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
 	}
 	if len(be.projects) != 1 || be.projects[0].Name != "我的项目" {
@@ -226,9 +224,10 @@ func TestDeleteRequestClosesTab(t *testing.T) {
 
 func TestImportCurlCreatesRequest(t *testing.T) {
 	a, tt, be := zhApp(t)
-	a.overlays.curl = curlState{open: true, text: "curl https://curl.example/x -d hi"}
+	a.openImport(importCurlMode)
+	a.overlays.imp.curl = "curl https://curl.example/x -d hi"
 	tt.Frame()
-	if err := tt.Click("导入"); err != nil {
+	if err := tt.Click("导入 (⌘Enter)"); err != nil {
 		t.Fatal(err)
 	}
 	var found bool

@@ -70,7 +70,7 @@ func (a *app) prefsView(c *ui.Context) {
 	p := a.p
 	changed := false
 	a.dialog(c, &s.open, 880, 600, 14, func() {
-		ui.Row(c).Height(598).FillWidth().AlignItems(ui.Stretch).Children(func() {
+		ui.Row(c).FillWidth().FillHeight().AlignItems(ui.Stretch).Children(func() {
 			// 左栏：210px，次级背景。
 			ui.Row(c).Width(210).Shrink(0).Background(p.surface2).AlignItems(ui.Stretch).Children(func() {
 				ui.Column(c).Grow(1).Basis(0).Padding(12).Gap(4).Children(func() {

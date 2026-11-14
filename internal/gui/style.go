@@ -335,6 +335,7 @@ type fieldOpts struct {
 	bg     *ui.Color
 	flat   bool // 无边框（用于表格单元格）
 	mono   bool
+	focus  bool // 出现时自动获得焦点
 }
 
 // input 绘制 TablePlus 风格的输入框：圆角边框，获得焦点时边框变为强调色。返回内部输入框以便读取 Changed/Submitted。
@@ -378,6 +379,9 @@ func (a *app) input(c *ui.Context, v *string, ph string, o fieldOpts) ui.Element
 		}
 		in = ui.TextInputBase(c, v).Placeholder(ph).PlaceholderColor(p.muted).FontSize(o.fs).TextColor(p.fg).
 			Grow(1).Basis(0).FillHeight().PaddingX(pad)
+		if o.focus {
+			in = in.AutoFocus()
+		}
 	})
 	return in
 }
@@ -514,13 +518,14 @@ func (a *app) edTheme() *editor.Theme {
 // dialog 绘制居中的对话框：半透明遮罩 + 固定宽高、圆角、细边框与大阴影的面板（同旧版弹窗）。
 func (a *app) dialog(c *ui.Context, open *bool, w, h, radius float32, fn func()) {
 	p := a.p
+	cw, ch := c.Size()
 	ui.DialogBase(c, open, func(back, panel ui.Element) {
 		back.Background(ui.RGBA(0, 0, 0, 0.4))
 		panel.Width(w).Radius(radius).Background(p.surface).Border(1, p.border).Clip().Shadow(0, 20, 50, 0, ui.RGBA(0, 0, 0, 0.3))
 		if h > 0 {
 			panel.Height(h)
 		}
-		panel.MaxWidth(w).MaxHeight(h + 1000)
+		panel.MaxWidth(cw * 0.92).MaxHeight(ch * 0.88)
 		fn()
 	})
 }
@@ -567,4 +572,58 @@ func (a *app) segmented(c *ui.Context, key string, sel *int, labels []string) bo
 		}
 	})
 	return changed
+}
+
+// 对话框按钮的种类。
+const (
+	dlgNormal  = iota // 描边按钮
+	dlgPrimary        // 强调色实心
+	dlgDanger         // 危险色实心
+)
+
+// dlgButton 是对话框底部的 32px 高按钮（圆角 8，12px 文字）。返回是否被点击。
+func (a *app) dlgButton(c *ui.Context, key, label string, kind int, disabled bool) bool {
+	p := a.p
+	o := btnOpts{h: 32, radius: radiusInput, padX: 12, key: key, disabled: disabled}
+	col, wt := p.fg, 0
+	switch kind {
+	case dlgPrimary:
+		bg := p.accent
+		o.bg, o.hoverBg = &bg, &p.accentHover
+		col, wt = p.accentFg, 500
+	case dlgDanger:
+		bg := p.danger
+		o.bg, o.hoverBg = &bg, &bg
+		col, wt = ui.Hex("#ffffff"), 500
+	default:
+		bd := p.btnBorder
+		o.border = &bd
+	}
+	if disabled {
+		col = col.Alpha(0.5)
+	}
+	return a.button(c, o, func(bool) { txt(c, label, fsBase, col, wt) })
+}
+
+// stdDialog 绘制标准对话框：head、body 与可选的 foot 自上而下排列，head 与 foot 与正文之间有细分隔线。
+func (a *app) stdDialog(c *ui.Context, open *bool, w float32, head, body, foot func()) {
+	p := a.p
+	a.dialog(c, open, w, 0, 12, func() {
+		ui.Column(c).FillWidth().Children(func() {
+			ui.Row(c).FillWidth().PaddingX(16).PaddingY(12).AlignItems(ui.Center).Justify(ui.SpaceBetween).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(head)
+			ui.Column(c).FillWidth().Children(body)
+			if foot != nil {
+				ui.Row(c).FillWidth().PaddingX(16).PaddingY(12).Gap(8).AlignItems(ui.Center).Justify(ui.End).BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(foot)
+			}
+		})
+	})
+}
+
+// dlgTitle 是对话框标题行：16px 粗体标题，closable 时右侧带关闭按钮。
+func (a *app) dlgTitle(c *ui.Context, open *bool, title string, closable bool) {
+	p := a.p
+	txt(c, title, 16, p.fg, 600)
+	if closable && a.iconButton(c, "clear", a.t("关闭", "Close"), 12, p.muted) {
+		*open = false
+	}
 }

@@ -68,7 +68,7 @@ func (a *app) searchRow(c *ui.Context) {
 	ui.Row(c).FillWidth().Shrink(0).Padding(7.5, 8, 6, 8).Gap(4).AlignItems(ui.Center).Children(func() {
 		a.input(c, &a.sideQuery, a.t("搜索请求...", "Search requests..."), fieldOpts{icon: "search", radius: radiusInput, key: "side-search"})
 		if a.iconButton(c, "fileImport", a.t("导入", "Import"), 14, p.fg2) {
-			a.later(a.importFromFile)
+			a.later(func() { a.openImport(importFile) })
 		}
 		if a.iconButton(c, "folderAdd", a.t("新建文件夹", "New folder"), 14, p.fg2) {
 			a.later(func() { a.newFolder("") })

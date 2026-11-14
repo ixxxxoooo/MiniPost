@@ -27,7 +27,7 @@ func (a *app) titleBar(c *ui.Context) {
 
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
 			if a.iconButton(c, "fileImport", a.t("导入 cURL", "Import cURL")+" (⌘I)", 14, p.fg2) {
-				a.later(func() { a.overlays.curl = curlState{open: true} })
+				a.later(func() { a.openImport(importCurlMode) })
 			}
 			themeIcon, themeTip := "moon", a.t("切换为深色主题", "Switch to dark theme")
 			if p.dark {

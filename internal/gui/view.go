@@ -28,8 +28,6 @@ func (a *app) view(c *ui.Context) {
 
 // overlayViews 绘制所有弹层，放在主界面之后以显示在最上层。
 func (a *app) overlayViews(c *ui.Context) {
-	a.projectDialogView(c)
-	a.curlDialogView(c)
 	a.prefsView(c)
 	a.importView(c)
 	a.cookiesView(c)

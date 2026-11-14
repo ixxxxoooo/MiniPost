@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"minipost/internal/client"
 	"minipost/internal/model"
 )
 
@@ -121,4 +122,41 @@ func TestVisualEnv(t *testing.T) {
 	a.openEnvManagerFor(e.ID)
 	tt.Frame()
 	snapshot(t, tt, "v_env")
+}
+
+func TestVisualCookiesConsole(t *testing.T) {
+	a, tt, _ := visualApp(t, false)
+	_ = tt.Click("用户服务")
+	_ = tt.Click("获取用户列表")
+	_ = tt.Click("Send")
+	a.jar.Add(client.Cookie{Domain: "api.example.com", Name: "sid", Value: "abc123", Path: "/", Enabled: true, HTTPOnly: true})
+	a.jar.Add(client.Cookie{Domain: "example.org", Name: "theme", Value: "dark", Path: "/", Enabled: true})
+	a.setConsoleOpen(true)
+	a.console[0].open = true
+	tt.Frame()
+	snapshot(t, tt, "v_console")
+	a.openCookies()
+	tt.Frame()
+	snapshot(t, tt, "v_cookies")
+}
+
+func TestVisualHomeDialogs(t *testing.T) {
+	a, tt, _ := visualApp(t, false)
+	a.showHome = true
+	tt.Frame()
+	snapshot(t, tt, "v_home")
+	a.showHome = false
+	a.openImport(importFile)
+	tt.Frame()
+	snapshot(t, tt, "v_import_file")
+	_ = tt.Click("cURL 导入")
+	snapshot(t, tt, "v_import_curl")
+	a.overlays.imp.open = false
+	a.overlays.askConfirm("确认删除", "确定删除请求“获取用户列表”吗?", "删除", func() {})
+	tt.Frame()
+	snapshot(t, tt, "v_confirm")
+	a.overlays.confirm.open = false
+	a.overlays.askClose(0, "获取用户列表")
+	tt.Frame()
+	snapshot(t, tt, "v_close")
 }
