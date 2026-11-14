@@ -175,6 +175,9 @@ func TestBuildSendInputPipeline(t *testing.T) {
 	set.SSLTLSKeyLog = true
 	in, info := BuildSendInput(d, "rid", SendEnv{Vars: []Var{{"base", "https://example.com"}}, Settings: set, Jar: jar})
 
+	if in.SourceID != d.ID || in.RequestID != "rid" {
+		t.Fatalf("SourceID 应为草稿 ID、RequestID 为发送 ID: %q %q", in.SourceID, in.RequestID)
+	}
 	if in.URL != "https://example.com/items?a=1" || info.ResolvedURL != in.URL {
 		t.Fatalf("url: %s", in.URL)
 	}

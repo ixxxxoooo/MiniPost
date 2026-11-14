@@ -21,6 +21,7 @@ func normalizeCurlInput(input model.SendRequestInput) (model.SendRequestInput, e
 		return input, appErrors.Wrap("INVALID_CURL", "cURL 命令解析失败", err)
 	}
 	parsed.Options = input.Options
+	parsed.SourceID = input.SourceID
 	return *parsed, nil
 }
 
@@ -126,6 +127,7 @@ func (a *App) sendRequestWithEnv(input model.SendRequestInput, projectID, envID 
 
 	if projectID != "" {
 		entry := &model.HistoryEntry{
+			RequestID:  input.SourceID,
 			Name:       input.URL,
 			Method:     input.Method,
 			URL:        input.URL,

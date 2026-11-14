@@ -3,6 +3,7 @@ package model
 // SendRequestInput 前端发送请求时传入的参数
 type SendRequestInput struct {
 	RequestID string          `json:"requestId,omitempty"`
+	SourceID  string          `json:"sourceId,omitempty"` // 发起本次发送的集合请求 ID，用于历史回溯；临时请求为空
 	Method    string          `json:"method"`
 	URL       string          `json:"url"`
 	Params    []KeyValue      `json:"params"`

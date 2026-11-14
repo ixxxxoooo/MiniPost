@@ -666,12 +666,3 @@ func historyClock(ts string) string {
 	}
 	return t.Local().Format("15:04")
 }
-
-// openFromHistory 点击历史记录：请求仍存在则打开，否则提示。
-func (a *app) openFromHistory(e historyItem) {
-	if _, ok := a.requestItem(e.RequestID); ok {
-		a.openRequest(e.RequestID)
-		return
-	}
-	a.toast(a.t("该请求已被删除", "This request no longer exists"))
-}

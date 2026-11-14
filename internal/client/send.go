@@ -76,7 +76,7 @@ func resolveKV(items []model.KeyValue, vars []Var) []model.KeyValue {
 // buildPayload 把草稿转换为发送载荷（仅保留启用行，并解析环境变量）。
 func buildPayload(d *Draft, requestID string, vars []Var) model.SendRequestInput {
 	in := model.SendRequestInput{
-		RequestID: requestID, Method: d.Method, URL: ResolveTemplate(d.URL, vars),
+		RequestID: requestID, SourceID: d.ID, Method: d.Method, URL: ResolveTemplate(d.URL, vars),
 		Params:  resolveKV(enabledKV(d.Params), vars),
 		Headers: dedupeHeaders(resolveKV(enabledKV(d.Headers), vars)),
 	}
