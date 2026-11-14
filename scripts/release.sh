@@ -3,11 +3,12 @@
 # 不走线上 CI 构建：安装包、更新包、增量包和 update-*.json 都在本机生成并直接上传，发布页只存放结果。
 #
 # 用法：先改 mygo.json 的 version、在 CHANGELOG.md 加对应的「## x.y.z」小节，提交后运行  scripts/release.sh
-#   SKIP_TESTS=1      跳过 go vet / go test（只在刚跑过时用）
+#   SKIP_TESTS=1      跳过 scripts/check.sh（gofmt / vet / staticcheck / -race 测试，只在刚跑过时用）
 #   DRAFT_ONLY=1      只上传草稿，不打 tag、不发布（先去页面检查再手动发布）
 # 更新签名私钥取自 MYGO_UPDATER_PRIVATE_KEY，缺省读 ~/Library/Application Support/mygo/update-keys/mygo-update.key。
 set -eu
 cd "$(dirname "$0")/.."
+. scripts/goenv.sh
 
 VERSION=$(go run ./scripts/version)
 TAG="v$VERSION"
@@ -30,8 +31,7 @@ fi
 export MYGO_UPDATER_PRIVATE_KEY
 
 if [ -z "${SKIP_TESTS:-}" ]; then
-  go vet ./...
-  go test ./...
+  scripts/check.sh
 fi
 
 echo "==> 本地构建并上传 ${TAG}（草稿）"

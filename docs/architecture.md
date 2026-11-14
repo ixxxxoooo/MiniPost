@@ -52,7 +52,8 @@ MiniPost 是 macOS 专用的轻量 HTTP 调试工具，界面是纯 Go 的 MyGo 
 
 ## 测试
 
-- 不使用 CI；提交前在本地跑 `go vet ./...`、`staticcheck ./...` 和 `go test -race ./...`。
+- 不使用 CI；提交前在本地跑 `scripts/check.sh`（gofmt、`go vet`、`staticcheck`、`go test -race`）。`staticcheck` 作为 `go.mod` 的 tool 依赖固定版本，用 `go tool staticcheck` 调用，不需要全局安装。
+- 脚本会先清掉环境里残留的 `GOROOT`（`scripts/goenv.sh`）：版本管理器写死的旧 `GOROOT` 会让编译器与标准库版本不匹配。手动跑 `go` 命令前如遇此报错，先 `unset GOROOT`。
 - 界面行为用 `ui.NewTester` 加 `fakeBackend` 测试（`internal/gui/*_test.go`）；设置 `MINIPOST_SNAPSHOT_DIR` 可输出截图。
 - 后端用临时目录的 `FileStore` 做集成式单元测试；门面与备份恢复的测试在 `internal/app`（`*_test.go`）。
 - 测试文件与被测代码放在同一目录；资源校验（如应用图标）放在资源所在的 `resources/`。

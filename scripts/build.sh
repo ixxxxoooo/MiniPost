@@ -15,7 +15,8 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 1
 fi
 
-command -v go >/dev/null 2>&1 || { echo "缺少命令: go(需要 Go 1.27 或更新版本)" >&2; exit 1; }
+# 校验 go 命令并让 GOROOT 与之一致(清掉环境里残留的旧 GOROOT)
+. "$ROOT_DIR/scripts/goenv.sh"
 
 # 优先使用 PATH 中的 mygo,其次使用 go install 的默认位置
 MYGO="$(command -v mygo || true)"
@@ -26,9 +27,5 @@ if [[ -z "$MYGO" ]]; then
   echo "缺少 mygo,请先安装: go install github.com/egoist/mygo/cmd/mygo@latest" >&2
   exit 1
 fi
-
-# 保证 GOROOT 与当前 go 命令一致,避免多版本 Go 并存时编译器与标准库不匹配
-GOROOT="$(go env GOROOT)"
-export GOROOT
 
 exec "$MYGO" build "$@"
