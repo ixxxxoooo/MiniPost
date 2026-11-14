@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"minipost/internal/client"
 	"minipost/internal/model"
 )
 
@@ -554,5 +555,72 @@ func TestConsoleFilter(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("没有符合筛选的日志") {
 		t.Fatalf("筛选后无结果时应提示：%q", tt.Texts())
+	}
+}
+
+// Auth 页预览文本：密钥一律用圆点遮盖，API Key 区分请求头与查询参数。
+func TestAuthPreview(t *testing.T) {
+	cases := []struct {
+		au   client.AuthDraft
+		want string
+	}{
+		{client.AuthDraft{Type: client.AuthNone}, ""},
+		{client.AuthDraft{Type: client.AuthBasic}, "Authorization: Basic •••••"},
+		{client.AuthDraft{Type: client.AuthBearer, Token: "secret"}, "Authorization: Bearer •••••"},
+		{client.AuthDraft{Type: client.AuthAPIKey, APIKeyName: "X-Key"}, "X-Key: •••••"},
+		{client.AuthDraft{Type: client.AuthAPIKey, APIKeyName: "k", APIKeyLocation: "query"}, "?k=•••••"},
+	}
+	for _, c := range cases {
+		got := authPreview(&c.au)
+		if got != c.want {
+			t.Errorf("authPreview(%v)=%q，应为 %q", c.au.Type, got, c.want)
+		}
+		if strings.Contains(got, "secret") {
+			t.Errorf("预览不应泄露密钥：%q", got)
+		}
+	}
+}
+
+// Auth 页：类型下拉显示当前类型，选 Bearer 后出现 Token 行与请求头预览；Auth 标签带锁。
+func TestAuthTabDropdown(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openRequest(a.coll.Requests[0].ID)
+	tt.Frame()
+	if err := tt.Click("Auth"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	for _, want := range []string{"认证类型", "None"} {
+		if !tt.HasText(want) {
+			t.Fatalf("Auth 页缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	tab := a.activeTab()
+	tab.draft.Auth.Type = client.AuthBearer
+	tab.draft.Auth.Token = "abc"
+	tt.Frame()
+	for _, want := range []string{"Bearer Token", "Token", "将自动添加请求头", "Authorization: Bearer •••••"} {
+		if !tt.HasText(want) {
+			t.Fatalf("Bearer 配置后缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	snapshot(t, tt, "auth_bearer")
+}
+
+// Body 标签显示类型徽标；格式化按钮为中文。
+func TestBodyTabBadgeAndBeautify(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openRequest(a.coll.Requests[0].ID)
+	a.activeTab().draft.Body.Type = client.BodyJSON
+	tt.Frame()
+	if !tt.HasText("JSON") {
+		t.Fatalf("Body 标签应带 JSON 徽标：%q", tt.Texts())
+	}
+	if err := tt.Click("Body"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("格式化") || !tt.HasText("urlencoded") {
+		t.Fatalf("Body 页应有 格式化 与 urlencoded：%q", tt.Texts())
 	}
 }

@@ -97,25 +97,6 @@ func dotPulse(elapsed time.Duration, i int) float32 {
 	return float32(0.25 + 0.75*(0.5-0.5*math.Cos(phase*2*math.Pi)))
 }
 
-// sendingIndicator 是响应区中央的等待提示：三个主题色圆点 + 文案 + 已用时间。
-func (a *app) sendingIndicator(c *ui.Context, t *tab) {
-	p := a.p
-	elapsed := time.Since(t.sendAt)
-	if t.sendAt.IsZero() {
-		elapsed = 0
-	}
-	c.AnimationFrame()
-	ui.Row(c.Key("sending")).Gap(10).AlignItems(ui.Center).Children(func() {
-		ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
-			for i := 0; i < 3; i++ {
-				ui.Box(c).Size(7, 7).Radius(3.5).Background(p.accent.Alpha(dotPulse(elapsed, i)))
-			}
-		})
-		txt(c, a.t("发送请求...", "Sending request..."), fsLarge, p.fg2, 0)
-		txtMono(c, sendingElapsed(elapsed), fsSmall, p.muted, 0)
-	})
-}
-
 // sendingElapsed 把已用时间写成 0.0s / 12.3s / 1m 05s，位数稳定，不会让整行抖动。
 func sendingElapsed(d time.Duration) string {
 	if d < 0 {

@@ -441,6 +441,7 @@ type fieldOpts struct {
 	iconSize, iconLeft, iconGap float32
 	// trail 非 nil 时在输入框右端绘制附加内容（如 ⌘K 提示），不参与输入。
 	trail func()
+	mono  bool // 输入文字使用等宽字体
 }
 
 // input 绘制 TablePlus 风格的输入框：圆角边框，获得焦点时边框变为强调色。返回内部输入框以便读取 Changed/Submitted。
@@ -498,6 +499,9 @@ func (a *app) input(c *ui.Context, v *string, ph string, o fieldOpts) ui.Element
 		}
 		in = ui.TextInputBase(c, v).Placeholder(ph).PlaceholderColor(p.muted).FontSize(o.fs).TextColor(p.fg).
 			Grow(1).Basis(0).FillHeight().PaddingX(pad)
+		if o.mono {
+			in = in.Font(monoFont)
+		}
 		if o.focus {
 			in = in.AutoFocus()
 		}
@@ -531,12 +535,23 @@ func (a *app) checkbox(c *ui.Context, key any, on *bool, disabled bool) bool {
 	return b.Changed()
 }
 
-// countZero 传给 pillTabs 表示「数量为 0 时也显示 (0)」（旧版响应头 / Cookies 标签）。
+// countZero 传给 pillTabs 表示「数量为 0 时也显示 0」（响应头 / Cookies 标签）。
 const countZero = -1
 
-// pillTabs 是 TablePlus 风格的分段标签（Params/Headers/Body/Auth、响应体/响应头等）：
-// 选中项有浅灰底，数量显示在名称后。返回是否切换了选项。
+// tabExtra 是标签名后的附加标记：badge 为等宽小标签（如 Body 的 JSON），lock 表示显示锁图标（Auth 已配置）。
+type tabExtra struct {
+	badge string
+	lock  bool
+}
+
+// pillTabs 是设计稿的下划线标签（Params/Headers/Body/Auth、响应体/响应头等）：
+// 选中项加粗并带 2px 强调色下划线，数量显示为名称后的灰色小徽标。返回是否切换了选项。
 func (a *app) pillTabs(c *ui.Context, key string, sel *int, labels []string, counts []int) bool {
+	return a.underlineTabs(c, key, sel, labels, counts, nil, 30)
+}
+
+// underlineTabs 是 pillTabs 的完整形态：h 为标签高度（含 2px 下划线），extras 可为 nil。
+func (a *app) underlineTabs(c *ui.Context, key string, sel *int, labels []string, counts []int, extras []tabExtra, h float32) bool {
 	p := a.p
 	changed := false
 	for i, l := range labels {
@@ -548,26 +563,43 @@ func (a *app) pillTabs(c *ui.Context, key string, sel *int, labels []string, cou
 		if n == countZero {
 			n = 0
 		}
-		h := float32(19)
-		if show {
-			h = 24
+		var ex tabExtra
+		if i < len(extras) {
+			ex = extras[i]
 		}
 		active := *sel == i
-		b := ui.ButtonBase(c.Key(key + l)).Height(h).Radius(6).PaddingX(10).Gap(4).AlignItems(ui.Center).Shrink(0)
-		col := p.muted
+		b := ui.ButtonBase(c.Key(key + l)).Height(h).PaddingX(10).AlignItems(ui.Center).Shrink(0)
+		col, w := p.muted, 500
 		hover := b.Hovered()
 		switch {
 		case active:
-			b = b.Background(p.selected)
-			col = p.fg
+			col, w = p.fg, 600
 		case hover:
 			col = p.fg2
 		}
 		b.Children(func() {
-			txtFlat(c, l, fsSmall, col, 500)
-			if show {
-				txtFlat(c, "("+itoa(n)+")", 10.4, p.muted, 500)
-			}
+			ui.Column(c).FillHeight().Children(func() {
+				ui.Row(c).Grow(1).Gap(5).AlignItems(ui.Center).Children(func() {
+					txtFlat(c, l, fsBase, col, w)
+					if show {
+						ui.Row(c).Height(15).PaddingX(5).Radius(8).Background(p.surface2).AlignItems(ui.Center).Children(func() {
+							txtMono(c, itoa(n), fsTiny, p.muted, 500)
+						})
+					}
+					if ex.badge != "" {
+						ui.Row(c).Height(15).PaddingX(5).Radius(4).Background(p.surface2).AlignItems(ui.Center).Children(func() {
+							txtMono(c, ex.badge, 9, p.muted, 500)
+						})
+					}
+					if ex.lock {
+						icon(c, "lock", 10, p.accent)
+					}
+				})
+				line := ui.Box(c).FillWidth().Height(2).Radius(1).Shrink(0)
+				if active {
+					line.Background(p.accent)
+				}
+			})
 		})
 		if b.Clicked() && !active {
 			*sel = i
@@ -583,12 +615,12 @@ func (a *app) kindPills(c *ui.Context, key string, sel *int, labels []string, pa
 	changed := false
 	for i, l := range labels {
 		active := *sel == i
-		b := ui.ButtonBase(c.Key(key + l)).Height(26).Radius(4).PaddingX(padX).AlignItems(ui.Center).Shrink(0)
+		b := ui.ButtonBase(c.Key(key + l)).Height(22).Radius(11).PaddingX(padX).AlignItems(ui.Center).Shrink(0)
 		col, w := p.muted, 0
 		switch {
 		case active:
-			b = b.Background(p.sideActive)
-			col, w = p.accent, 500
+			b = b.Background(p.selected)
+			col, w = p.fg, 600
 		case b.Hovered():
 			col = p.fg2
 		}
@@ -758,4 +790,30 @@ func (a *app) dlgTitle(c *ui.Context, open *bool, title string, closable bool) {
 	if closable && a.iconButton(c, "clear", a.t("关闭", "Close"), 12, p.muted) {
 		*open = false
 	}
+}
+
+// segTabs 是设计稿的分段控件（流式视图的“事件 / 合并文本”）：灰色轨道内，选中项为带细边的白底块。
+func (a *app) segTabs(c *ui.Context, key string, sel *int, labels []string) bool {
+	p := a.p
+	changed := false
+	ui.Row(c.Key(key)).Height(28).Padding(2).Gap(2).Radius(8).Background(p.hover).AlignItems(ui.Stretch).Shrink(0).Children(func() {
+		for i, l := range labels {
+			active := *sel == i
+			b := ui.ButtonBase(c.Key(key + l)).Radius(6).PaddingX(12).AlignItems(ui.Center).Justify(ui.Center)
+			col, w := p.fg2, 0
+			switch {
+			case active:
+				b = b.Background(p.surface).Border(1, p.border)
+				col, w = p.fg, 600
+			case b.Hovered():
+				col = p.fg
+			}
+			b.Children(func() { txt(c, l, fsBase, col, w) })
+			if b.Clicked() && !active {
+				*sel = i
+				changed = true
+			}
+		}
+	})
+	return changed
 }

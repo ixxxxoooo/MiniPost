@@ -332,7 +332,22 @@ func TestRequestErrorCardShowsDiagnosis(t *testing.T) {
 			t.Fatalf("错误卡片应包含 %q，实际 %q", want, tt.Texts())
 		}
 	}
+	// 设计稿 5A：诊断清单、请求失败胶囊、重试按钮
+	for _, want := range []string{"URL 格式正确", "域名解析成功 example.com", "连接被拒绝 example.com", "请求失败", "重试"} {
+		if !tt.HasText(want) {
+			t.Fatalf("失败诊断应包含 %q，实际 %q", want, tt.Texts())
+		}
+	}
 	snapshot(t, tt, "rb_error")
+	// 点击重试会再发一次请求
+	n := len(be.sent)
+	if err := tt.Click("重试"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(be.sent) != n+1 {
+		t.Fatalf("点击重试应重新发送，发送次数 %d → %d", n, len(be.sent))
+	}
 	if err := tt.Click("在控制台查看"); err != nil {
 		t.Fatal(err)
 	}

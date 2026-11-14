@@ -24,17 +24,18 @@ func (a *app) bodyTab(c *ui.Context, t *tab) {
 	}
 	ui.Column(c).Grow(1).Basis(0).Children(func() {
 		ui.Row(c).FillWidth().Shrink(0).PaddingX(8).Padding(6, 8).Gap(4).AlignItems(ui.Center).Children(func() {
-			if a.kindPills(c, "body", &kind, []string{"none", "form-data", "raw", "JSON", "x-www-form-urlencoded"}, 10) {
+			if a.kindPills(c, "body", &kind, []string{"none", "form-data", "raw", "JSON", "urlencoded"}, 10) {
 				d.Body.Type = bodyKinds[kind]
 			}
 			ui.Spacer(c)
 			if d.Body.Type == client.BodyJSON || d.Body.Type == client.BodyRaw {
-				if a.button(c, btnOpts{padX: 6, h: 20, noHover: true, key: "beautify"}, func(hover bool) {
+				if a.button(c, btnOpts{padX: 6, h: 20, gap: 4, noHover: true, key: "beautify"}, func(hover bool) {
 					col := p.accent
 					if hover {
 						col = p.accentHover
 					}
-					txt(c, "Beautify", 10.4, col, 0)
+					icon(c, "formatList", 11, col)
+					txt(c, a.t("格式化", "Beautify"), fsSmall, col, 500)
 				}) {
 					a.formatBody(t)
 				}

@@ -232,15 +232,20 @@ func TestHeadersTabListsAutoHeaders(t *testing.T) {
 	}
 	var found bool
 	for _, s := range tt.Texts() {
-		if strings.HasPrefix(s, "显示 ") {
+		if strings.Contains(s, "个自动请求头") {
 			found = true
 		}
 	}
 	if !found {
 		t.Fatalf("Headers 页应显示自动请求头折叠区，实际 %q", tt.Texts())
 	}
-	a.activeTab().autoOpen = true
+	if err := tt.Click("5 个自动请求头（Host、User-Agent、Accept…）"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
+	if !a.activeTab().autoOpen {
+		t.Fatal("点击折叠行应展开自动请求头")
+	}
 	if !tt.HasText("User-Agent") || !tt.HasText("Host") {
 		t.Fatalf("展开后应列出自动请求头，实际 %q", tt.Texts())
 	}

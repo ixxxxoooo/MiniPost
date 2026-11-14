@@ -37,3 +37,36 @@ func TestDescribeRequestError(t *testing.T) {
 		}
 	}
 }
+
+// 诊断清单：出错之前的步骤为通过，出错的那一步为失败，且主机名写进文案。
+func TestDiagnoseRequestError(t *testing.T) {
+	cases := []struct {
+		name, err, url string
+		okCount        int // 通过的步骤数（最后一步一定失败）
+		lastZH         string
+	}{
+		{"dns", "[DNS_LOOKUP_FAILED] 请求失败: lookup api.exmaple.dev: no such host", "https://api.exmaple.dev/x", 1, "域名解析失败 api.exmaple.dev"},
+		{"refused", "dial tcp 127.0.0.1:1: connection refused", "http://127.0.0.1:1/a", 2, "连接被拒绝 127.0.0.1:1"},
+		{"timeout", "context deadline exceeded", "example.com/a", 2, "请求超时 example.com"},
+		{"tls", "x509: certificate signed by unknown authority", "https://self.signed", 3, "TLS 握手或证书校验失败"},
+		{"closed", "unexpected EOF", "https://a.b", 2, "连接被提前关闭 a.b"},
+		{"other", "boom", "https://a.b", 1, "请求未能发送"},
+	}
+	for _, c := range cases {
+		steps := DiagnoseRequestError(ParseRequestError(c.err), c.url)
+		if len(steps) != c.okCount+1 {
+			t.Fatalf("%s: 步骤数 %d，应为 %d：%+v", c.name, len(steps), c.okCount+1, steps)
+		}
+		for i, s := range steps[:c.okCount] {
+			if !s.OK {
+				t.Errorf("%s: 第 %d 步应通过", c.name, i)
+			}
+		}
+		if last := steps[len(steps)-1]; last.OK || last.ZH != c.lastZH {
+			t.Errorf("%s: 最后一步应为失败「%s」，实际 %+v", c.name, c.lastZH, last)
+		}
+	}
+	if s := DiagnoseRequestError(ParsedRequestError{}, ""); len(s) != 1 || s[0].OK {
+		t.Errorf("空 URL 应只给出一步失败：%+v", s)
+	}
+}

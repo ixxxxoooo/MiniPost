@@ -284,13 +284,26 @@ func (a *app) requestPane(c *ui.Context, t *tab) {
 	ui.Column(c).Grow(1).Basis(0).Children(func() {
 		labels := []string{"Params", "Headers", "Body", "Auth"}
 		counts := []int{count(d.Params, false), count(d.Headers, true), 0, 0}
-		ui.Row(c).FillWidth().Height(28).Shrink(0).PaddingX(8).Gap(4).AlignItems(ui.Center).Children(func() {
-			a.pillTabs(c, "rq", &t.sub, labels, counts)
+		// 设计稿：Body 标签后显示请求体类型，Auth 已配置时显示锁
+		extras := make([]tabExtra, 4)
+		switch d.Body.Type {
+		case client.BodyJSON:
+			extras[2].badge = "JSON"
+		case client.BodyRaw:
+			extras[2].badge = "RAW"
+		case client.BodyFormData:
+			extras[2].badge = "FORM"
+		case client.BodyURLEncoded:
+			extras[2].badge = "URL"
+		}
+		extras[3].lock = d.Auth.Type != client.AuthNone && d.Auth.Type != ""
+		ui.Row(c).FillWidth().Height(30).Shrink(0).PaddingX(8).Gap(2).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(a.p.border).Children(func() {
+			a.underlineTabs(c, "rq", &t.sub, labels, counts, extras, 30)
 		})
-		ui.Column(c).Grow(1).Basis(0).Padding(4, 0, 0, 0).Children(func() {
+		ui.Column(c).Grow(1).Basis(0).Children(func() {
 			switch t.sub {
 			case 0:
-				if a.kvTableOpts(c, &d.Params, kvOpts{id: t.draft.ID + ":params", keyPH: a.t("参数名", "Key"), valPH: a.t("参数值", "Value")}) {
+				if a.kvTableOpts(c, &d.Params, kvOpts{id: t.draft.ID + ":params", keyPH: a.t("参数名", "Key"), valPH: a.t("参数值", "Value"), hint: a.t("查询参数 · 修改后自动同步到地址栏", "Query params · synced to the URL")}) {
 					d.URL = client.BuildURLWithParams(d.URL, d.Params)
 				}
 			case 1:

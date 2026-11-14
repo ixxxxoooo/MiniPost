@@ -28,21 +28,64 @@ type kvOpts struct {
 	keyPH  string
 	valPH  string
 	noDesc bool
-	t      *tab // 提供自动请求头显隐状态；nil 表示没有自动请求头
+	t      *tab   // 提供自动请求头显隐状态；nil 表示没有自动请求头
+	hint   string // 表格上方左侧的说明文字（没有自动请求头时显示）
 }
 
-// tableCell 画一个带右/下边框的表格单元（合并边框效果由表格容器补上左/上边框）。
+// kvSubhead 绘制表格上方的一行：左侧是自动请求头折叠开关（或说明文字），右侧是“批量编辑”。
+func (a *app) kvSubhead(c *ui.Context, rows *[]*client.Row, o kvOpts, auto []client.AutoHeader) {
+	p := a.p
+	ui.Row(c).FillWidth().Height(28).Shrink(0).PaddingX(12).AlignItems(ui.Center).Gap(6).Children(func() {
+		if len(auto) > 0 && o.t != nil {
+			name := "arrowRight"
+			if o.t.autoOpen {
+				name = "arrowDown"
+			}
+			names := make([]string, 0, 3)
+			for i, h := range auto {
+				if i == 3 {
+					break
+				}
+				names = append(names, h.Key)
+			}
+			label := fmt.Sprintf(a.t("%d 个自动请求头（%s…）", "%d auto headers (%s…)"), len(auto), strings.Join(names, a.t("、", ", ")))
+			if a.button(c, btnOpts{h: 22, padX: 2, gap: 4, noHover: true, key: "auto-toggle"}, func(hover bool) {
+				col := p.muted
+				if hover {
+					col = p.fg2
+				}
+				icon(c, name, 10, col)
+				txt(c, label, fsSmall, col, 0)
+			}) {
+				o.t.autoOpen = !o.t.autoOpen
+			}
+		} else if o.hint != "" {
+			txt(c, o.hint, fsSmall, p.muted, 0)
+		}
+		ui.Spacer(c)
+		if a.button(c, btnOpts{h: 22, padX: 4, gap: 4, noHover: true, key: "bulk-" + o.id}, func(hover bool) {
+			col := p.accent
+			if hover {
+				col = p.accentHover
+			}
+			icon(c, "formatList", 11, col)
+			txt(c, a.t("批量编辑", "Bulk Edit"), fsSmall, col, 500)
+		}) {
+			a.bulk[o.id] = serializeBulk(*rows)
+		}
+	})
+}
+
+// tableCell 画一个带下分隔线的表格单元。
 func (a *app) tableCell(c *ui.Context, grow, h float32, children func()) {
 	ui.Row(c).Grow(grow).Basis(0).Height(h).Shrink(1).AlignItems(ui.Center).
-		BorderWidth(0, 1, 1, 0).BorderColor(a.p.border).Children(children)
+		BorderWidth(0, 0, 1, 0).BorderColor(a.p.border).Children(children)
 }
 
-// tableFrame 是表格外框容器：左、上边框 + 8px 内边距的滚动区域。
+// tableFrame 是扁平表格的滚动容器：只有行间 1px 分隔线，没有外框和竖线。
 func (a *app) tableFrame(c *ui.Context, rows func()) {
 	ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
-		ui.Column(c).FillWidth().Padding(8).Children(func() {
-			ui.Column(c).FillWidth().BorderWidth(1, 0, 0, 1).BorderColor(a.p.border).Children(rows)
-		})
+		ui.Column(c).FillWidth().Padding(0, 8).Children(rows)
 	})
 }
 
@@ -70,7 +113,7 @@ func (a *app) kvCellInput(c *ui.Context, key string, v *string, ph string, mono 
 func (a *app) kvHeaderCell(c *ui.Context, grow float32, label string, extra func()) {
 	a.tableCell(c, grow, 25.5, func() {
 		ui.Row(c).FillWidth().PaddingX(8).AlignItems(ui.Center).Children(func() {
-			txtE(c, label, fsSmall, a.p.fg2, 600).Grow(1)
+			txtE(c, label, fsSmall, a.p.muted, 500).Grow(1)
 			if extra != nil {
 				extra()
 			}
@@ -92,45 +135,17 @@ func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {
 	if o.t != nil {
 		auto = client.AutoHeaders(o.t.draft, a.set, a.jar, a.vars(), a.t)
 	}
+	a.kvSubhead(c, rows, o, auto)
 	a.tableFrame(c, func() {
 		// 表头
 		ui.Row(c).FillWidth().Children(func() {
 			a.kvHeaderCell(c, colCheck, "", nil)
-			a.kvHeaderCell(c, colKey, o.keyPH, func() {
-				if len(auto) == 0 {
-					return
-				}
-				name, label := "eye", a.t("显示", "Show")
-				if o.t.autoOpen {
-					name, label = "viewOff", a.t("隐藏", "Hide")
-				} else {
-					label += " " + itoa(len(auto))
-				}
-				bg := p.surface2
-				if a.button(c, btnOpts{w: 72, h: 16, radius: 8, padX: 6, gap: 4, bg: &bg, border: &p.border, noHover: true, key: "auto-toggle"}, func(bool) {
-					icon(c, name, 10, p.fg2)
-					txt(c, label, fsTiny, p.fg2, 500)
-				}) {
-					o.t.autoOpen = !o.t.autoOpen
-				}
-			})
+			a.kvHeaderCell(c, colKey, o.keyPH, nil)
 			a.kvHeaderCell(c, colValue, o.valPH, nil)
 			if !o.noDesc {
 				a.kvHeaderCell(c, colDesc, a.t("说明", "Description"), nil)
 			}
-			a.tableCell(c, colAct, 25.5, func() {
-				ui.Row(c).FillWidth().PaddingX(4).Justify(ui.End).Children(func() {
-					if a.button(c, btnOpts{noHover: true, key: "bulk-" + o.id}, func(hover bool) {
-						col := p.muted
-						if hover {
-							col = p.accent
-						}
-						txt(c, a.t("批量编辑", "Bulk Edit"), fsTiny, col, 700)
-					}) {
-						a.bulk[o.id] = serializeBulk(*rows)
-					}
-				})
-			})
+			a.tableCell(c, colAct, 25.5, func() {})
 		})
 		// 自动请求头（只读，可单独关闭）
 		if o.t != nil && o.t.autoOpen {

@@ -3,6 +3,7 @@ package gui
 import (
 	"image"
 	"image/color"
+	"strings"
 	"testing"
 	"time"
 
@@ -133,12 +134,12 @@ func TestShimmerDrawnWhileSending(t *testing.T) {
 			tt.Frame()
 			busy := tt.Image()
 			snapshot(t, tt, "sending")
-			if !tt.HasText("发送请求...") {
+			if !tt.HasText("正在等待 example.com 响应首字节…") {
 				t.Fatalf("发送中应显示提示，实际 %q", tt.Texts())
 			}
-			title, ok := tt.Find("响应")
+			title, ok := tt.Find("响应体")
 			if !ok {
-				t.Fatal("找不到响应标题")
+				t.Fatal("找不到响应标签")
 			}
 			tb.sending, tb.sendAt = false, time.Now().Add(-time.Hour)
 			tt.Frame()
@@ -159,7 +160,7 @@ func TestSendingIndicatorShowsElapsed(t *testing.T) {
 	tt.Frame()
 	found := false
 	for _, s := range tt.Texts() {
-		if len(s) >= 4 && s[len(s)-1] == 's' && s[0] == '2' && s[1] == '.' {
+		if strings.Contains(s, "发送中") && strings.Contains(s, "2.3s") {
 			found = true
 		}
 	}

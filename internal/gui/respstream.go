@@ -191,7 +191,7 @@ func (a *app) streamView(c *ui.Context, rs *respState) {
 			}
 			ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Children(func() {
 				if canMerge {
-					a.pillTabs(c, "ssv", &v.view, []string{a.t("事件", "Events"), a.t("合并文本", "Merged text")}, nil)
+					a.segTabs(c, "ssv", &v.view, []string{a.t("事件", "Events"), a.t("合并文本", "Merged text")})
 				}
 				if v.view == 0 {
 					ui.Row(c).Grow(1).Basis(0).Gap(4).AlignItems(ui.Center).Children(func() {

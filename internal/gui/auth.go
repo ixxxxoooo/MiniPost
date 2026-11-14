@@ -8,61 +8,122 @@ import (
 
 var authKinds = []string{client.AuthNone, client.AuthBasic, client.AuthBearer, client.AuthAPIKey}
 
-// authField 绘制带标题的输入框：标题 10.4px 次要色，输入框 28px 高、圆角 8、等宽字体。
-func (a *app) authField(c *ui.Context, label string, value *string, password bool) {
+// authLabelW 是 Auth 页左侧标签列宽度。
+const authLabelW = 84
+
+// authField 绘制一行“标签 + 输入框”：标签固定列宽，输入框等宽字体；secret 为 true 时带显示/隐藏开关。
+func (a *app) authField(c *ui.Context, label string, value *string, secret bool) {
 	p := a.p
-	ui.Column(c).FillWidth().MaxWidth(448).Gap(4).Shrink(0).Children(func() {
-		txt(c, label, 10.4, p.fg2, 0)
-		in := a.input(c, value, "", fieldOpts{h: 28, radius: radiusInput, padX: 12, fs: fsVXs, key: "af:" + label})
-		if password {
+	ui.Row(c).FillWidth().Shrink(0).Gap(12).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Width(authLabelW).Shrink(0).Children(func() { txt(c, label, fsBase, p.fg2, 500) })
+		opts := fieldOpts{h: 28, radius: radiusInput, padX: 10, fs: fsBase, key: "af:" + label, mono: true}
+		if secret {
+			opts.trail = func() {
+				name, tip := "eye", a.t("显示", "Show")
+				if a.authReveal {
+					name, tip = "viewOff", a.t("隐藏", "Hide")
+				}
+				if a.iconButton(c, name, tip, 13, p.muted) {
+					a.authReveal = !a.authReveal
+				}
+			}
+		}
+		in := a.input(c, value, "", opts)
+		if secret && !a.authReveal {
 			in.Password()
 		}
 	})
 }
 
-// authTab 绘制 Auth 子标签：类型标签行与对应表单。
+// authTypeLabel 返回认证类型在下拉框里显示的名字。
+func (a *app) authTypeLabel(typ string) string {
+	switch typ {
+	case client.AuthBasic:
+		return "Basic Auth"
+	case client.AuthBearer:
+		return "Bearer Token"
+	case client.AuthAPIKey:
+		return "API Key"
+	}
+	return "None"
+}
+
+// authPreview 返回“将自动添加请求头”提示里的预览文本（密钥以圆点遮盖）；不需要提示时返回空串。
+func authPreview(au *client.AuthDraft) string {
+	const mask = "•••••"
+	switch au.Type {
+	case client.AuthBasic:
+		return "Authorization: Basic " + mask
+	case client.AuthBearer:
+		return "Authorization: Bearer " + mask
+	case client.AuthAPIKey:
+		name := au.APIKeyName
+		if name == "" {
+			name = "API-Key"
+		}
+		if au.APIKeyLocation == "query" {
+			return "?" + name + "=" + mask
+		}
+		return name + ": " + mask
+	}
+	return ""
+}
+
+// authTab 绘制 Auth 子标签：类型下拉 + 各类型表单 + 将生成的请求头提示。
 func (a *app) authTab(c *ui.Context, t *tab) {
 	p := a.p
 	au := &t.draft.Auth
-	kind := 0
-	for i, k := range authKinds {
-		if k == au.Type {
-			kind = i
-		}
-	}
-	ui.Column(c).Grow(1).Basis(0).Padding(8).Children(func() {
-		ui.Row(c).FillWidth().Shrink(0).Gap(4).AlignItems(ui.Center).Padding(0, 0, 12, 0).Children(func() {
-			if a.kindPills(c, "auth", &kind, []string{"None", "Basic", "Bearer", "API Key"}, 8) {
-				au.Type = authKinds[kind]
-			}
-		})
-		ui.Column(c).FillWidth().PaddingStart(8).Gap(8).Children(func() {
-			switch au.Type {
-			case client.AuthBasic:
-				a.authField(c, a.t("用户名", "Username"), &au.Username, false)
-				a.authField(c, a.t("密码", "Password"), &au.Password, true)
-			case client.AuthBearer:
-				a.authField(c, "Token", &au.Token, false)
-			case client.AuthAPIKey:
-				a.authField(c, "Key", &au.APIKeyName, false)
-				a.authField(c, "Value", &au.APIKeyValue, false)
-				ui.Column(c).Gap(4).Shrink(0).Children(func() {
-					txt(c, a.t("添加位置", "Add to"), 10.4, p.fg2, 0)
-					loc := 0
-					if au.APIKeyLocation == "query" {
-						loc = 1
-					}
-					ui.Row(c).Gap(8).Children(func() {
-						if a.kindPills(c, "akloc", &loc, []string{"Header", "Query Param"}, 8) {
-							au.APIKeyLocation = []string{"header", "query"}[loc]
+	ui.Column(c).Grow(1).Basis(0).Padding(16, 16).Gap(12).Children(func() {
+		ui.Row(c).FillWidth().Shrink(0).Gap(12).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Width(authLabelW).Shrink(0).Children(func() { txt(c, a.t("认证类型", "Auth type"), fsBase, p.fg2, 500) })
+			ui.ButtonBase(c.Key("authtype")).Width(200).Height(28).Radius(radiusInput).PaddingX(10).Gap(8).AlignItems(ui.Center).
+				Border(1, p.btnBorder).Background(p.surface).
+				PopoverMenuButton(func(m *ui.Menu) {
+					for _, k := range authKinds {
+						if m.Item(a.authTypeLabel(k)).Checked(au.Type == k || (k == client.AuthNone && au.Type == "")).Chosen() {
+							k := k
+							a.later(func() { au.Type = k })
 						}
-					})
-				})
-			default:
-				ui.Row(c).FillWidth().Padding(24, 0).Justify(ui.Center).Children(func() {
-					txt(c, a.t("此请求不需要认证", "This request does not require authentication"), 10.4, p.muted, 0)
-				})
-			}
+					}
+				}).Children(func() {
+				txt(c, a.authTypeLabel(au.Type), fsBase, p.fg, 0)
+				ui.Spacer(c)
+				icon(c, "arrowDown", 9, p.muted)
+			})
+			txt(c, "None / Basic / Bearer / API Key", fsSmall, p.muted, 0)
 		})
+		switch au.Type {
+		case client.AuthBasic:
+			a.authField(c, a.t("用户名", "Username"), &au.Username, false)
+			a.authField(c, a.t("密码", "Password"), &au.Password, true)
+		case client.AuthBearer:
+			a.authField(c, "Token", &au.Token, true)
+		case client.AuthAPIKey:
+			a.authField(c, "Key", &au.APIKeyName, false)
+			a.authField(c, "Value", &au.APIKeyValue, true)
+			ui.Row(c).FillWidth().Shrink(0).Gap(12).AlignItems(ui.Center).Children(func() {
+				ui.Row(c).Width(authLabelW).Shrink(0).Children(func() { txt(c, a.t("添加位置", "Add to"), fsBase, p.fg2, 500) })
+				loc := 0
+				if au.APIKeyLocation == "query" {
+					loc = 1
+				}
+				if a.kindPills(c, "akloc", &loc, []string{"Header", "Query Param"}, 10) {
+					au.APIKeyLocation = []string{"header", "query"}[loc]
+				}
+			})
+		default:
+			ui.Row(c).FillWidth().Padding(24, 0).Justify(ui.Center).Children(func() {
+				txt(c, a.t("此请求不需要认证", "This request does not require authentication"), fsSmall, p.muted, 0)
+			})
+		}
+		if pv := authPreview(au); pv != "" {
+			ui.Row(c).FillWidth().Shrink(0).PaddingStart(authLabelW + 12).Gap(6).AlignItems(ui.Center).Children(func() {
+				icon(c, "info", 12, p.accent)
+				txt(c, a.t("将自动添加请求头", "Will add header"), fsSmall, p.muted, 0)
+				ui.Row(c).Height(20).PaddingX(8).Radius(5).Background(p.surface2).AlignItems(ui.Center).Children(func() {
+					txtMono(c, pv, fsSmall, p.fg2, 0)
+				})
+			})
+		}
 	})
 }

@@ -3,7 +3,9 @@ package gui
 import (
 	"fmt"
 	"math"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -62,15 +64,14 @@ func (a *app) responsePane(c *ui.Context, t *tab) {
 		a.sendShimmer(c, t)
 		switch {
 		case rs.err != "":
-			a.respTitle(c)
+			a.respStateBar(c, func() { a.respFailedMeta(c) })
 			a.respError(c, t)
+		case rs.resp == nil && !rs.streamed && t.sending:
+			a.respStateBar(c, func() { a.sendingMeta(c, t) })
+			a.sendingSkeleton(c, t)
 		case rs.resp == nil && !rs.streamed:
 			a.respTitle(c)
 			ui.Row(c).Grow(1).Basis(0).FillWidth().AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-				if t.sending {
-					a.sendingIndicator(c, t)
-					return
-				}
 				empty := strings.TrimSpace(t.draft.URL) == ""
 				bg := p.surface2
 				if p.dark {
@@ -116,49 +117,136 @@ func (a *app) kbdSmall(c *ui.Context, s string) {
 	})
 }
 
-// respError 绘制请求失败卡片。
+// respStateBar 是失败/发送中状态下的标签行：与成功态同样的三个标签（不可切换），右侧放状态内容。
+func (a *app) respStateBar(c *ui.Context, right func()) {
+	p := a.p
+	sel := 0
+	labels := []string{a.t("响应体", "Body"), a.t("响应头", "Headers"), "Cookies"}
+	ui.Row(c).FillWidth().Height(32).Shrink(0).PaddingX(8).Gap(2).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
+		a.underlineTabs(c, "rst", &sel, labels, nil, nil, 32)
+		ui.Spacer(c)
+		right()
+	})
+}
+
+// respFailedMeta 是失败状态标签行右侧的“请求失败”红色胶囊。
+func (a *app) respFailedMeta(c *ui.Context) {
+	fg, bg := a.statusBadge(0)
+	ui.Row(c.Key("failbadge")).Height(20).PaddingX(8).Gap(5).Radius(10).Background(bg).AlignItems(ui.Center).Shrink(0).Children(func() {
+		ui.Box(c).Size(6, 6).Radius(3).Background(fg).Shrink(0)
+		txt(c, a.t("请求失败", "Request failed"), fsTiny, fg, 600)
+	})
+}
+
+// sendingMeta 是发送中标签行右侧：旋转图标 + 已用秒数 + 取消按钮。
+func (a *app) sendingMeta(c *ui.Context, t *tab) {
+	p := a.p
+	elapsed := time.Since(t.sendAt)
+	if t.sendAt.IsZero() {
+		elapsed = 0
+	}
+	c.AnimationFrame()
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
+		ui.Spinner(c)
+		txtMono(c, a.t("发送中… ", "Sending… ")+sendingElapsed(elapsed), fsSmall, p.muted, 0)
+		bg := p.surface
+		if a.button(c, btnOpts{h: 22, radius: 6, padX: 10, bg: &bg, border: &p.btnBorder, key: "resp-cancel"}, func(bool) {
+			txt(c, a.t("取消", "Cancel"), fsSmall, p.fg, 500)
+		}) {
+			a.be.CancelHTTPRequest(t.sendID)
+		}
+	})
+}
+
+// sendingSkeleton 是发送中的骨架屏：几条灰色占位条（轻微脉动）+ 等待提示。
+func (a *app) sendingSkeleton(c *ui.Context, t *tab) {
+	p := a.p
+	elapsed := time.Since(t.sendAt)
+	if t.sendAt.IsZero() {
+		elapsed = 0
+	}
+	c.AnimationFrame()
+	pulse := 0.55 + 0.45*dotPulse(elapsed, 0)
+	host := ""
+	if u, err := url.Parse(client.EnsureProtocol(client.ResolveTemplate(t.draft.URL, a.vars()))); err == nil {
+		host = u.Host
+	}
+	ui.Column(c.Key("sending")).Grow(1).Basis(0).FillWidth().Padding(20, 16).Gap(10).Children(func() {
+		for _, w := range []float32{0.34, 0.62, 0.46, 0.8, 0.28} {
+			ui.Box(c).Width(520 * w / 0.8).Height(10).Radius(5).Background(p.border.Alpha(pulse)).Shrink(1)
+		}
+		ui.Row(c).Gap(6).Padding(8, 0, 0, 0).AlignItems(ui.Center).Children(func() {
+			icon(c, "globe", 11, p.muted)
+			label := a.t("正在等待响应首字节…", "Waiting for the first response byte…")
+			if host != "" {
+				label = a.t("正在等待 "+host+" 响应首字节…", "Waiting for the first byte from "+host+"…")
+			}
+			txt(c, label, fsSmall, p.muted, 0)
+		})
+	})
+}
+
+// respError 绘制请求失败卡片：原因说明、错误详情、逐步诊断清单与“重试 / 在控制台查看”。
 func (a *app) respError(c *ui.Context, t *tab) {
 	p := a.p
 	rs := t.resp
-	ui.Column(c).Grow(1).Basis(0).FillWidth().Padding(8).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-		ui.Column(c).FillWidth().MaxWidth(860).Padding(12, 16).Gap(10).Radius(12).Background(p.surface).Border(1, p.danger.Alpha(0.25)).Children(func() {
-			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-				ui.Row(c).Size(24, 24).Radius(12).Background(p.danger.Alpha(0.12)).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-					icon(c, "info", 11, p.danger)
+	parsed := client.ParseRequestError(strings.TrimPrefix(rs.err, "Error: "))
+	info := client.DescribeRequestError(parsed)
+	url := ""
+	if strings.TrimSpace(t.draft.URL) != "" {
+		url = client.EnsureProtocol(client.ResolveTemplate(t.draft.URL, a.vars()))
+	}
+	steps := client.DiagnoseRequestError(parsed, url)
+	ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
+		ui.Column(c).FillWidth().Padding(20, 24).Gap(14).Children(func() {
+			ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
+				ui.Row(c).Size(30, 30).Radius(8).Background(p.danger.Alpha(0.12)).AlignItems(ui.Center).Justify(ui.Center).Shrink(0).Children(func() {
+					icon(c, "toastWarn", 15, p.danger)
 				})
-				txt(c, a.t("无法发送请求", "Could not send request"), 14, p.fg, 600)
+				ui.Column(c).Gap(2).Grow(1).Basis(0).Children(func() {
+					txt(c, a.t("无法发送请求", "Could not send request"), 14, p.fg, 600)
+					ui.Text(c, a.t(info.DescZH+" "+info.SuggestZH, info.DescEN+" "+info.SuggestEN)).FontSize(fsBase).TextColor(p.fg2).Selectable().FillWidth()
+				})
 			})
-			ui.Row(c).Gap(8).Children(func() {
-				txtMono(c, t.draft.Method, fsBase, p.method(t.draft.Method), 600)
-				url := client.EnsureProtocol(client.ResolveTemplate(t.draft.URL, a.vars()))
-				if strings.TrimSpace(t.draft.URL) == "" {
-					url = ""
+			ui.Column(c).FillWidth().MaxWidth(720).Padding(8, 12).Gap(2).Radius(8).Background(p.surface2).Children(func() {
+				ui.Text(c, a.t("错误: ", "Error: ")+info.Detail).FontSize(fsSmall).Font(monoFont).TextColor(p.fg2).Selectable()
+				ui.Text(c, a.t("错误码: ", "Code: ")+parsed.Code).FontSize(fsSmall).Font(monoFont).TextColor(p.muted).Selectable()
+			})
+			ui.Column(c).Gap(6).Children(func() {
+				for _, st := range steps {
+					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+						if st.OK {
+							icon(c, "tick", 12, p.success)
+						} else {
+							icon(c, "clear", 12, p.danger)
+						}
+						txt(c, a.t(st.ZH, st.EN), fsBase, p.fg, 0)
+					})
 				}
-				txtMono(c, url, fsBase, p.fg, 0).Selectable()
 			})
-			parsed := client.ParseRequestError(strings.TrimPrefix(rs.err, "Error: "))
-			info := client.DescribeRequestError(parsed)
-			fg, bg := ui.Hex("#b44840"), ui.Hex("#fbeceb")
-			if info.Tone == client.ToneWarning {
-				fg, bg = ui.Hex("#a56412"), ui.Hex("#fbf2e6")
-			}
-			ui.Row(c).FillWidth().Padding(8, 10).Radius(9).Background(bg).Border(1, fg.Alpha(0.2)).Children(func() {
-				ui.Text(c, a.t("错误: ", "Error: ")+info.Detail).FontSize(fsBase).TextColor(fg).Selectable()
-			})
-			ui.Text(c, a.t(info.DescZH+" "+info.SuggestZH, info.DescEN+" "+info.SuggestEN)).FontSize(fsBase).TextColor(p.fg2).Selectable().FillWidth()
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				if a.button(c, btnOpts{h: 24, radius: 7, padX: 8, gap: 6, key: "err-console"}, func(hover bool) {
-					col := p.muted
+				retry := ui.ButtonBase(c.Key("err-retry")).Height(26).Radius(6).PaddingX(12).Gap(6).AlignItems(ui.Center).Background(p.accent)
+				if retry.Hovered() {
+					retry = retry.Background(p.accentHover)
+				}
+				retry.Children(func() {
+					icon(c, "send", 11, p.accentFg)
+					txt(c, a.t("重试", "Retry"), fsBase, p.accentFg, 600)
+				})
+				if retry.Clicked() {
+					a.later(func() { a.sendTab(t) })
+				}
+				bg := p.surface
+				if a.button(c, btnOpts{h: 26, radius: 6, padX: 10, gap: 6, bg: &bg, border: &p.btnBorder, key: "err-console"}, func(hover bool) {
+					col := p.fg2
 					if hover {
-						col = p.fg2
+						col = p.fg
 					}
 					icon(c, "commandLine", 12, col)
-					txt(c, a.t("在控制台查看", "View in console"), fsSmall, col, 0)
+					txt(c, a.t("在控制台查看", "View in console"), fsBase, col, 0)
 				}) {
 					a.later(func() { a.setConsoleOpen(true) })
 				}
-				txt(c, "•", fsSmall, p.muted, 0)
-				txt(c, a.t("错误码", "Code")+": "+parsed.Code, fsSmall, p.muted, 0)
 			})
 		})
 	})
@@ -246,8 +334,8 @@ func (a *app) responseBody(c *ui.Context, t *tab) {
 	}
 	rs.sub = min(rs.sub, len(labels)-1)
 	ui.Column(c).Grow(1).Basis(0).Children(func() {
-		ui.Row(c).FillWidth().Height(32).Shrink(0).PaddingStart(16).PaddingEnd(8).Gap(4).AlignItems(ui.Center).Children(func() {
-			a.pillTabs(c, "rs", &rs.sub, labels, counts)
+		ui.Row(c).FillWidth().Height(32).Shrink(0).PaddingStart(8).PaddingEnd(8).Gap(2).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
+			a.underlineTabs(c, "rs", &rs.sub, labels, counts, nil, 32)
 			ui.Spacer(c)
 			a.respMeta(c, rs)
 		})

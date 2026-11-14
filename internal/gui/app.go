@@ -47,6 +47,7 @@ type app struct {
 	homeSel      string // 项目主页右侧详情面板选中的项目 ID
 	homeSort     string // 项目主页排序：updated（默认）或 name
 	homeQuery    string // 项目主页搜索词
+	authReveal   bool   // Auth 页是否明文显示密钥
 	homeStats    map[string]projStats
 	homeStatsKey map[string]string // 统计缓存对应的项目更新时间，变化后重新读取
 	nameDraft    map[string]string // 项目名称的编辑草稿
