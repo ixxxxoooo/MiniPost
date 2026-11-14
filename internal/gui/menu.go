@@ -27,6 +27,9 @@ func (a *app) installMenu() {
 			{Label: a.t("新建请求", "New Request"), Accelerator: "CmdOrCtrl+N", Click: act(true, func() { a.newRequest("") })},
 			{Label: a.t("新建文件夹", "New Folder"), Accelerator: "CmdOrCtrl+Shift+N", Click: act(true, func() { a.newFolder("") })},
 			{Label: a.t("导入 cURL…", "Import cURL…"), Accelerator: "CmdOrCtrl+I", Click: act(true, func() { a.overlays.curl = curlState{open: true} })},
+			{Label: a.t("导入集合…", "Import Collection…"), Accelerator: "CmdOrCtrl+Shift+I", Click: act(true, a.importFromFile)},
+			{Label: a.t("从 URL 导入…", "Import from URL…"), Click: act(true, a.importFromURL)},
+			{Label: a.t("导出项目…", "Export Project…"), Accelerator: "CmdOrCtrl+Shift+E", Click: act(true, a.exportProject)},
 			mygo.Separator(),
 			{Label: a.t("保存", "Save"), Accelerator: "CmdOrCtrl+S", Click: act(true, func() {
 				if t := a.activeTab(); t != nil {
@@ -50,6 +53,12 @@ func (a *app) installMenu() {
 		{Role: mygo.RoleEditMenu},
 		{Label: a.t("视图", "View"), Submenu: []*mygo.MenuItem{
 			{Label: a.t("显示/隐藏侧栏", "Toggle Sidebar"), Accelerator: "CmdOrCtrl+B", Click: act(true, a.toggleSidebar)},
+			{Label: a.t("显示/隐藏控制台", "Toggle Console"), Accelerator: "CmdOrCtrl+J", Click: act(true, func() { a.setConsoleOpen(!a.set.ConsoleOpen) })},
+			mygo.Separator(),
+			{Label: a.t("环境管理…", "Environments…"), Accelerator: "CmdOrCtrl+E", Click: act(true, a.openEnvManager)},
+			{Label: "Cookies…", Accelerator: "CmdOrCtrl+Shift+K", Click: act(true, a.openCookies)},
+			{Label: a.t("设置…", "Settings…"), Accelerator: "CmdOrCtrl+,", Click: act(false, a.openPrefs)},
+			mygo.Separator(),
 			{Role: mygo.RoleToggleFullScreen},
 		}},
 		{Role: mygo.RoleWindowMenu},

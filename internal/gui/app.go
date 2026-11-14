@@ -37,7 +37,9 @@ type app struct {
 	histList  ui.ListState
 	histRow   int
 
-	console []consoleEntry
+	console     []consoleEntry
+	consoleList ui.ListState
+	consolePct  float32
 
 	tabs   []*tab
 	active int
@@ -51,18 +53,20 @@ type app struct {
 	toastMsgs  []string
 	applied    appliedTheme
 	menuLocale string
+	backupStop chan struct{}
 }
 
 func newApp(be Backend) *app {
 	base := be.BaseDir()
 	a := &app{
-		be:       be,
-		setStore: client.NewSettingsStore(base),
-		sessions: client.NewSessionStore(base),
-		jar:      client.NewJar(filepath.Join(base, "cookies.json")),
-		outRow:   -1,
-		histRow:  -1,
-		splitPct: 50,
+		be:         be,
+		setStore:   client.NewSettingsStore(base),
+		sessions:   client.NewSessionStore(base),
+		jar:        client.NewJar(filepath.Join(base, "cookies.json")),
+		outRow:     -1,
+		histRow:    -1,
+		splitPct:   50,
+		consolePct: 72,
 	}
 	a.set = a.setStore.Load()
 	a.loadProjects()

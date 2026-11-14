@@ -11,6 +11,10 @@ type overlays struct {
 	closing closeState
 	projDlg projectDialogState
 	curl    curlState
+	prefs   prefsState
+	imp     importState
+	envMgr  envState
+	cookies cookiesState
 }
 
 // promptState 是单行文本输入对话框。

@@ -12,6 +12,7 @@ import (
 func Open(be Backend) *mygo.Window {
 	a := newApp(be)
 	a.native = true
+	a.restartBackupTimer()
 	win := mygo.NewWindow(mygo.WindowOptions{
 		Title:     "MiniPost",
 		Width:     1280,

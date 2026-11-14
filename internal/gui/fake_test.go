@@ -27,6 +27,8 @@ type fakeBackend struct {
 	resp     *model.HttpResponse
 	sendErr  error
 	canceled []string
+
+	importedStrategy string
 }
 
 func newFakeBackend(t *testing.T) *fakeBackend {
@@ -250,6 +252,7 @@ func (f *fakeBackend) PreviewImportFromURL(pid, format, u string) (*service.Impo
 	return &service.ImportPreview{Kind: "swagger", ResolvedURL: u}, nil
 }
 func (f *fakeBackend) ImportCollectionWithStrategy(pid, format, content, u, strategy string) error {
+	f.importedStrategy = strategy
 	return nil
 }
 func (f *fakeBackend) CreateBackup() (string, error)   { return "/tmp/backup", nil }

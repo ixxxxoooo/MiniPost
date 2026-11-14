@@ -32,24 +32,36 @@ func (a *app) view(c *ui.Context) {
 
 // overlayViews 绘制所有弹层，放在主界面之后以显示在最上层。
 func (a *app) overlayViews(c *ui.Context) {
+	a.projectDialogView(c)
+	a.curlDialogView(c)
+	a.prefsView(c)
+	a.importView(c)
+	a.envDialogView(c)
+	a.cookiesView(c)
+	// 询问类弹层最后绘制，才能显示在其他对话框之上。
 	a.promptView(c)
 	a.confirmView(c)
 	a.closeView(c)
-	a.projectDialogView(c)
-	a.curlDialogView(c)
 }
 
 func (a *app) workspace(c *ui.Context) {
 	a.toolbar(c)
 	ui.Divider(c)
-	if a.set.SidebarCollapsed {
-		a.mainPane(c)
+	body := func() {
+		if a.set.SidebarCollapsed {
+			a.mainPane(c)
+			return
+		}
+		split := ui.Split(c, &a.set.SidebarWidth, func() { a.sidebar(c) }, func() { a.mainPane(c) }).SplitReset(260).Grow(1)
+		if split.Changed() {
+			a.saveSettings()
+		}
+	}
+	if a.set.ConsoleOpen {
+		ui.SplitVerticalPercent(c, &a.consolePct, body, func() { a.consolePanel(c) }).Grow(1)
 		return
 	}
-	split := ui.Split(c, &a.set.SidebarWidth, func() { a.sidebar(c) }, func() { a.mainPane(c) }).SplitReset(260).Grow(1)
-	if split.Changed() {
-		a.saveSettings()
-	}
+	body()
 }
 
 // selectIndex 是按下标选择的下拉框：labels 为选项文案，*idx 为当前选中项。
@@ -96,6 +108,18 @@ func (a *app) toolbar(c *ui.Context) {
 			} else {
 				a.setEnv(a.envs[cur-1].ID)
 			}
+		}
+		if ui.Button(c, a.t("环境…", "Envs…")).Tooltip(a.t("管理环境变量", "Manage environments")).Clicked() {
+			a.later(a.openEnvManager)
+		}
+		if ui.Button(c, "Cookies").Clicked() {
+			a.later(a.openCookies)
+		}
+		if ui.Button(c, a.t("控制台", "Console")).Clicked() {
+			a.later(func() { a.setConsoleOpen(!a.set.ConsoleOpen) })
+		}
+		if ui.Button(c, a.t("设置", "Settings")).Tooltip("⌘,").Clicked() {
+			a.later(a.openPrefs)
 		}
 	})
 }

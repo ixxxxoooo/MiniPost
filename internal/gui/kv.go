@@ -2,6 +2,7 @@ package gui
 
 import (
 	"path/filepath"
+	"strconv"
 
 	"github.com/egoist/mygo/ui"
 
@@ -142,3 +143,5 @@ func (a *app) async(work func() func()) {
 		}
 	}()
 }
+
+func itoa(n int) string { return strconv.Itoa(n) }
