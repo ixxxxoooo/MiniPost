@@ -302,3 +302,19 @@ func (a *app) restoreSession() {
 	}
 	a.revealTab = true
 }
+
+// moveTab 把标签 t 移到下标 to 处（其余标签顺延），选中状态跟随原来选中的标签。
+func (a *app) moveTab(t *tab, to int) {
+	from := a.tabIndex(t)
+	if from < 0 || to < 0 || to >= len(a.tabs) || from == to {
+		return
+	}
+	cur := a.activeTab()
+	a.tabs = append(a.tabs[:from], a.tabs[from+1:]...)
+	a.tabs = append(a.tabs[:to], append([]*tab{t}, a.tabs[to:]...)...)
+	if cur != nil {
+		a.active = a.tabIndex(cur)
+	}
+	a.persistSession()
+	logger.Info("已调整标签顺序", "from", from, "to", to)
+}

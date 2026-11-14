@@ -3,6 +3,7 @@ package gui
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"testing"
 
@@ -121,12 +122,30 @@ func (f *fakeBackend) GetCollectionData(pid string) (*model.CollectionData, erro
 }
 func (f *fakeBackend) MoveCollectionNode(pid, nodeID string, kind model.CollectionNodeType, target string, idx int) error {
 	cd := f.colls[pid]
-	for i := range cd.TreeNodes {
-		if cd.TreeNodes[i].NodeID == nodeID {
-			cd.TreeNodes[i].ParentFolderID = target
-			cd.TreeNodes[i].SortOrder = idx + 1000
+	// 与真实实现一致：先摘掉自己，再按 idx 插入目标文件夹的兄弟列表并重排序号。
+	var moving model.CollectionNode
+	var sibs []model.CollectionNode
+	var rest []model.CollectionNode
+	for _, n := range cd.TreeNodes {
+		switch {
+		case n.NodeID == nodeID:
+			moving = n
+		case n.ParentFolderID == target:
+			sibs = append(sibs, n)
+		default:
+			rest = append(rest, n)
 		}
 	}
+	sort.SliceStable(sibs, func(i, j int) bool { return sibs[i].SortOrder < sibs[j].SortOrder })
+	moving.ParentFolderID = target
+	if idx < 0 || idx > len(sibs) {
+		idx = len(sibs)
+	}
+	sibs = append(sibs[:idx], append([]model.CollectionNode{moving}, sibs[idx:]...)...)
+	for i := range sibs {
+		sibs[i].SortOrder = i
+	}
+	cd.TreeNodes = append(rest, sibs...)
 	return nil
 }
 func (f *fakeBackend) CreateFolder(pid, parent, name string) (*model.Folder, error) {

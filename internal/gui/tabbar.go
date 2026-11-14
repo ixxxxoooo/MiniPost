@@ -39,6 +39,9 @@ func (a *app) tabBar(c *ui.Context) {
 	})
 }
 
+// tabDrag 是拖动标签时携带的值。
+type tabDrag struct{ t *tab }
+
 // tabAction 是标签栏里 22×22 的图标按钮。
 func (a *app) tabAction(c *ui.Context, name, tip string, size float32) bool {
 	p := a.p
@@ -76,7 +79,7 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 		h = sizeTabStrip // 选中的标签从顶线所在行开始，用自己的上边框盖住它
 	}
 	// 宽度固定：选中项的字重更粗，按内容算宽度的话切换时标签会突然变宽变窄。
-	cell := ui.Row(c.Key("tab:" + t.draft.ID)).Height(h).Width(tabWidth).Shrink(0).
+	cell := ui.Row(c.Key("tab:" + t.draft.ID)).Height(h).Width(tabWidth).Shrink(0).Drag(tabDrag{t: t}).
 		ContextMenu(func(m *ui.Menu) { a.tabMenu(m, i) }).
 		HandleInput(func(ev ui.InputEvent) bool {
 			// 中键按下时接管这次点按，抬起时关闭（和浏览器标签页的习惯一致）。
@@ -94,6 +97,14 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 		a.revealTab = false
 		cell = cell.ScrollIntoView()
 	}
+	// 拖动标签到另一个标签上：放下后占据它的位置；拖动经过时在左侧画一条插入指示线。
+	if d, ok := ui.Drop[tabDrag](cell); ok {
+		a.later(func() { a.moveTab(d.t, a.tabIndex(t)) })
+	}
+	dropHere := false
+	if d, ok := ui.DragOver[tabDrag](cell); ok && d.t != t {
+		dropHere = true
+	}
 	hover := cell.Hovered()
 	switch {
 	case active:
@@ -102,6 +113,9 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 		cell = cell.Background(p.hover)
 	}
 	cell.Children(func() {
+		if dropHere {
+			ui.Box(c).Absolute().Top(0).Bottom(0).Left(0).Width(2).Background(p.accent).ZIndex(1)
+		}
 		ui.Column(c).Grow(1).Basis(0).FillHeight().Children(func() {
 			ui.Row(c).Grow(1).Basis(0).FillWidth().PaddingX(8).Gap(4).AlignItems(ui.Center).Children(func() {
 				if t.env != nil {

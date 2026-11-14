@@ -106,15 +106,29 @@ func (a *app) deleteNode(id string) {
 
 // moveNode 把节点移动到目标文件夹（空串表示根目录）的末尾。
 func (a *app) moveNode(id, target string) {
-	n, ok := a.tree.nodes[id]
-	if !ok || n.parent == target || (n.folder && a.tree.isInside(target, id)) {
+	if n, ok := a.tree.nodes[id]; ok && n.parent == target {
 		return
+	}
+	a.moveNodeAt(id, target, -1)
+}
+
+// moveNodeAt 把节点移动到目标文件夹的指定位置；idx 为插入后的下标（先摘掉自己再计算），小于 0 表示末尾。
+func (a *app) moveNodeAt(id, target string, idx int) {
+	n, ok := a.tree.nodes[id]
+	if !ok || (n.folder && (target == id || a.tree.isInside(target, id))) {
+		return
+	}
+	if idx < 0 || idx > len(a.tree.kids[target]) {
+		idx = len(a.tree.kids[target])
+		if n.parent == target {
+			idx-- // 自己也在这个列表里，末尾下标要减一
+		}
 	}
 	kind := model.CollectionNodeTypeRequest
 	if n.folder {
 		kind = model.CollectionNodeTypeFolder
 	}
-	if err := a.be.MoveCollectionNode(a.projectID, id, kind, target, len(a.tree.kids[target])); err != nil {
+	if err := a.be.MoveCollectionNode(a.projectID, id, kind, target, idx); err != nil {
 		a.fail(a.t("移动", "Move"), err)
 		return
 	}
@@ -122,4 +136,44 @@ func (a *app) moveNode(id, target string) {
 	if target != "" {
 		a.side.outline.Open.Add(target)
 	}
+	logger.Info("已移动节点", "nodeID", id, "target", target, "index", idx)
 }
+
+// dropOnNode 处理侧栏里把 src 拖到 target 上：
+// 放在文件夹上是移进该文件夹末尾；放在请求上是插到该请求之前（同一文件夹内即重新排序）。
+func (a *app) dropOnNode(src, target string) {
+	tn, ok := a.tree.nodes[target]
+	if !ok || src == target {
+		return
+	}
+	if tn.folder {
+		a.moveNode(src, target)
+		return
+	}
+	siblings := a.tree.kids[tn.parent]
+	j, k := -1, -1
+	for i, id := range siblings {
+		switch id {
+		case target:
+			j = i
+		case src:
+			k = i
+		}
+	}
+	if j < 0 {
+		return
+	}
+	if k >= 0 && k < j {
+		j-- // 自己在目标前面，摘掉自己后目标的下标前移一位
+	}
+	if k >= 0 && k == j {
+		return // 位置没有变化
+	}
+	a.moveNodeAt(src, tn.parent, j)
+}
+
+// dropOnRoot 处理侧栏里把 src 拖到“根目录”上：移到项目根目录末尾。
+func (a *app) dropOnRoot(src string) { a.moveNode(src, "") }
+
+// nodeDrag 是拖动侧栏节点时携带的值。
+type nodeDrag struct{ id string }

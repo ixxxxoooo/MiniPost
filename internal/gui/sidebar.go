@@ -159,8 +159,12 @@ func (a *app) treeRootRow(c *ui.Context) {
 	p := a.p
 	row := ui.Row(c.Key("tree-root")).Height(28).MarginX(4).PaddingX(8).Radius(radiusBtn).Gap(6).AlignItems(ui.Center).
 		ContextMenu(a.rootMenu)
+	if d, ok := ui.Drop[nodeDrag](row); ok {
+		a.later(func() { a.dropOnRoot(d.id) })
+	}
+	_, over := ui.DragOver[nodeDrag](row)
 	hover := row.Hovered()
-	if hover {
+	if hover || over {
 		row = row.Background(p.sideHover)
 	}
 	row.Children(func() {
@@ -201,9 +205,16 @@ func (a *app) treeNode(c *ui.Context, id string, depth int) {
 	p := a.p
 	open := a.side.outline.Open.Has(id)
 	row := ui.ButtonBase(c.Key("f:" + id)).Height(28).MarginX(4).PaddingStart(8 + float32(depth)*12).PaddingEnd(8).Radius(radiusBtn).Gap(4).
-		AlignItems(ui.Center).Justify(ui.Start).ContextMenu(func(m *ui.Menu) { a.nodeMenu(m, id) })
+		AlignItems(ui.Center).Justify(ui.Start).ContextMenu(func(m *ui.Menu) { a.nodeMenu(m, id) }).Drag(nodeDrag{id})
+	if d, ok := ui.Drop[nodeDrag](row); ok {
+		a.later(func() { a.dropOnNode(d.id, id) })
+	}
+	d, over := ui.DragOver[nodeDrag](row)
+	over = over && d.id != id
 	hover := row.Hovered()
 	switch {
+	case over:
+		row = row.Background(p.sideActive) // 拖动经过文件夹：高亮表示将放入其中
 	case a.side.sel == id:
 		row = row.Background(p.sideActive)
 	case hover:
@@ -260,7 +271,12 @@ func (a *app) requestRow(c *ui.Context, id string, depth int) {
 	// 侧栏只高亮一行：选中的节点（点过的文件夹/请求，没有时是当前标签对应的请求）。
 	active := a.selectedNode() == id
 	row := ui.ButtonBase(c.Key("r:" + id)).Height(28).MarginX(4).PaddingStart(20 + float32(depth)*12).PaddingEnd(8).Radius(radiusBtn).Gap(4).
-		AlignItems(ui.Center).Justify(ui.Start).ContextMenu(func(m *ui.Menu) { a.nodeMenu(m, id) })
+		AlignItems(ui.Center).Justify(ui.Start).ContextMenu(func(m *ui.Menu) { a.nodeMenu(m, id) }).Drag(nodeDrag{id})
+	if d, ok := ui.Drop[nodeDrag](row); ok {
+		a.later(func() { a.dropOnNode(d.id, id) })
+	}
+	d, over := ui.DragOver[nodeDrag](row)
+	over = over && d.id != id
 	hover := row.Hovered()
 	switch {
 	case active:
@@ -269,6 +285,10 @@ func (a *app) requestRow(c *ui.Context, id string, depth int) {
 		row = row.Background(p.sideHover)
 	}
 	row.Children(func() {
+		if over {
+			// 拖动经过请求：在行顶部画插入线，表示将放到它之前。
+			ui.Box(c).Absolute().Top(0).Left(0).Right(0).Height(2).Background(p.accent).ZIndex(1)
+		}
 		txtMono(c, n.method, 9, p.method(n.method), 700).MinWidth(28).Shrink(0)
 		col, w := p.fg, 0
 		if active {
