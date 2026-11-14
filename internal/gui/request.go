@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"minipost/internal/client"
+	"minipost/internal/pkg/logger"
 )
 
 // requestView 是当前标签的编辑区：面包屑、地址栏，下方是请求区与响应区的分栏。
@@ -26,19 +27,46 @@ func (a *app) requestView(c *ui.Context, t *tab) {
 	})
 }
 
+// crumb 是面包屑里的一段：显示名，以及点击后要在侧栏定位的文件夹 ID（项目段为空）。
+type crumb struct{ name, folderID string }
+
 // breadcrumbSegments 返回“项目 > 文件夹…”路径（不含请求名）。
-func (a *app) breadcrumbSegments(t *tab) []string {
-	var segs []string
+func (a *app) breadcrumbSegments(t *tab) []crumb {
+	var segs []crumb
 	if pr := a.project(); pr != nil {
-		segs = append(segs, pr.Name)
+		segs = append(segs, crumb{name: pr.Name})
 	}
-	var chain []string
+	var chain []crumb
 	if n, ok := a.tree.nodes[t.draft.ID]; ok {
 		for id := n.parent; id != ""; id = a.tree.nodes[id].parent {
-			chain = append([]string{a.tree.nodes[id].name}, chain...)
+			chain = append([]crumb{{name: a.tree.nodes[id].name, folderID: id}}, chain...)
 		}
 	}
 	return append(segs, chain...)
+}
+
+// clickCrumb 处理面包屑某一段的点击：文件夹段在侧栏里展开并定位到该文件夹，
+// 项目段打开项目下拉面板（与标题栏的项目按钮一致）。
+func (a *app) clickCrumb(cr crumb) {
+	if cr.folderID == "" {
+		a.projMenu.open, a.projMenu.query = true, ""
+		return
+	}
+	if _, ok := a.tree.nodes[cr.folderID]; !ok {
+		return
+	}
+	if a.set.SidebarCollapsed {
+		a.set.SidebarCollapsed = false
+		a.saveSettings()
+	}
+	a.side.tab, a.side.query = 0, "" // 回到请求列表并清掉搜索过滤，保证目标可见
+	a.side.outline.Open.Add(cr.folderID)
+	for p := a.tree.nodes[cr.folderID].parent; p != ""; p = a.tree.nodes[p].parent {
+		a.side.outline.Open.Add(p)
+	}
+	a.side.sel = cr.folderID
+	a.side.reveal, a.side.revealFocus = cr.folderID, false
+	logger.Info("已从面包屑定位到侧栏文件夹", "folderID", cr.folderID)
 }
 
 // breadcrumb 是地址栏上方的一行：HTTP 徽标、路径、可点击改名的请求名，以及保存/复制 cURL。
@@ -55,9 +83,21 @@ func (a *app) breadcrumb(c *ui.Context, t *tab) {
 			})
 			ui.Box(c).Width(4).Shrink(0)
 			for i, seg := range a.breadcrumbSegments(t) {
-				ui.Row(c.Key("seg" + itoa(i))).Height(24).PaddingX(6).Radius(6).AlignItems(ui.Center).Shrink(0).Children(func() {
-					txtE(c, seg, fsBase, p.muted, 0).MaxWidth(220)
+				seg := seg
+				tip := a.t("在侧栏中定位", "Reveal in sidebar")
+				if seg.folderID == "" {
+					tip = a.t("切换项目", "Switch project")
+				}
+				sb := ui.ButtonBase(c.Key("seg" + itoa(i))).Height(24).PaddingX(6).Radius(6).AlignItems(ui.Center).Shrink(0).Tooltip(tip)
+				if sb.Hovered() {
+					sb = sb.Background(p.selected)
+				}
+				sb.Children(func() {
+					txtE(c, seg.name, fsBase, p.muted, 0).MaxWidth(220)
 				})
+				if sb.Clicked() {
+					a.later(func() { a.clickCrumb(seg) })
+				}
 				// 旧版间距：路径段 →2px→ 箭头 →6px→ 下一段
 				ui.Box(c.Key("bs" + itoa(i))).Width(2).Shrink(0)
 				icon(c, "arrowRight", 10, p.muted)
