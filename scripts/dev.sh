@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
+# 开发模式:构建并启动 "MiniPost Dev"(仅 macOS)
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-source "$ROOT_DIR/scripts/build-common.sh"
-require_patched_go_toolchain
+MYGO="$(command -v mygo || true)"
+if [[ -z "$MYGO" && -x "$(go env GOPATH)/bin/mygo" ]]; then
+  MYGO="$(go env GOPATH)/bin/mygo"
+fi
+if [[ -z "$MYGO" ]]; then
+  echo "缺少 mygo,请先安装: go install github.com/egoist/mygo/cmd/mygo@latest" >&2
+  exit 1
+fi
 
-# Default dev mode optimized for faster startup and less noise.
-# -skipbindings: avoid running the bindings generation executable every launch
-# -m: skip `go mod tidy` on each dev startup
-exec wails dev -skipbindings -m "$@"
+GOROOT="$(go env GOROOT)"
+export GOROOT
+
+exec "$MYGO" dev "$@"

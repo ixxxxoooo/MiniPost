@@ -1,9 +1,6 @@
-build/bin
-dist
-node_modules
-frontend/dist
-.DS_Store
-*.log
 build/darwin-*/
 build/*.dmg
+dist
+.DS_Store
+*.log
 .mygo/

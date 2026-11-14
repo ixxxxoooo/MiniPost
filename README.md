@@ -4,202 +4,79 @@
   <b>English</b> | <a href="README_zh.md">简体中文</a>
 </p>
 
-MiniPost is a lightweight desktop API debugging tool built with Wails + React + TypeScript.
+MiniPost is a lightweight, macOS-only API debugging tool. Since 2.0 the UI is written with [MyGo](https://github.com/egoist/mygo): pure Go, GPU-drawn native UI, no WebView and no frontend toolchain.
 
-## 1. Prerequisites
+## 1. Requirements
 
-- Go 1.22+
-- Node.js 20+
-- Wails CLI 2.11+
-
-Install Wails CLI:
+- macOS 12 (Monterey) or later (set by `macos.minimumSystemVersion` in `mygo.json`)
+- Go 1.27+
+- MyGo CLI:
 
 ```bash
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
+go install github.com/egoist/mygo/cmd/mygo@latest
 ```
 
 ## 2. Local Development
 
 ```bash
-wails dev
+./scripts/dev.sh        # builds and launches "MiniPost Dev"
+go test ./...           # all tests, including headless UI tests (ui.Tester)
 ```
+
+Code layout:
+
+- `main.go`, `app*.go`: entry point and the backend facade (`main.App`)
+- `internal/gui`: native UI (sidebar, tabs, request editor, response viewer, dialogs); talks to the backend through the `Backend` interface so it can be tested with a fake
+- `internal/client`: pure-Go client logic (URL/Params sync, variables, cookie jar, auto headers, cURL, settings and session persistence)
+- `internal/service`, `internal/repository`, `internal/model`, `internal/pkg`: business logic, storage (`~/.minipost`) and utilities
 
 ## 3. Viewing Logs
 
-MiniPost outputs backend logs to both the terminal and local log files simultaneously:
+MiniPost writes logs to both the terminal and local files:
 
 - Log directory: `~/.minipost/logs/`
 - Daily log file: `~/.minipost/logs/minipost-YYYY-MM-DD.log`
 - Real-time monitoring: `tail -f ~/.minipost/logs/minipost-$(date +%F).log`
 
-The default log level is `DEBUG` for easier development and troubleshooting. You can customize it via environment variables:
+The default log level is `DEBUG`. Override it with an environment variable:
 
 ```bash
-MINIPOST_LOG_LEVEL=INFO wails dev
-MINIPOST_LOG_LEVEL=WARN ./scripts/build-macos.sh
+MINIPOST_LOG_LEVEL=INFO ./scripts/dev.sh
 ```
 
-Supported log levels: `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
+Supported levels: `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
 
-## 4. Build Artifact Directory Conventions
-
-- `build/bin/`: Raw Wails build output
-- `dist/macos/`: macOS release artifacts (`.app` + `.dmg`)
-- `dist/windows/`: Windows release artifacts (`.exe` / installer)
-- Each build will first clean the corresponding platform's `dist` output directory to prevent stale artifacts from mixing into the current release.
-- Release artifacts follow a unified naming prefix `MiniPost-<version>-<platform>-<arch>` for clear distinction of versions, operating systems, and architectures.
-
-## 5. Build (Unified Commands)
-
-First, grant execution permissions to the build scripts:
+## 4. Build
 
 ```bash
-chmod +x scripts/*.sh
+./scripts/build.sh                            # current arch: .app + .dmg
+./scripts/build.sh -skip-dmg                  # .app only
+./scripts/build.sh -platform darwin/universal # arm64 + amd64 in one app
 ```
 
-### 5.1 Build for macOS (Outputs DMG)
+Artifacts are written to `build/`:
+
+- `build/darwin-<arch>/MiniPost.app`
+- `build/minipost-<version>-<arch>.dmg`
+
+The version comes from `mygo.json`.
+
+## 5. Signing and Notarization
+
+By default the app is ad-hoc signed (fine for local use). For distribution, set `macos.signingIdentity` and `macos.notarize` in `mygo.json` (or pass `-sign "Developer ID Application: Your Company (TEAMID)"`) and follow the MyGo documentation for notarization credentials.
+
+## 6. Authorizing an Unnotarized App (Internal Distribution)
+
+Remove the quarantine flag:
 
 ```bash
-./scripts/build-macos.sh
+xattr -dr com.apple.quarantine "build/darwin-arm64/MiniPost.app"
+# or
+./scripts/macos-authorize.sh "build/darwin-arm64/MiniPost.app"
 ```
 
-Default output:
-
-- `dist/macos/MiniPost-<version>-macos-<arch>.app`
-- `dist/macos/MiniPost-<version>-macos-<arch>.dmg`
-- The DMG includes `Authorize MiniPost.command` (users can double-click to authorize the app)
-
-Optional parameters (Environment Variables):
-
-- `APP_NAME`: Application name (default: `MiniPost`)
-- `VERSION`: DMG version (default: automatically retrieved via `git describe`)
-- `MACOS_PLATFORM`: `darwin/arm64` or `darwin/amd64`
-- `WAILS_BUILD_FLAGS`: Additional Wails build flags
-- `OUT_DIR`: Output directory (default: `dist/macos`)
-- `MACOS_ARTIFACT_PREFIX` / `ARTIFACT_PREFIX`: Custom release artifact filename prefix
-
-### 5.2 Build for Windows
+Optional local trust (requires administrator privileges):
 
 ```bash
-./scripts/build-windows.sh
-```
-
-Default output:
-
-- `dist/windows/MiniPost-<version>-windows-<arch>-portable.exe`
-- `dist/windows/MiniPost-<version>-windows-<arch>-setup.exe`
-- `dist/windows/MiniPost-<version>-windows-<arch>-setup.msi` (if applicable)
-
-Optional parameters (Environment Variables):
-
-- `VERSION`: Version string (default: automatically retrieved via `git describe`)
-- `WINDOWS_PLATFORM`: Target platform (default: `windows/amd64`)
-- `WEBVIEW2_STRATEGY`: WebView2 distribution strategy (default: `download`)
-- `WAILS_BUILD_FLAGS`: Additional Wails build flags
-- `OUT_DIR`: Output directory (default: `dist/windows`)
-- `WINDOWS_ARTIFACT_PREFIX` / `ARTIFACT_PREFIX`: Custom release artifact filename prefix
-
-Notes:
-
-- Cross-compiling Windows binaries on macOS/Linux requires a cross compiler. The script prefers `zig`, followed by `x86_64-w64-mingw32-gcc`.
-- Industry best practice recommends using CI native runners for macOS and Windows respectively to minimize cross-compilation inconsistency risks.
-
-### 5.3 Build for Both Platforms
-
-```bash
-./scripts/build.sh
-```
-
-Optional filters:
-
-```bash
-SKIP_WINDOWS=1 ./scripts/build.sh
-SKIP_MACOS=1 ./scripts/build.sh
-```
-
-## 6. macOS Release Best Practices (Code Signing + Notarization)
-
-For release builds, the following process is recommended:
-
-1. Sign the `.app` and `.dmg` using a `Developer ID Application` certificate
-2. Submit the `.dmg` for notarization using `notarytool`
-3. Staple the notarization ticket to the `.dmg` (and standalone `.app`)
-
-The build script has built-in support; simply set the following environment variables:
-
-- `MACOS_SIGN_IDENTITY` e.g., `Developer ID Application: Your Company (TEAMID)`
-- `MACOS_NOTARY_PROFILE` e.g., `AC_NOTARY_PROFILE`
-
-Example:
-
-```bash
-export MACOS_SIGN_IDENTITY="Developer ID Application: Your Company (TEAMID)"
-export MACOS_NOTARY_PROFILE="AC_NOTARY_PROFILE"
-./scripts/build-macos.sh
-```
-
-Configure notary profile (one-time setup):
-
-```bash
-xcrun notarytool store-credentials "AC_NOTARY_PROFILE" \
-  --apple-id "your-apple-id@example.com" \
-  --team-id "TEAMID" \
-  --password "app-specific-password"
-```
-
-## 7. Direct Authorization Command (For Internal Distribution)
-
-For quarantine flags caused by non-notarized apps or internal network distribution, run:
-
-```bash
-xattr -dr com.apple.quarantine "dist/macos/MiniPost-<version>-macos-<arch>.app"
-```
-
-Or run the script:
-
-```bash
-./scripts/macos-authorize.sh "dist/macos/MiniPost-<version>-macos-<arch>.app"
-```
-
-For users distributing via DMG:
-
-- After opening the DMG, double-click `Authorize MiniPost.command` to perform authorization.
-
-Optional local trust enhancement (requires administrator privileges):
-
-```bash
-sudo spctl --add --label "MiniPost Local Trust" "dist/macos/MiniPost.app"
-```
-
-## 8. Windows Code Signing Best Practices (Optional)
-
-The script supports optional `signtool` signing. Set the following environment variables on a Windows host:
-
-- `WIN_CERT_FILE`: Path to `pfx` certificate
-- `WIN_CERT_PASSWORD`: Certificate password
-- `WIN_SIGNTOOL`: Sign tool path/binary (default: `signtool`)
-- `WIN_TIMESTAMP_URL`: Timestamp server URL (default: `http://timestamp.digicert.com`)
-
-Example:
-
-```bash
-WIN_CERT_FILE="C:/certs/release.pfx" \
-WIN_CERT_PASSWORD="***" \
-./scripts/build-windows.sh
-```
-
-## 9. Quick Command Reference
-
-```bash
-# Development
-wails dev
-
-# macOS release (dmg)
-./scripts/build-macos.sh
-
-# Windows release
-./scripts/build-windows.sh
-
-# Dual-platform release
-./scripts/build.sh
+sudo spctl --add --label "MiniPost Local Trust" "build/darwin-arm64/MiniPost.app"
 ```
