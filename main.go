@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/egoist/mygo"
 
+	"minipost/internal/app"
 	"minipost/internal/gui"
 	"minipost/internal/pkg/logger"
 )
@@ -14,12 +15,12 @@ func main() {
 	defer logger.Close()
 
 	logger.Info("MiniPost 启动中...")
-	app := NewApp()
-	defer app.Shutdown()
+	backend := app.New()
+	defer backend.Shutdown()
 	logger.Info("App 实例创建完成")
 
 	mygo.App.WhenReady(func() {
-		win := gui.Open(app)
+		win := gui.Open(backend)
 		logger.Info("主窗口已创建", "title", win.Title())
 	})
 

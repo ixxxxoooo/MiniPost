@@ -61,12 +61,13 @@ go install github.com/egoist/mygo/cmd/mygo@latest
 ```bash
 ./scripts/dev.sh        # builds and launches "MiniPost Dev"
 go test ./...           # all tests, including headless UI tests (ui.Tester)
-go test -race ./...     # the same with the race detector (also run in CI)
+go test -race ./...     # the same with the race detector (run locally before committing)
 ```
 
 Code layout (see [docs/architecture.md](docs/architecture.md) for layering rules):
 
-- `main.go`, `app*.go`: entry point and the backend facade (`main.App`)
+- `main.go`: entry point (kept at the repo root because `mygo build` expects it there)
+- `internal/app`: the backend facade (`app.App`) that implements `gui.Backend`, plus backup and restore
 - `internal/gui`: native UI (sidebar, tabs, request editor, response viewer, dialogs); talks to the backend through the `Backend` interface so it can be tested with a fake
 - `internal/client`: pure-Go client logic (URL/Params sync, variables, cookie jar, auto headers, cURL, settings and session persistence)
 - `internal/service`, `internal/repository`, `internal/model`, `internal/pkg`: business logic, storage (`~/.minipost`) and utilities

@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 )
 
 // App 后端门面：聚合存储与各业务服务，供原生 UI 直接调用。
-// 导出方法按职责拆分在 app_http.go、app_collection.go、app_import*.go、app_dialog.go、backup.go 中。
+// 导出方法按职责拆分在 http.go、collection.go、import*.go、dialog.go、backup.go 中。
 type App struct {
 	// ctx 为应用生命周期上下文，用于远程导入等需要上下文的调用
 	ctx        context.Context
@@ -23,8 +23,8 @@ type App struct {
 	store      *repository.FileStore
 }
 
-// NewApp 初始化存储与各服务，存储初始化失败时直接终止进程。
-func NewApp() *App {
+// New 初始化存储与各服务，存储初始化失败时直接终止进程。
+func New() *App {
 	logger.Info("正在初始化存储...")
 	store, err := repository.NewFileStore()
 	if err != nil {

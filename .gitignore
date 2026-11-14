@@ -1,5 +1,4 @@
-build/darwin-*/
-build/*.dmg
+build/
 dist
 .DS_Store
 *.log

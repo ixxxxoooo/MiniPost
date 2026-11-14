@@ -6,8 +6,9 @@ MiniPost 是 macOS 专用的轻量 HTTP 调试工具，界面是纯 Go 的 MyGo 
 
 | 目录 | 职责 | 可以依赖 |
 | --- | --- | --- |
-| `main.go`、`app*.go`、`backup.go` | 进程入口与后端门面 `App`：实现 `gui.Backend`，只做转发、文件对话框、备份恢复 | `internal/*` |
-| `internal/gui` | 全部界面与界面状态；只通过 `Backend` 接口访问后端，不依赖 `main.App` | `internal/client`、`internal/model`、`internal/pkg/logger` |
+| `main.go` | 进程入口：初始化日志、创建后端、打开主窗口（`mygo build` 要求入口在仓库根目录，所以保持精简） | `internal/*` |
+| `internal/app` | 后端门面 `app.App`：实现 `gui.Backend`，只做转发、文件对话框、备份恢复 | `internal/service`、`internal/repository`、`internal/model`、`internal/pkg/*` |
+| `internal/gui` | 全部界面与界面状态；只通过 `Backend` 接口访问后端，不依赖 `app.App` | `internal/client`、`internal/model`、`internal/pkg/logger` |
 | `internal/client` | 界面侧的纯逻辑：设置、会话、Cookie 罐、请求草稿与 URL/参数同步、响应体格式化与过滤、错误诊断。不碰界面，也不发网络请求 | `internal/model`、`internal/pkg/*` |
 | `internal/service` | 后端业务：HTTP 发送（含 TLS、流式、诊断）、项目/请求/环境/历史、Postman 与 OpenAPI 导入导出 | `internal/repository`、`internal/model`、`internal/pkg/*` |
 | `internal/repository` | 文件存储（`~/.minipost`）：JSON 原子写入，集合树的增删改查与移动 | `internal/model` |
@@ -34,6 +35,15 @@ MiniPost 是 macOS 专用的轻量 HTTP 调试工具，界面是纯 Go 的 MyGo 
 - 应用启动 10 秒后和之后每小时在后台检查；发现新版本自动下载（设置 → 关于里可关），下载好后提示「重启更新」。逻辑在 `internal/gui/updates.go`。
 - 开发构建（`mygo build -skip-dmg` 不带密钥）没有更新能力，`Updater.Enabled()` 为 false，只有发过 release 的版本才能端到端验证。
 
+## 仓库其他目录
+
+| 目录 | 内容 |
+| --- | --- |
+| `AppIcon.icon`、`resources/` | 应用图标（Icon Composer 图层图标与 1024 位图回退），由 `scripts/icon/gen_icon.py` 生成 |
+| `scripts/` | 构建、开发、发版与授权脚本；`scripts/version` 输出 `mygo.json` 的版本号 |
+| `docs/` | 架构文档、README 截图（`images/`）、图标预览（`icon/`）、历史设计文档（`archive/`） |
+| `mygo.json` | MyGo 应用配置：名称、版本、最低系统版本、图标、更新源 |
+
 ## 快捷键与右键菜单
 
 - 菜单栏里的加速键走原生菜单（`menu.go`）；不在菜单里的全局键（⌘E/⌘D/⌫ 作用于侧栏选中节点、⌘F 响应体查找、标签切换）集中在 `internal/gui/shortcuts.go`，输入框有焦点或有对话框时不响应。
@@ -44,4 +54,5 @@ MiniPost 是 macOS 专用的轻量 HTTP 调试工具，界面是纯 Go 的 MyGo 
 
 - 不使用 CI；提交前在本地跑 `go vet ./...`、`staticcheck ./...` 和 `go test -race ./...`。
 - 界面行为用 `ui.NewTester` 加 `fakeBackend` 测试（`internal/gui/*_test.go`）；设置 `MINIPOST_SNAPSHOT_DIR` 可输出截图。
-- 后端用临时目录的 `FileStore` 做集成式单元测试；备份恢复的测试在根包（`backup_*_test.go`）。
+- 后端用临时目录的 `FileStore` 做集成式单元测试；门面与备份恢复的测试在 `internal/app`（`*_test.go`）。
+- 测试文件与被测代码放在同一目录；资源校验（如应用图标）放在资源所在的 `resources/`。

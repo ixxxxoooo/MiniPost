@@ -1,4 +1,4 @@
-package main
+package resources
 
 import (
 	"image/png"
@@ -9,7 +9,7 @@ import (
 // 应用图标必须是 1024x1024 的 PNG：四角透明（圆角方块）、中心不透明，
 // 并且不是纯色图（防止误提交空白或占位图标）。
 func TestAppIconAsset(t *testing.T) {
-	f, err := os.Open("resources/icon.png")
+	f, err := os.Open("icon.png")
 	if err != nil {
 		t.Fatal(err)
 	}

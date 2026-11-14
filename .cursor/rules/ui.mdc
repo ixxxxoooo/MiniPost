@@ -6,7 +6,7 @@ macOS 专用的轻量级 HTTP API 调试工具。视觉气质参考 TablePlus:na
 ## 2. 技术与版本
 - UI 使用 MyGo `ui` 包(纯 Go、立即模式、GPU 绘制),不使用 WebView、不引入前端工具链
 - 最低系统版本由 `mygo.json` 的 `macos.minimumSystemVersion` 决定(当前 12.0),仅支持 macOS
-- 界面代码位于 `internal/gui`,只通过 `Backend` 接口访问后端,不得直接依赖 `main.App`
+- 界面代码位于 `internal/gui`,只通过 `Backend` 接口访问后端,不得直接依赖 `app.App`
 
 ## 3. 线程与状态
 - `view` 函数运行在主线程;协程中修改状态必须通过 `win.Update(fn)`(封装为 `a.post`/`a.async`)

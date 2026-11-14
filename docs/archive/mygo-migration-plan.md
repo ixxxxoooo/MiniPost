@@ -1,5 +1,9 @@
 # MiniPost → MyGo 重构计划
 
+> **历史文档，仅作存档。** 本计划写于迁移之前，选择的是「MyGo Web 前端模式 + 保留 React」路线；
+> 实际落地时改成了纯 Go 的 MyGo 原生 UI（2.0.0），不再有前端工具链。文中涉及 Wails、React、`main_bindings.go`、
+> `app.go` 拆分等内容均已过时，当前结构请看 [architecture.md](../architecture.md)。
+
 > 作者：ixxxxoooo ｜ 日期：2026-11-14 ｜ 分支：`refactor/mygo-migration`
 > 依据：MyGo 0.9.0 文档（https://mygo.run/docs ，原 mygo.egoist.dev 已 308 跳转至此）与当前 `main`（1c4f106）代码盘点。
 > 标注 **【待验证】** 的条目来自文档未写明之处，须在阶段 0 用原型确认，不能当作既定事实。

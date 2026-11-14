@@ -21,14 +21,14 @@
 ### 必须打日志的关键节点
 1. **应用生命周期**: 启动、WhenReady 回调、窗口关闭、OnBeforeQuit、退出
 2. **存储初始化**: FileStore 创建成功或失败
-3. **所有 `main.App` 后端方法(`gui.Backend` 接口的实现)**: 调用入口和结果（成功用 INFO/DEBUG，失败用 WARN/ERROR）
+3. **所有 `app.App` 后端方法(`gui.Backend` 接口的实现)**: 调用入口和结果（成功用 INFO/DEBUG，失败用 WARN/ERROR）
 4. **HTTP 请求**: 发送前（DEBUG）、完成后（INFO，含 status/duration/size）、失败时（WARN）
 5. **数据变更操作**: 创建/删除/重命名 项目、文件夹、请求、环境变量
 
 ### 日志格式
 使用 key=value 结构化格式：
 ```
-2026-04-05 13:42:05.000 [INFO] app.go:85 HTTP 请求完成 method=GET url=https://api.example.com status=200 duration_ms=150 size=1024
+2026-04-05 13:42:05.000 [INFO] http.go:85 HTTP 请求完成 method=GET url=https://api.example.com status=200 duration_ms=150 size=1024
 ```
 
 ### 日志文件位置
@@ -53,7 +53,7 @@
 
 ## 4. 新增代码时的检查清单
 每次新增或修改代码时，自查以下事项：
-- [ ] 新增的 `main.App` 后端方法是否在调用入口和结果处打了日志
+- [ ] 新增的 `app.App` 后端方法是否在调用入口和结果处打了日志
 - [ ] 新增的 `a.async` 操作失败分支是否记录了日志
 - [ ] 新增的数据变更操作（CRUD）是否有成功/失败日志
 - [ ] 是否有潜在的静默失败路径（error 被忽略）

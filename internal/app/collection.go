@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"minipost/internal/model"

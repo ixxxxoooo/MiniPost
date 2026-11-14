@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -14,7 +14,7 @@ func newTestApp(t *testing.T) (*App, string) {
 	t.Helper()
 
 	t.Setenv("HOME", t.TempDir())
-	app := NewApp()
+	app := New()
 	app.ctx = context.Background()
 
 	projectID := "proj-app-import"

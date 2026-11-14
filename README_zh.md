@@ -59,12 +59,13 @@ go install github.com/egoist/mygo/cmd/mygo@latest
 ```bash
 ./scripts/dev.sh        # 构建并启动「MiniPost Dev」
 go test ./...           # 全部测试，包含无头界面测试（ui.Tester）
-go test -race ./...     # 同上并开启竞态检测（CI 也会跑）
+go test -race ./...     # 同上并开启竞态检测（提交前在本地运行）
 ```
 
 代码结构（分层规则见 [docs/architecture.md](docs/architecture.md)）：
 
-- `main.go`、`app*.go`：入口与后端门面（`main.App`）
+- `main.go`：程序入口（`mygo build` 要求入口在仓库根目录）
+- `internal/app`：后端门面（`app.App`），实现 `gui.Backend`，含备份与恢复
 - `internal/gui`：原生界面（侧栏、标签、请求编辑、响应查看、对话框）；只通过 `Backend` 接口访问后端，便于用假后端测试
 - `internal/client`：纯 Go 的客户端逻辑（URL/参数同步、变量、Cookie 罐、自动请求头、cURL、设置与会话持久化）
 - `internal/service`、`internal/repository`、`internal/model`、`internal/pkg`：业务逻辑、存储（`~/.minipost`）与工具
