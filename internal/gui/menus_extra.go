@@ -64,6 +64,29 @@ func (a *app) exportCurlOf(id string) {
 	})
 }
 
+// exportNodeOf 把请求或文件夹（含子项）导出为 Postman Collection JSON 文件，之后可用“导入”还原。
+func (a *app) exportNodeOf(id string) {
+	n, ok := a.tree.nodes[id]
+	if !ok {
+		return
+	}
+	safe := strings.TrimSpace(unsafeFileChars.ReplaceAllString(n.name, "-"))
+	if safe == "" {
+		safe = id
+	}
+	pid := a.projectID
+	a.async(func() func() {
+		content, err := a.be.ExportNodeJSON(pid, id)
+		if err == nil {
+			err = a.be.SaveFileDialogJSON(a.win, safe+".postman_collection.json", content)
+		}
+		if err == nil {
+			logger.Info("已导出节点", "nodeID", id, "folder", n.folder)
+		}
+		return func() { a.fail(a.t("导出 JSON", "Export JSON"), err) }
+	})
+}
+
 // copyText 复制一段文本并提示。
 func (a *app) copyText(s, tip string) {
 	a.writeClipboard(s)

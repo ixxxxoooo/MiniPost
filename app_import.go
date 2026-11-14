@@ -26,6 +26,17 @@ func (a *App) ExportProjectJSON(projectID string) (string, error) {
 	return string(data), nil
 }
 
+// ExportNodeJSON 导出项目里的单个请求或文件夹为 Postman Collection JSON。
+func (a *App) ExportNodeJSON(projectID, nodeID string) (string, error) {
+	data, err := a.requestSvc.ExportNodeJSON(projectID, nodeID)
+	if err != nil {
+		logger.Error("导出节点失败", "projectID", projectID, "nodeID", nodeID, "error", err.Error())
+		return "", err
+	}
+	logger.Info("导出节点成功", "projectID", projectID, "nodeID", nodeID, "size", len(data))
+	return string(data), nil
+}
+
 func (a *App) ImportPostmanCollection(projectID, jsonStr string) error {
 	if err := a.requestSvc.ImportPostmanCollection(projectID, []byte(jsonStr)); err != nil {
 		logger.Error("导入 Postman 集合失败", "projectID", projectID, "error", err.Error())

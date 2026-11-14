@@ -334,6 +334,9 @@ func (a *app) nodeMenu(m *ui.Menu, id string) {
 		if m.Item(label).Chosen() {
 			a.later(func() { a.toggleFolder(id) })
 		}
+		if m.Item(a.t("导出 JSON…", "Export JSON…")).Chosen() {
+			a.later(func() { a.exportNodeOf(id) })
+		}
 		m.Separator()
 	} else {
 		if m.Item(a.t("打开", "Open")).Chosen() {
@@ -344,6 +347,9 @@ func (a *app) nodeMenu(m *ui.Menu, id string) {
 		}
 		if m.Item(a.t("导出 cURL…", "Export cURL…")).Chosen() {
 			a.later(func() { a.exportCurlOf(id) })
+		}
+		if m.Item(a.t("导出 JSON…", "Export JSON…")).Chosen() {
+			a.later(func() { a.exportNodeOf(id) })
 		}
 		m.Separator()
 	}

@@ -304,6 +304,9 @@ func (f *fakeBackend) DeleteHistoryEntry(pid, id string) error {
 }
 func (f *fakeBackend) ClearHistory(pid string) error                { f.history[pid] = nil; return nil }
 func (f *fakeBackend) ExportProjectJSON(pid string) (string, error) { return "{}", nil }
+func (f *fakeBackend) ExportNodeJSON(pid, nodeID string) (string, error) {
+	return `{"node":"` + nodeID + `"}`, nil
+}
 func (f *fakeBackend) PreviewImportFromFile(pid, format, content string) (*service.ImportPreview, error) {
 	return &service.ImportPreview{Kind: "postman", Content: content}, nil
 }
@@ -328,7 +331,8 @@ func (f *fakeBackend) OpenFileDialogJSON(*mygo.Window) (string, error) {
 	return "", nil
 }
 func (f *fakeBackend) OpenFileDialogAny(*mygo.Window) (string, error) { return "", nil }
-func (f *fakeBackend) SaveFileDialogJSON(*mygo.Window, string, string) error {
+func (f *fakeBackend) SaveFileDialogJSON(_ *mygo.Window, name, content string) error {
+	f.texts = append(f.texts, savedFile{name, content})
 	return nil
 }
 func (f *fakeBackend) SaveTextFile(_ *mygo.Window, name, content string) error {

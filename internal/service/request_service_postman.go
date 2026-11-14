@@ -195,7 +195,46 @@ func (s *RequestService) ExportProjectJSON(projectID string) ([]byte, error) {
 	return json.MarshalIndent(collection, "", "  ")
 }
 
+// ExportNodeJSON 把项目里的一个请求或文件夹（含全部子项）导出为 Postman Collection v2.1 JSON。
+// 导出内容保留该节点本身，因此再导入时会在项目里还原出同名文件夹/请求。
+func (s *RequestService) ExportNodeJSON(projectID, nodeID string) ([]byte, error) {
+	data, err := s.store.GetCollectionData(projectID)
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
+		data = &model.CollectionData{}
+	}
+	var name string
+	var items []postmanItem
+	for _, f := range data.Folders {
+		if f.ID == nodeID {
+			name = f.Name
+			items = []postmanItem{{Name: f.Name, Item: s.buildPostmanItemsUnder(data, f.ID)}}
+		}
+	}
+	for _, r := range data.Requests {
+		if r.ID == nodeID {
+			name = r.Name
+			items = []postmanItem{{Name: r.Name, Request: convertRequestToPostman(r)}}
+		}
+	}
+	if items == nil {
+		return nil, fmt.Errorf("未找到要导出的节点: %s", nodeID)
+	}
+	collection := postmanCollection{
+		Info: postmanInfo{Name: name, Schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+		Item: items,
+	}
+	return json.MarshalIndent(collection, "", "  ")
+}
+
 func (s *RequestService) buildPostmanItems(data *model.CollectionData) []postmanItem {
+	return s.buildPostmanItemsUnder(data, "")
+}
+
+// buildPostmanItemsUnder 构造 parentID 文件夹（空串为根）下的 Postman 条目树。
+func (s *RequestService) buildPostmanItemsUnder(data *model.CollectionData, parentID string) []postmanItem {
 	folderByID := make(map[string]model.Folder, len(data.Folders))
 	for _, folder := range data.Folders {
 		folderByID[folder.ID] = folder
@@ -252,7 +291,7 @@ func (s *RequestService) buildPostmanItems(data *model.CollectionData) []postman
 		return result
 	}
 
-	return walk("")
+	return walk(parentID)
 }
 
 func convertRequestToPostman(request model.RequestItem) *postmanReq {

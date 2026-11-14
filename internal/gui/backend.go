@@ -53,6 +53,7 @@ type Backend interface {
 
 	// 导入导出与备份
 	ExportProjectJSON(projectID string) (string, error)
+	ExportNodeJSON(projectID, nodeID string) (string, error)
 	PreviewImportFromFile(projectID, format, content string) (*service.ImportPreview, error)
 	PreviewImportFromURL(projectID, format, sourceURL string) (*service.ImportPreview, error)
 	ImportCollectionWithStrategy(projectID, format, content, sourceURL, strategy string) error
