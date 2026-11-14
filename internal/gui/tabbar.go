@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"math"
+
 	"github.com/egoist/mygo/ui"
 )
 
@@ -55,11 +57,35 @@ func (a *app) newTabButton(c *ui.Context) {
 // tabDrag 是拖动标签时携带的值。
 type tabDrag struct{ t *tab }
 
-// tabWidth 是请求标签的固定宽度；tabAccentWidth 是选中标签顶部强调线的粗细（与旧版 2px 的强调线一致）。
+// 请求标签按标题自适应宽度，限制在 [tabMinWidth, tabMaxWidth]；tabAccentWidth 是选中标签顶部强调线的粗细（与旧版 2px 的强调线一致）。
 const (
-	tabWidth       = 220
+	tabMinWidth    = 120
+	tabMaxWidth    = 220
 	tabAccentWidth = 2
+	// 标签里标题之外固定占用的宽度：左右内边距 16 + 三处间距 12 + 未保存圆点位 6 + 关闭按钮 16，再留 4 的余量防止刚好被截断。
+	tabChrome = 16 + 12 + 6 + 16 + 4
 )
+
+// tabLeadWidth 是标题前面的方法标签（或环境标签的地球图标）的宽度。
+func (a *app) tabLeadWidth(c *ui.Context, t *tab) float32 {
+	if t.env != nil {
+		return 11
+	}
+	w, _ := c.MeasureText(0, ui.Span{Text: t.draft.Method, Font: monoFont, Size: 9, Weight: 700})
+	return w
+}
+
+// tabWidthFor 计算标签宽度：方法标签 + 标题 + 固定占位，夹在 [tabMinWidth, tabMaxWidth] 之间。
+// 不抖动的关键：
+//   - 标题一律按选中态的字重（500）量宽，选中/未选中切换时宽度不变；
+//   - 未保存圆点和关闭按钮的位置始终预留，修改请求或悬停时宽度不变；
+//   - 只有标题、方法变化（改名、改方法）时才会改变宽度。
+func (a *app) tabWidthFor(c *ui.Context, t *tab) float32 {
+	lead := a.tabLeadWidth(c, t)
+	title, _ := c.MeasureText(0, ui.Span{Text: t.title(), Size: fsV2xs, Weight: 500})
+	w := min(max(lead+title+tabChrome, tabMinWidth), tabMaxWidth)
+	return float32(math.Ceil(float64(w)))
+}
 
 // stripTopLine 画标签条顶部的 1px 横线（铺满整条，作为最底层）。
 // 选中的标签从这一行开始，用自己的强调色上边框把线盖住，所以同一个位置永远只有一条线；
@@ -78,8 +104,9 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 	if active {
 		h = sizeTabStrip // 选中的标签从顶线所在行开始，用自己的上边框盖住它
 	}
-	// 宽度固定：选中项的字重更粗，按内容算宽度的话切换时标签会突然变宽变窄。
-	cell := ui.Row(c.Key("tab:" + t.draft.ID)).Height(h).Width(tabWidth).Shrink(0).Drag(tabDrag{t: t}).
+	// 宽度按标题自适应，但用固定字重量宽并预留圆点/关闭按钮的位置，所以切换、编辑、悬停时都不会抖动。
+	t.shownW = a.tabWidthFor(c, t)
+	cell := ui.Row(c.Key("tab:" + t.draft.ID)).Height(h).Width(t.shownW).Shrink(0).Drag(tabDrag{t: t}).
 		ContextMenu(func(m *ui.Menu) { a.tabMenu(m, i) }).
 		HandleInput(func(ev ui.InputEvent) bool {
 			// 中键按下时接管这次点按，抬起时关闭（和浏览器标签页的习惯一致）。
@@ -106,11 +133,8 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 		dropHere = true
 	}
 	hover := cell.Hovered()
-	// 标题可用宽度 = 标签宽 - 左右内边距 16 - 方法标签（约 6 个等宽字符加间距）- 未保存圆点 - 关闭按钮
-	titleRoom := float32(tabWidth) - 16 - 40 - 20
-	if t.dirty {
-		titleRoom -= 10
-	}
+	// 标题可用宽度 = 标签宽 - 标题之外固定占用的部分 - 方法标签
+	titleRoom := t.shownW - tabChrome - a.tabLeadWidth(c, t)
 	cell = a.tipIfLong(c, cell, t.title(), fsV2xs, 500, titleRoom)
 	switch {
 	case active:
@@ -134,8 +158,10 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 					col, w = p.fg, 500
 				}
 				txtE(c, t.title(), fsV2xs, col, w).Grow(1).Basis(0)
+				// 未保存圆点：位置始终预留（不脏时透明），避免编辑时标签宽度变化。
+				dot := ui.Box(c).Size(6, 6).Radius(3).Shrink(0)
 				if t.dirty {
-					ui.Box(c).Size(6, 6).Radius(3).Background(p.accent).Shrink(0)
+					dot = dot.Background(p.accent)
 				}
 				closeCol := p.muted
 				cb := ui.ButtonBase(c.Key("tc:"+t.draft.ID)).Size(16, 16).Radius(4).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).

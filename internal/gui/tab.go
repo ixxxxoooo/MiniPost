@@ -57,6 +57,8 @@ type tab struct {
 	sendID   string
 	urlCache string // 上一次与 Params 同步过的 URL
 
+	shownW float32 // 标签栏里这个标签最近一次渲染的宽度（自适应宽度，测试和提示用）
+
 	env *envEdit // 非空表示这是环境编辑页标签，而不是请求标签
 
 	editName      bool   // 面包屑里的请求名是否处于编辑状态

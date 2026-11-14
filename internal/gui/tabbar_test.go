@@ -49,7 +49,7 @@ func TestActiveTabMergesWithContent(t *testing.T) {
 	snapshot(t, tt, "tabs")
 	img := tt.Image()
 	stripBottom := sizeToolbar - 1 + sizeTabStrip - 1 // 标签栏最后一行像素（标题栏不再画底线，标签栏从 sizeToolbar-1 开始）
-	x := int(a.set.SidebarWidth) + 130                // 选中标签内部、文字右侧（标签最小宽 148）
+	x := int(a.set.SidebarWidth) + 100                // 选中标签内部、文字右侧（标签最小宽 120）
 	below := img.RGBAAt(x, stripBottom+3)             // 内容区
 	at := img.RGBAAt(x, stripBottom)
 	if at != below {
@@ -92,7 +92,7 @@ func TestTabStripHasSingleTopLine(t *testing.T) {
 	}{
 		{"请求标签条空白处", img.Bounds().Max.X - 300, rgb(p.border)},
 		{"未选中的请求标签", sw + 60, rgb(p.border)},
-		{"选中的请求标签", sw + tabWidth + 70, rgb(p.tabActiveBorder)},
+		{"选中的请求标签", sw + int(a.tabs[0].shownW) + 40, rgb(p.tabActiveBorder)},
 		{"侧栏选中的标签", 60, rgb(p.tabActiveBorder)},
 		{"侧栏未选中的标签", 150, rgb(p.border)},
 	}
@@ -163,19 +163,19 @@ func TestTabWidthStableOnSwitch(t *testing.T) {
 	tt.Frame()
 	y := sizeToolbar - 1 // 顶部强调线所在行
 	img0 := tt.Image()
-	// 选中第一个标签时，第二个标签从 sw+tabWidth 开始（第一个标签 + 无分隔线）；
+	// 选中第一个标签时，第二个标签从 sw+tabMaxWidth 开始（第一个标签 + 无分隔线）；
 	// 选中第二个标签时，它的左边框也应从同一列开始。
 	a.activate(1)
 	tt.Frame()
 	tt.Frame()
 	img1 := tt.Image()
 	acc := rgb(a.p.tabActiveBorder)
-	// 第一个标签占 [sw, sw+tabWidth)，分隔线在 sw+tabWidth，第二个标签从 sw+tabWidth+1 开始。
-	if px(img1, sw+tabWidth+1, y) != acc || px(img1, sw+tabWidth, y) == acc {
-		t.Errorf("选中第二个标签时顶部强调线应从 x=%d 开始", sw+tabWidth+1)
+	// 第一个标签占 [sw, sw+tabMaxWidth)（标题很长，取最大宽度），分隔线在 sw+tabMaxWidth，第二个标签从 sw+tabMaxWidth+1 开始。
+	if px(img1, sw+tabMaxWidth+1, y) != acc || px(img1, sw+tabMaxWidth, y) == acc {
+		t.Errorf("选中第二个标签时顶部强调线应从 x=%d 开始", sw+tabMaxWidth+1)
 	}
-	if px(img0, sw+tabWidth-1, y) != acc || px(img0, sw+tabWidth, y) == acc {
-		t.Errorf("选中第一个标签时顶部强调线应在 x=%d 结束", sw+tabWidth-1)
+	if px(img0, sw+tabMaxWidth-1, y) != acc || px(img0, sw+tabMaxWidth, y) == acc {
+		t.Errorf("选中第一个标签时顶部强调线应在 x=%d 结束", sw+tabMaxWidth-1)
 	}
 }
 
@@ -260,5 +260,94 @@ func TestTabBarPlusHasVisibleBackground(t *testing.T) {
 	strip := img.RGBAAt(int(r.X)-3, int(r.Y)+3)
 	if px == strip {
 		t.Fatalf("“+”按钮常态应有可见底色，与标签栏背景不同: %v", px)
+	}
+}
+
+// 标签宽度随标题自适应：短标题取下限，长标题取上限，中等长度的在两者之间且更长的更宽。
+func TestTabWidthAdaptsToTitle(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openRequest(a.coll.Requests[0].ID)
+	a.openRequest(a.coll.Requests[1].ID)
+	names := []string{"a", "中等长度的标题", "中等长度的标题再长一些一些一些"}
+	a.tabs[0].draft.Name = names[0]
+	a.tabs[1].draft.Name = names[1]
+	tt.Frame()
+	short, mid := a.tabs[0].shownW, a.tabs[1].shownW
+	if short != tabMinWidth {
+		t.Fatalf("短标题应取下限 %d，实际 %.0f", tabMinWidth, short)
+	}
+	if !(mid > short && mid < tabMaxWidth) {
+		t.Fatalf("中等标题应在 (%d,%d) 之间，实际 %.0f", tabMinWidth, tabMaxWidth, mid)
+	}
+	a.tabs[1].draft.Name = names[2]
+	tt.Frame()
+	if longer := a.tabs[1].shownW; longer <= mid {
+		t.Fatalf("更长的标题应更宽: %.0f → %.0f", mid, longer)
+	}
+	a.tabs[1].draft.Name = "一个很长很长很长很长很长很长很长很长很长很长很长很长的标签标题 (long title)"
+	tt.Frame()
+	if a.tabs[1].shownW != tabMaxWidth {
+		t.Fatalf("超长标题应取上限 %d，实际 %.0f", tabMaxWidth, a.tabs[1].shownW)
+	}
+}
+
+// 不抖动：切换选中、出现未保存圆点、鼠标悬停/移开，所有标签的宽度都不变。
+func TestTabWidthsDoNotJitter(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openRequest(a.coll.Requests[0].ID)
+	a.openRequest(a.coll.Requests[1].ID)
+	a.tabs[0].draft.Name = "中等长度的标题"
+	a.tabs[1].draft.Name = "另一个中等长度标题"
+	a.tabs[0].base.Name, a.tabs[1].base.Name = a.tabs[0].draft.Name, a.tabs[1].draft.Name // 视为已保存
+	tt.Frame()
+	widths := func() [2]float32 { return [2]float32{a.tabs[0].shownW, a.tabs[1].shownW} }
+	base := widths()
+	check := func(what string) {
+		t.Helper()
+		if got := widths(); got != base {
+			t.Fatalf("%s后标签宽度变了: %v → %v", what, base, got)
+		}
+	}
+
+	a.activate(0)
+	tt.Frame()
+	check("切换到第一个标签")
+	a.activate(1)
+	tt.Frame()
+	check("切换到第二个标签")
+
+	// 未保存圆点出现（不改标题和方法，只标脏）
+	a.tabs[1].dirty = true
+	tt.Frame()
+	check("出现未保存圆点")
+	a.tabs[1].dirty = false
+	tt.Frame()
+	check("圆点消失")
+
+	// 悬停到标签上再移开（关闭按钮图标出现/消失）
+	y := float32(sizeToolbar + sizeTabStrip/2)
+	tt.Move(a.set.SidebarWidth+30, y)
+	tt.Frame()
+	check("鼠标悬停在第一个标签")
+	tt.Move(600, 500)
+	tt.Frame()
+	check("鼠标移开")
+}
+
+// 相邻标签首尾相接：第二个标签的左边正好是第一个标签的宽度加 1px 分隔线之后。
+func TestAdaptiveTabsAreContiguous(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openRequest(a.coll.Requests[0].ID)
+	a.openRequest(a.coll.Requests[1].ID)
+	a.tabs[0].draft.Name = "中等长度的标题"
+	tt.Frame()
+	tt.Frame()
+	img := tt.Image()
+	y := sizeToolbar - 1 // 顶线所在行；选中的第二个标签用强调色盖住它
+	sw := int(a.set.SidebarWidth)
+	acc := rgb(a.p.tabActiveBorder)
+	start := sw + int(a.tabs[0].shownW) + 1
+	if px(img, start, y) != acc || px(img, start-2, y) == acc {
+		t.Fatalf("选中的第二个标签应从 x=%d 开始", start)
 	}
 }

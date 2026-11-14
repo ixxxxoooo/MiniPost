@@ -39,7 +39,7 @@ func TestDragTabReorders(t *testing.T) {
 	tt.Frame()
 	y := float32(sizeToolbar + sizeTabStrip/2)
 	x0 := a.set.SidebarWidth + 90
-	x1 := a.set.SidebarWidth + tabWidth + 90
+	x1 := a.set.SidebarWidth + a.tabs[0].shownW + 40 // 第二个标签（宽度自适应）
 	drag(tt, x0, y, x1, y)
 	if len(a.tabs) != 2 || a.tabs[0].title() != "beta" || a.tabs[1].title() != "alpha" {
 		t.Fatalf("拖动后顺序应为 beta, alpha: %s, %s", a.tabs[0].title(), a.tabs[1].title())
