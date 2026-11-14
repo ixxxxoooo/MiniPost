@@ -68,7 +68,7 @@ func (a *app) responsePane(c *ui.Context, t *tab) {
 			a.respTitle(c)
 			ui.Row(c).Grow(1).Basis(0).FillWidth().AlignItems(ui.Center).Justify(ui.Center).Children(func() {
 				if t.sending {
-					txt(c, a.t("发送请求...", "Sending request..."), fsLarge, p.fg2, 0)
+					a.sendingIndicator(c, t)
 					return
 				}
 				empty := strings.TrimSpace(t.draft.URL) == ""

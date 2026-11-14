@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"image"
+	"image/color"
 	"testing"
 	"time"
 
@@ -32,7 +34,7 @@ func TestShimmerOffset(t *testing.T) {
 	if start >= 0 {
 		t.Fatalf("起点应在容器左侧之外，实际 %v", start)
 	}
-	if end := shimmerOffset(shimmerPeriod - time.Millisecond); end < 100 {
+	if end := shimmerOffset(shimmerPeriod - time.Millisecond); end < 99 {
 		t.Fatalf("终点应扫出容器右侧，实际 %v", end)
 	}
 	if mid := shimmerOffset(shimmerPeriod / 2); mid <= 0 || mid >= 100 {
@@ -43,41 +45,126 @@ func TestShimmerOffset(t *testing.T) {
 	}
 }
 
-// 发送中响应区顶部应画出蓝色扫光条，结束后消失。
-func TestShimmerDrawnWhileSending(t *testing.T) {
-	a, tt, _ := zhApp(t)
-	a.openRequest(a.coll.Requests[0].ID)
-	tb := a.activeTab()
-	tb.sending, tb.sendAt = true, time.Now().Add(-shimmerPeriod/2)
-	tt.Frame()
-	busy := tt.Image()
-	snapshot(t, tt, "sending")
-	if !tt.HasText("发送请求...") {
-		t.Fatalf("发送中应显示提示，实际 %q", tt.Texts())
+// 淡入淡出：刚开始透明，随后不透明；请求很快结束时在最短展示时间的末段淡出。
+func TestShimmerAlpha(t *testing.T) {
+	now := time.Now()
+	tb := &tab{sending: true, sendAt: now}
+	if a := shimmerAlpha(tb, now); a != 0 {
+		t.Fatalf("刚开始应完全透明，实际 %v", a)
 	}
-	title, ok := tt.Find("响应")
-	if !ok {
-		t.Fatal("找不到响应标题")
+	if a := shimmerAlpha(tb, now.Add(shimmerFadeIn/2)); a <= 0 || a >= 1 {
+		t.Fatalf("淡入中途应半透明，实际 %v", a)
 	}
+	if a := shimmerAlpha(tb, now.Add(time.Hour)); a != 1 {
+		t.Fatalf("发送中应不透明，实际 %v", a)
+	}
+	tb.sending = false
+	if a := shimmerAlpha(tb, now.Add(shimmerMin-shimmerFadeOut/2)); a <= 0 || a >= 1 {
+		t.Fatalf("结束后的淡出中途应半透明，实际 %v", a)
+	}
+	if a := shimmerAlpha(tb, now.Add(shimmerMin)); a != 0 {
+		t.Fatalf("展示结束时应完全透明，实际 %v", a)
+	}
+}
 
-	tb.sending, tb.sendAt = false, time.Now().Add(-time.Hour)
-	tt.Frame()
-	idle := tt.Image()
-
-	// 标题上方（响应区最顶端）只可能是扫光条造成差异。
-	top := int(title.Y) - 10
-	b := busy.Bounds()
-	blue := 0
-	for y := top; y < int(title.Y); y++ {
-		for x := b.Min.X; x < b.Max.X; x++ {
-			c1, c2 := busy.RGBAAt(x, y), idle.RGBAAt(x, y)
-			if c1 != c2 && c1.B > 200 && c1.R < 120 {
-				blue++
+// 三个圆点依次起伏：亮度始终在 0.25~1 之间，且同一时刻互不相同。
+func TestDotPulse(t *testing.T) {
+	for ms := 0; ms < int(dotsPeriod/time.Millisecond); ms += 37 {
+		el := time.Duration(ms) * time.Millisecond
+		for i := 0; i < 3; i++ {
+			if v := dotPulse(el, i); v < 0.249 || v > 1.001 {
+				t.Fatalf("t=%dms 点 %d 亮度 %v 越界", ms, i, v)
 			}
 		}
 	}
-	if blue == 0 {
-		t.Fatal("发送中响应区顶部应出现蓝色扫光条")
+	if dotPulse(300*time.Millisecond, 0) == dotPulse(300*time.Millisecond, 1) {
+		t.Fatal("相邻圆点应错开相位")
+	}
+}
+
+func TestSendingElapsed(t *testing.T) {
+	cases := map[time.Duration]string{
+		-time.Second:            "0.0s",
+		0:                       "0.0s",
+		1250 * time.Millisecond: "1.2s",
+		59 * time.Second:        "59.0s",
+		65 * time.Second:        "1m 05s",
+	}
+	for in, want := range cases {
+		if got := sendingElapsed(in); got != want {
+			t.Errorf("sendingElapsed(%v)=%q，想要 %q", in, got, want)
+		}
+	}
+}
+
+// accentPixels 统计响应区顶部那几行里，与空闲帧不同且“偏向 want”的像素数。
+func accentPixels(t *testing.T, tt *ui.Tester, busy, idle *image.RGBA, titleY int, want func(c color.RGBA) bool) int {
+	t.Helper()
+	b := busy.Bounds()
+	n := 0
+	for y := titleY - 12; y < titleY; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			c1, c2 := busy.RGBAAt(x, y), idle.RGBAAt(x, y)
+			if c1 != c2 && want(c1) {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// 发送中响应区顶部应画出扫光线，颜色跟随项目主题色（默认蓝、绿色主题则偏绿），结束后消失。
+func TestShimmerDrawnWhileSending(t *testing.T) {
+	for _, tc := range []struct {
+		name, theme string
+		want        func(c color.RGBA) bool
+	}{
+		{"默认蓝色", "", func(c color.RGBA) bool { return c.B > 200 && c.R < 140 }},
+		{"绿色主题", "#16a34a", func(c color.RGBA) bool { return c.G > c.B+30 && c.G > c.R+30 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, tt, _ := zhApp(t)
+			a.openRequest(a.coll.Requests[0].ID)
+			if tc.theme != "" {
+				a.project().ThemeColor = tc.theme
+			}
+			tb := a.activeTab()
+			tb.sending, tb.sendAt = true, time.Now().Add(-shimmerPeriod*6/10)
+			tt.Frame()
+			busy := tt.Image()
+			snapshot(t, tt, "sending")
+			if !tt.HasText("发送请求...") {
+				t.Fatalf("发送中应显示提示，实际 %q", tt.Texts())
+			}
+			title, ok := tt.Find("响应")
+			if !ok {
+				t.Fatal("找不到响应标题")
+			}
+			tb.sending, tb.sendAt = false, time.Now().Add(-time.Hour)
+			tt.Frame()
+			idle := tt.Image()
+			if n := accentPixels(t, tt, busy, idle, int(title.Y), tc.want); n == 0 {
+				t.Fatalf("发送中响应区顶部应出现主题色扫光线（%s）", tc.name)
+			}
+		})
+	}
+}
+
+// 发送中提示里要有实时计时。
+func TestSendingIndicatorShowsElapsed(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openRequest(a.coll.Requests[0].ID)
+	tb := a.activeTab()
+	tb.sending, tb.sendAt = true, time.Now().Add(-2300*time.Millisecond)
+	tt.Frame()
+	found := false
+	for _, s := range tt.Texts() {
+		if len(s) >= 4 && s[len(s)-1] == 's' && s[0] == '2' && s[1] == '.' {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("应显示约 2.3s 的计时，实际 %q", tt.Texts())
 	}
 }
 
