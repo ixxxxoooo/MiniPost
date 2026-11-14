@@ -88,6 +88,10 @@ func TestCleanupOldLogs(t *testing.T) {
 func TestInitUsesPrivatePermissions(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	// 旧版本留下的宽权限目录也会被收紧
+	if err := os.MkdirAll(filepath.Join(home, ".minipost", "logs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := Init(); err != nil {
 		t.Fatal(err)
 	}

@@ -52,6 +52,8 @@ func Init() error {
 		return fmt.Errorf("创建日志目录失败: %w", err)
 	}
 
+	_ = os.Chmod(logDir, 0o700) // 旧版本以 0755 创建过目录，这里收紧；失败不影响启动
+
 	logFileName := fmt.Sprintf("minipost-%s.log", time.Now().Format("2006-01-02"))
 	logPath = filepath.Join(logDir, logFileName)
 
@@ -59,6 +61,7 @@ func Init() error {
 	if err != nil {
 		return fmt.Errorf("打开日志文件失败: %w", err)
 	}
+	_ = logFile.Chmod(0o600) // 当天已有的旧日志文件也收紧
 
 	fileLogger = log.New(logFile, "", 0)
 
