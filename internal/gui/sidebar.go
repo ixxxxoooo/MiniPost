@@ -77,7 +77,7 @@ func (a *app) sideTabs(c *ui.Context) {
 func (a *app) searchRow(c *ui.Context) {
 	p := a.p
 	ui.Row(c).FillWidth().Shrink(0).Padding(7.5, 8, 6, 8).Gap(4).AlignItems(ui.Center).Children(func() {
-		a.input(c, &a.side.query, a.t("搜索请求...", "Search requests..."), fieldOpts{icon: "search", radius: radiusInput, key: "side-search"})
+		a.input(c, &a.side.query, a.t("搜索名称、地址、请求体...", "Search name, URL, body..."), fieldOpts{icon: "search", radius: radiusInput, key: "side-search"})
 		if a.iconButton(c, "fileImport", a.t("导入", "Import"), 14, p.fg2) {
 			a.later(func() { a.openImport(importFile) })
 		}
@@ -136,15 +136,9 @@ func (a *app) collectionView(c *ui.Context) {
 	_ = p
 }
 
-// matchNode 判断请求的名称或地址是否包含搜索词。
+// matchNode 判断请求的名称、地址、方法、参数、请求头或请求体是否包含搜索词。
 func (a *app) matchNode(n treeNode, q string) bool {
-	if strings.Contains(strings.ToLower(n.name), q) {
-		return true
-	}
-	if it, ok := a.requestItem(n.id); ok {
-		return strings.Contains(strings.ToLower(it.URL), q)
-	}
-	return false
+	return a.searchHit(n, q) != hitNone
 }
 
 // sideHint 是侧栏列表为空时居中的灰色提示。
@@ -301,6 +295,12 @@ func (a *app) requestRow(c *ui.Context, id string, depth int) {
 			col, w = p.accent, 500
 		}
 		txtE(c, n.name, fsV2xs, col, w).Grow(1)
+		if q := strings.ToLower(strings.TrimSpace(a.side.query)); q != "" && !hover {
+			// 搜索结果：名称/地址以外的位置命中时，在行尾标出命中位置
+			if label := a.hitLabel(a.searchHit(n, q)); label != "" {
+				txt(c, label, 9, p.muted, 0).Shrink(0)
+			}
+		}
 		if hover {
 			if a.miniIcon(c, "add", a.t("新建请求", "New request")) {
 				a.later(func() { a.newRequest(n.parent) })
