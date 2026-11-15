@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN" data-scheme="mist" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MiniPost · UI 重设计稿</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/doc.css">
+<style>
+  .hero{display:grid;grid-template-columns:auto 1fr;gap:40px;align-items:center;padding:40px;border-radius:24px;background:radial-gradient(110% 150% at 0% 0%,var(--ac-soft),transparent 62%),var(--bg2);border:1px solid var(--bd);margin-top:0}
+  .hero .lg{filter:drop-shadow(0 22px 34px color-mix(in oklab,var(--ac) 40%,transparent))}
+  .hero h1{font-size:32px;line-height:1.2;margin:0 0 10px;letter-spacing:-.025em}
+  .hero p{margin:0 0 20px;color:var(--fg2);font-size:14px;max-width:560px}
+  .stats{display:flex;gap:30px;margin-top:22px}.stats div b{display:block;font-size:22px;letter-spacing:-.02em}.stats div span{font-size:11.5px;color:var(--mu)}
+  .dir{display:grid;gap:12px;padding:16px;border-radius:18px;border:1px solid var(--bd);background:var(--bg);transition:transform .25s var(--ease-out),box-shadow .25s,border-color .25s}
+  .dir:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:color-mix(in oklab,var(--ac) 45%,var(--bd))}
+  .dir.rec{border-color:color-mix(in oklab,var(--ac) 55%,var(--bd));box-shadow:0 0 0 3px var(--ac-soft)}
+  .prev{position:relative;height:0;padding-bottom:62.7%;border-radius:12px;overflow:hidden;border:1px solid var(--bd);background:var(--bg2)}
+  .prev iframe{position:absolute;left:0;top:0;width:1180px;height:740px;border:0;transform-origin:0 0;pointer-events:none}
+  .dir h3{margin:0;font-size:16px;display:flex;align-items:center;gap:8px}
+  .dir h3 i{font-style:normal;width:22px;height:22px;border-radius:7px;background:var(--ac);color:var(--acf);display:grid;place-items:center;font-size:12px}
+  .dir p{margin:0;color:var(--fg2);font-size:12.5px}
+  .dir ul{margin:0;padding-left:16px;color:var(--mu);font-size:12px}.dir li{margin:2px 0}
+  .dir .go{display:flex;gap:8px;margin-top:2px}
+  .dec td:first-child{white-space:nowrap}
+  .opt{display:inline-flex;gap:4px;flex-wrap:wrap}
+  .opt span{padding:0 8px;height:20px;line-height:20px;border-radius:6px;background:var(--bg2);font-size:11.5px;color:var(--fg2)}
+  .opt span.r{background:var(--ac-soft);color:var(--ac);font-weight:650}
+  .who{font-size:11px;color:var(--mu)}
+  .sch{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+  .sch a{display:grid;gap:8px;padding:10px;border-radius:14px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);transition:transform .2s var(--ease-out)}
+  .sch a:hover{transform:translateY(-2px)}
+  .sch .pv{display:flex;gap:4px;height:46px;padding:5px;border-radius:9px;background:var(--chrome);border:1px solid var(--bd)}
+  .sch .pv i{border-radius:5px;background:var(--side);flex:1}.sch .pv i+i{flex:2.4;background:var(--bg)}
+  .sch .pv u{position:absolute}
+  .sch b{font-size:12.5px}.sch small{color:var(--mu);font:10.5px var(--font-mono);margin-left:6px}
+  .cover{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .cover div{padding:14px 16px;border:1px solid var(--bd);border-radius:14px;background:var(--bg)}
+  .cover b{display:block;font-size:13px;margin-bottom:3px}.cover span{font-size:12px;color:var(--mu)}
+  .howto{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .howto div{padding:16px;border-radius:14px;background:var(--bg2)}
+  .howto b{display:block;margin-bottom:4px}.howto span{color:var(--fg2);font-size:12.5px}
+  .rec-box{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:center;padding:22px 26px;border-radius:18px;background:linear-gradient(120deg,var(--ac-soft),transparent 70%);border:1px solid color-mix(in oklab,var(--ac) 35%,var(--bd))}
+  .rec-box h3{margin:0 0 4px;font-size:16px}.rec-box p{margin:0;color:var(--fg2)}
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="brand" id="brand"></span>
+  <nav><a href="index.html" class="on">总览</a><a href="prototype.html">可交互原型</a><a href="gallery.html">全屏幕画廊</a><a href="logo.html">Logo</a><a href="system.html">设计系统</a></nav>
+  <span class="sp"></span><div class="dots" id="dots"></div><button class="tg" id="mode">深色</button>
+</header>
+<main>
+  <section class="hero">
+    <div class="lg" id="heroLogo"></div>
+    <div>
+      <span class="badge2">UI 重设计 · 设计稿 v1</span>
+      <h1 style="margin-top:12px">更紧凑、更好看、更连贯的 MiniPost</h1>
+      <p>保留原有的紧凑风格与全部功能，把 <b>3 套整体方向</b>、<b>8 个可单独切换的交互决策</b>、<b>5 套配色 × 明暗</b>、<b>全新 Logo</b> 做成了可以直接点开、操作、对比的原型。你只需要挑出喜欢的方案。</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btnx pri" href="prototype.html">打开可交互原型 →</a><a class="btnx" href="gallery.html">全屏幕画廊（61 个场景）</a><a class="btnx" href="logo.html">Logo 方案</a><a class="btnx" href="system.html">设计系统与动效</a>
+      </div>
+      <div class="stats"><div><b>3</b><span>整体方向</span></div><div><b>8</b><span>交互决策点</span></div><div><b>10</b><span>主题（5 配色 × 明暗）</span></div><div><b>61</b><span>页面 / 状态 / 弹层</span></div><div><b>4</b><span>Logo 方案</span></div></div>
+    </div>
+  </section>
+
+  <h2>三套整体方向<small>每套都是完整可用的，并且每个细节都可以在原型里再单独改</small></h2>
+  <p class="sub">同一套功能、同一份数据，三种不同的取舍。下面的缩略图为实时渲染，会跟随右上角的配色与明暗。</p>
+  <div class="grid3" id="dirs"></div>
+
+  <h2>8 个交互决策<small>原型右上角「交互方案」可逐项切换</small></h2>
+  <p class="sub">对你可能觉得「不合理」的交互，我给了替代方案并标注了推荐。三套方向各自带一组默认组合，也可以自由混搭。</p>
+  <table class="t dec"><thead><tr><th>决策</th><th>可选方案</th><th>我的建议</th><th>理由</th></tr></thead><tbody id="dec"></tbody></table>
+
+  <h2>配色<small>5 套 × 明 / 暗 = 10 套主题，项目还可以再覆盖强调色</small></h2>
+  <p class="sub">点击任意配色，会用该配色打开原型。Logo 的渐变与图形色同样跟随主题。</p>
+  <div class="sch" id="sch"></div>
+
+  <h2>覆盖范围</h2>
+  <div class="cover">
+    <div><b>工作区</b><span>欢迎空状态 · 请求 Params / Headers / Body / Auth · 未保存标记 · 多标签</span></div>
+    <div><b>响应</b><span>成功 · 响应头 · Cookies · 时间分解 · 发送中 · 失败诊断 · 4xx · 204 · SSE 事件流与合并</span></div>
+    <div><b>页面</b><span>历史 · 环境列表与编辑页 · 项目主页（卡片 / 列表）· 控制台 · 搜索 · 侧栏收起</span></div>
+    <div><b>设置与数据</b><span>设置 5 页（弹窗 / 整页）· 更新状态 · 导入 5 种状态 · Cookie 管理</span></div>
+    <div><b>菜单与浮层</b><span>⌘K 三种状态 · 项目 / 环境切换 · 三种右键菜单 · 方法 / 发送下拉</span></div>
+    <div><b>对话框与提示</b><span>保存 · 删除 · 重命名 · 恢复备份 · 四种 Toast · 更新就绪与撤销</span></div>
+    <div><b>Logo</b><span>4 个方案 · 5 种图标风格 · 5 套配色 · Dock / 标题栏 / 标签 / 欢迎页</span></div>
+    <div><b>动效与系统</b><span>色板令牌 · 字体 · 间距圆角阴影 · 组件 · 10 个可重播动效 · 快捷键</span></div>
+  </div>
+
+  <h2>怎么看</h2>
+  <div class="howto">
+    <div><b>① 先看原型</b><span>在「可交互原型」里切换方向、配色、屏幕；点击、右键、⌘K、⌘, 都能真实操作，发送请求会演示完整的等待与返回过程。</span></div>
+    <div><b>② 再看画廊</b><span>「全屏幕画廊」一页看完所有页面与状态，可按方向、配色、明暗筛选，点击放大并用 ← → 翻页。</span></div>
+    <div><b>③ 告诉我选择</b><span>只需告诉我：选哪个方向（或各决策项分别选哪个）、哪套 Logo、默认配色，我再把它落到 Go 代码里。</span></div>
+  </div>
+
+  <h2>我的推荐</h2>
+  <div class="rec-box"><div id="recLogo"></div><div>
+    <h3>方向 A「静雅」 + 折纸 Logo + 雾蓝</h3>
+    <p>与现有界面最接近、改动成本最低，又把层级、留白和动效整体提升了一档；若你想要更大的代码视野与更多纵向空间，选 B「聚焦」；想要最强的视觉记忆点，选 C「流光」。8 个决策项里最值得改的是：<b>环境切换放进标题栏</b>、<b>响应区可在底部 / 右侧切换</b>、<b>发送反馈用顶部彗星线</b>。</p></div></div>
+</main>
+<script src="assets/icons.js"></script>
+<script src="assets/logos.js"></script>
+<script>
+(function () {
+  var SCH = [['mist', '雾蓝', '#4f52d9'], ['ink', '墨白', '#2b2d36'], ['jade', '松石', '#0f9d82'], ['amber', '琥珀', '#d97706'], ['rose', '玫瑰', '#e11d6a']];
+  var q = new URLSearchParams(location.search), root = document.documentElement, $ = function (s) { return document.querySelector(s); };
+  var scheme = q.get('scheme') || 'mist', mode = q.get('mode') || 'light';
+
+  var DIRS = [
+    { id: 'a', n: 'A', name: '静雅', tag: '最贴近现有习惯，层次更清晰', rec: true,
+      pts: ['分段标签切换 请求 / 历史 / 环境', '独立标签条 + 底部响应区', '设置用居中弹窗，⌘K 居中面板', '顶部彗星线表达发送中'] },
+    { id: 'b', n: 'B', name: '聚焦', tag: '给代码和响应最大的空间', pts: ['左侧活动栏 + 窄侧栏', '标签并入标题栏，节省 34px', '响应区在右侧，左右对照阅读', '设置整页、⌘K 标题栏下拉'] },
+    { id: 'c', n: 'C', name: '流光', tag: '更强的视觉记忆，玻璃与悬浮', pts: ['毛玻璃侧栏 + 悬浮主卡片', '岛屿式标题栏、胶囊地址栏', '同样的交互组合，更有质感', '深色模式下尤其出彩'] },
+  ];
+  var DEC = [
+    ['侧栏导航', ['分段标签', '活动栏'], '分段标签', '三个入口时分段标签更直观；追求极致窄侧栏再选活动栏。'],
+    ['标签位置', ['独立标签条', '并入标题栏'], '独立标签条', '并入标题栏多出约 34px 纵向空间，但拖动窗口区域变小。'],
+    ['响应布局', ['底部', '右侧'], '底部（宽屏可切右侧）', '窄窗口底部更舒展；宽屏右侧便于请求与响应对照。'],
+    ['环境切换位置', ['标题栏', '地址栏内', '底栏'], '标题栏', '全局可见、和项目并排；地址栏内离发送最近但挤占 URL 空间。'],
+    ['设置呈现', ['弹窗', '整页'], '弹窗', '设置项不多，弹窗更轻；未来内容变多再升级整页。'],
+    ['项目主页', ['卡片', '列表'], '卡片（项目多用列表）', '5 个以内卡片更直观，10 个以上列表扫描更快。'],
+    ['发送反馈', ['顶部彗星线', '按钮内进度'], '顶部彗星线', '不改变按钮宽度，也不遮挡内容；按钮内进度更含蓄。'],
+    ['快速打开 ⌘K', ['居中面板', '标题栏下拉'], '居中面板', '与 macOS 习惯一致，焦点最集中。'],
+  ];
+
+  function qs(d) { return 'chrome=0&dir=' + d + '&scheme=' + scheme + '&mode=' + mode; }
+  function renderDirs() {
+    $('#dirs').innerHTML = DIRS.map(function (d) {
+      return '<div class="dir' + (d.rec ? ' rec' : '') + '"><div class="prev"><iframe loading="lazy" src="prototype.html?' + qs(d.id) + '&screen=req-params" data-f></iframe></div>' +
+        '<h3><i>' + d.n + '</i>' + d.name + (d.rec ? '<span class="badge2">推荐</span>' : '') + '</h3><p>' + d.tag + '</p><ul>' + d.pts.map(function (p) { return '<li>' + p + '</li>'; }).join('') + '</ul>' +
+        '<div class="go"><a class="btnx pri" href="prototype.html?dir=' + d.id + '&scheme=' + scheme + '&mode=' + mode + '">打开原型</a><a class="btnx" href="gallery.html?dir=' + d.id + '&scheme=' + scheme + '&mode=' + mode + '">看全部页面</a></div></div>';
+    }).join('');
+    fit();
+  }
+  function fit() {
+    document.querySelectorAll('.prev').forEach(function (p) { var f = p.querySelector('iframe'); f.style.transform = 'scale(' + (p.clientWidth / 1180) + ')'; });
+  }
+  window.addEventListener('resize', fit);
+
+  $('#dec').innerHTML = DEC.map(function (r) {
+    return '<tr><td><b>' + r[0] + '</b></td><td><span class="opt">' + r[1].map(function (o) { return '<span class="' + (r[2].indexOf(o) === 0 ? 'r' : '') + '">' + o + '</span>'; }).join('') + '</span></td><td>' + r[2] + '</td><td class="mu2">' + r[3] + '</td></tr>';
+  }).join('');
+
+  function renderSch() {
+    $('#sch').innerHTML = SCH.map(function (s) {
+      return '<a href="prototype.html?dir=a&scheme=' + s[0] + '&mode=' + mode + '"><div class="pv" data-nest data-scheme="' + s[0] + '" data-mode="' + mode + '"><i></i><i style="position:relative"><b style="position:absolute;left:6px;top:6px;width:26px;height:6px;border-radius:3px;background:var(--ac)"></b></i></div><span><b>' + s[1] + '</b><small>' + s[0] + '</small></span></a>';
+    }).join('');
+  }
+  function apply() {
+    root.dataset.scheme = scheme; root.dataset.mode = mode;
+    $('#mode').textContent = mode === 'light' ? '深色' : '浅色';
+    document.querySelectorAll('.dots button').forEach(function (b) { b.classList.toggle('on', b.dataset.s === scheme); });
+    $('#brand').innerHTML = MPLogo.tile('fold', { size: 22 }) + 'MiniPost 设计稿';
+    $('#heroLogo').innerHTML = MPLogo.tile('fold', { size: 132 });
+    $('#recLogo').innerHTML = MPLogo.tile('fold', { size: 64 });
+    renderDirs(); renderSch();
+  }
+  $('#dots').innerHTML = SCH.map(function (s) { return '<button data-s="' + s[0] + '" title="' + s[1] + '" style="background:' + s[2] + '"></button>'; }).join('');
+  $('#dots').onclick = function (e) { var b = e.target.closest('button'); if (b) { scheme = b.dataset.s; apply(); } };
+  $('#mode').onclick = function () { mode = mode === 'light' ? 'dark' : 'light'; apply(); };
+  apply();
+})();
+</script>
+</body>
+</html>

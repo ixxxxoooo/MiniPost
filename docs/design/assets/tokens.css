@@ -1,0 +1,153 @@
+/* ==========================================================================
+   MiniPost 设计令牌（Design Tokens）
+   5 套配色 × 亮/暗 = 10 套主题，通过 [data-scheme][data-mode] 切换。
+   其中 mist / ink / jade 沿用现有实现并微调，amber / rose 为新增。
+   ========================================================================== */
+
+:root {
+  /* —— 字体 —— */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+  /* —— 字号（紧凑 12 基准）—— */
+  --fs-xs: 10px;
+  --fs-sm: 11px;
+  --fs-base: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 20px;
+
+  /* —— 间距（4 点网格，紧凑取 2/4/6/8/12/16）—— */
+  --sp-1: 2px;
+  --sp-2: 4px;
+  --sp-3: 6px;
+  --sp-4: 8px;
+  --sp-5: 12px;
+  --sp-6: 16px;
+
+  /* —— 动效 —— */
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-spring: cubic-bezier(.34, 1.4, .64, 1);
+  --ease-inout: cubic-bezier(.65, 0, .35, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 280ms;
+}
+
+/* ---------- 雾蓝 mist（默认） ---------- */
+[data-scheme="mist"][data-mode="light"] {
+  --chrome: #f1f2f6; --side: #f5f6f9; --bg: #ffffff; --bg2: #eef0f5;
+  --bd: #e2e5ec; --bd2: #cfd4de;
+  --fg: #1b1e29; --fg2: #4b5266; --mu: #6a7287;
+  --ac: #4f52d9; --ach: #4144c4; --acf: #ffffff;
+}
+[data-scheme="mist"][data-mode="dark"] {
+  --chrome: #16171c; --side: #1a1b21; --bg: #1f2027; --bg2: #282a32;
+  --bd: #2d2f38; --bd2: #3b3e4a;
+  --fg: #eceef4; --fg2: #a9adbb; --mu: #8a8fa0;
+  --ac: #8c8fff; --ach: #a3a5ff; --acf: #0f1030;
+}
+
+/* ---------- 墨白 ink ---------- */
+[data-scheme="ink"][data-mode="light"] {
+  --chrome: #f2f2f0; --side: #f6f6f4; --bg: #ffffff; --bg2: #efefed;
+  --bd: #e4e4e1; --bd2: #d0d0cc;
+  --fg: #17171a; --fg2: #4d4d54; --mu: #6c6c74;
+  --ac: #17171a; --ach: #35353b; --acf: #ffffff;
+}
+[data-scheme="ink"][data-mode="dark"] {
+  --chrome: #121212; --side: #161616; --bg: #1b1b1c; --bg2: #252526;
+  --bd: #2a2a2c; --bd2: #3a3a3d;
+  --fg: #f0f0f0; --fg2: #a8a8ae; --mu: #86868e;
+  --ac: #f0f0f0; --ach: #ffffff; --acf: #111111;
+}
+
+/* ---------- 松石 jade ---------- */
+[data-scheme="jade"][data-mode="light"] {
+  --chrome: #eff3f2; --side: #f4f7f6; --bg: #ffffff; --bg2: #ebf0ee;
+  --bd: #dde5e2; --bd2: #c9d4d0;
+  --fg: #17201e; --fg2: #46524f; --mu: #66726f;
+  --ac: #08806f; --ach: #066b5c; --acf: #ffffff;
+}
+[data-scheme="jade"][data-mode="dark"] {
+  --chrome: #0f1514; --side: #131a19; --bg: #172020; --bg2: #1f2a29;
+  --bd: #243230; --bd2: #30403d;
+  --fg: #e8f0ee; --fg2: #a1b2ae; --mu: #84968f;
+  --ac: #3fd0b8; --ach: #62dcc7; --acf: #04201b;
+}
+
+/* ---------- 琥珀 amber（新增） ---------- */
+[data-scheme="amber"][data-mode="light"] {
+  --chrome: #f6f3ee; --side: #f9f7f3; --bg: #ffffff; --bg2: #f3efe8;
+  --bd: #e8e2d8; --bd2: #d6cdbf;
+  --fg: #231d14; --fg2: #5a5042; --mu: #7a6f5f;
+  --ac: #c2570c; --ach: #a84a08; --acf: #ffffff;
+}
+[data-scheme="amber"][data-mode="dark"] {
+  --chrome: #17140f; --side: #1b1812; --bg: #211d16; --bg2: #2b261d;
+  --bd: #342e23; --bd2: #453d2e;
+  --fg: #f3ede2; --fg2: #beb4a1; --mu: #968b77;
+  --ac: #ff9a3c; --ach: #ffb066; --acf: #2a1500;
+}
+
+/* ---------- 玫瑰 rose（新增） ---------- */
+[data-scheme="rose"][data-mode="light"] {
+  --chrome: #f7f1f3; --side: #faf5f7; --bg: #ffffff; --bg2: #f5edf0;
+  --bd: #ebe0e4; --bd2: #dac9cf;
+  --fg: #261a1f; --fg2: #5c4750; --mu: #7d6670;
+  --ac: #d6336c; --ach: #b8275a; --acf: #ffffff;
+}
+[data-scheme="rose"][data-mode="dark"] {
+  --chrome: #181114; --side: #1c1418; --bg: #221a1e; --bg2: #2c2227;
+  --bd: #372a31; --bd2: #493943;
+  --fg: #f6ecf0; --fg2: #c2aab4; --mu: #9a8590;
+  --ac: #ff7aa5; --ach: #ff9bbb; --acf: #2d0614;
+}
+
+/* ---------- 语义色（方法 / 状态 / JSON 高亮），亮暗各一套 ---------- */
+[data-mode="light"] {
+  --get: #0a7d50; --post: #b8520a; --put: #2260c4; --patch: #7e45cc; --del: #c93030; --head: #0a7f7f; --opt: #626a7b;
+  --ok: #0a7d50; --warn: #a05a00; --err: #c93030; --info: #2260c4;
+  --j-key: #3e4bc2; --j-str: #0a7d50; --j-num: #b8520a; --j-bool: #c93030; --j-punc: #8a91a2;
+  --shadow-sm: 0 1px 2px rgba(20, 24, 40, .06);
+  --shadow-md: 0 4px 14px rgba(20, 24, 40, .10), 0 1px 3px rgba(20, 24, 40, .06);
+  --shadow-lg: 0 18px 48px rgba(20, 24, 40, .20), 0 2px 8px rgba(20, 24, 40, .08);
+  --scrim: rgba(20, 24, 40, .28);
+  --elev: #ffffff;
+  color-scheme: light;
+}
+[data-mode="dark"] {
+  --get: #4cd694; --post: #ffa05c; --put: #6aa6ff; --patch: #c39bff; --del: #ff7070; --head: #4fd1d1; --opt: #9aa1b2;
+  --ok: #4cd694; --warn: #f2b84b; --err: #ff7a7a; --info: #6aa6ff;
+  --j-key: #9fb0ff; --j-str: #7fd9a8; --j-num: #ffb070; --j-bool: #ff8a8a; --j-punc: #7c8394;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, .38), 0 1px 3px rgba(0, 0, 0, .3);
+  --shadow-lg: 0 22px 56px rgba(0, 0, 0, .55), 0 2px 10px rgba(0, 0, 0, .35);
+  --scrim: rgba(0, 0, 0, .5);
+  --elev: var(--bg2);
+  color-scheme: dark;
+}
+
+/* ---------- 由基础令牌派生的次级令牌 ---------- */
+[data-scheme] {
+  --ac-soft: color-mix(in oklab, var(--ac) 12%, transparent);
+  --ac-soft2: color-mix(in oklab, var(--ac) 20%, transparent);
+  --ac-line: color-mix(in oklab, var(--ac) 45%, transparent);
+  --hover: color-mix(in oklab, var(--fg) 5.5%, transparent);
+  --press: color-mix(in oklab, var(--fg) 9%, transparent);
+  --sel: color-mix(in oklab, var(--bg) 92%, var(--fg));
+  --ok-soft: color-mix(in oklab, var(--ok) 14%, transparent);
+  --warn-soft: color-mix(in oklab, var(--warn) 16%, transparent);
+  --err-soft: color-mix(in oklab, var(--err) 13%, transparent);
+  --info-soft: color-mix(in oklab, var(--info) 14%, transparent);
+  /* Logo 通用变量：图标渐变底色与图形色 */
+  --lg-a: color-mix(in oklab, var(--ac) 78%, white);
+  --lg-b: color-mix(in oklab, var(--ac) 88%, black);
+  --lg-fg: var(--acf);
+}
+/* 应用图标在深色模式下仍保持「深色底 + 白色图形」，避免亮色强调色上白字对比不足 */
+[data-scheme][data-mode="dark"] {
+  --lg-a: color-mix(in oklab, var(--ac) 80%, black);
+  --lg-b: color-mix(in oklab, var(--ac) 52%, black);
+  --lg-fg: #fff;
+}

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN" data-scheme="mist" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MiniPost · Logo 设计</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.55 var(--font-ui, -apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif);-webkit-font-smoothing:antialiased}
+  .top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:10px 28px;background:color-mix(in oklab,var(--bg) 82%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--bd)}
+  .top b{font-size:13px}.top a{color:var(--mu);text-decoration:none;font-size:12px}.top a:hover{color:var(--ac)}
+  .top .sp{flex:1}
+  .dots{display:flex;gap:6px}
+  .dots button{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;outline:none;transition:transform .15s}
+  .dots button:hover{transform:scale(1.15)}.dots button.on{border-color:var(--fg);box-shadow:0 0 0 2px var(--bg) inset}
+  .tg{border:1px solid var(--bd2);background:var(--bg);color:var(--fg);border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer}
+  .tg:hover{border-color:var(--ac);color:var(--ac)}
+  main{max-width:1080px;margin:0 auto;padding:28px 28px 80px}
+  h2{font-size:18px;margin:44px 0 4px;letter-spacing:-.01em}.sub{color:var(--mu);margin:0 0 16px}
+  .hero{display:grid;grid-template-columns:auto 1fr;gap:36px;align-items:center;padding:34px;border-radius:20px;background:radial-gradient(120% 140% at 0% 0%,var(--ac-soft),transparent 60%),var(--bg2);border:1px solid var(--bd)}
+  .hero .big{filter:drop-shadow(0 18px 30px color-mix(in oklab,var(--ac) 38%,transparent))}
+  .hero h1{margin:0 0 6px;font-size:26px;letter-spacing:-.02em}.hero p{margin:0 0 14px;color:var(--fg2);max-width:520px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}.chip{padding:2px 10px;border-radius:99px;background:var(--ac-soft);color:var(--ac);font-size:11.5px;font-weight:600}
+  .cards{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  .card{border:1px solid var(--bd);border-radius:16px;background:var(--bg);padding:18px;display:grid;gap:14px}
+  .card.rec{border-color:color-mix(in oklab,var(--ac) 55%,var(--bd));box-shadow:0 0 0 3px var(--ac-soft)}
+  .card h3{margin:0;font-size:15px;display:flex;align-items:center;gap:8px}
+  .card p{margin:0;color:var(--mu);font-size:12px}
+  .row{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+  .row figure{margin:0;display:grid;justify-items:center;gap:5px}
+  .row figcaption{font-size:10.5px;color:var(--mu)}
+  .panel{border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:16px;background:var(--bg2)}
+  .play{margin-left:auto;font-size:11.5px;color:var(--ac);background:var(--ac-soft);border:0;border-radius:99px;padding:3px 12px;cursor:pointer}
+  table.mx{border-collapse:separate;border-spacing:10px;margin:-10px}
+  table.mx th{font-weight:500;font-size:11.5px;color:var(--mu);text-align:center}table.mx td{text-align:center}
+  table.mx td:first-child,table.mx th:first-child{text-align:right;color:var(--fg2);font-size:12px;white-space:nowrap}
+  .scn{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}
+  .dock-bg{border-radius:16px;padding:46px 30px 22px;background:linear-gradient(135deg,#7f9cd8,#b9a6d8 50%,#e6b98d);display:grid;place-items:center;position:relative;overflow:hidden}
+  html[data-mode=dark] .dock-bg{background:linear-gradient(135deg,#1c2340,#352a52 50%,#4a2f3b)}
+  .dock{display:flex;gap:12px;padding:10px 14px;border-radius:22px;background:rgba(255,255,255,.28);border:1px solid rgba(255,255,255,.45);backdrop-filter:blur(18px);box-shadow:0 12px 30px rgba(0,0,0,.18)}
+  .dock i{width:56px;height:56px;border-radius:14px;background:rgba(255,255,255,.35);display:block}
+  .mbar{position:absolute;left:0;right:0;top:0;height:24px;background:rgba(255,255,255,.35);backdrop-filter:blur(12px);display:flex;align-items:center;gap:14px;padding:0 14px;font-size:11.5px;color:#111;font-weight:600}
+  html[data-mode=dark] .mbar{background:rgba(0,0,0,.3);color:#fff}
+  .tbar{display:grid;gap:10px}
+  .mini-win{border:1px solid var(--bd);border-radius:12px;overflow:hidden;background:var(--bg)}
+  .mini-win .h{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--chrome);border-bottom:1px solid var(--bd);font-size:12px}
+  .mini-win .h i{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .mini-win .b{padding:18px;display:grid;justify-items:center;gap:8px;color:var(--mu);font-size:12px}
+  .tabrow{display:flex;gap:2px;padding:6px 8px 0;background:var(--chrome)}
+  .tabrow span{display:inline-flex;gap:6px;align-items:center;padding:5px 12px;border-radius:7px 7px 0 0;font-size:11.5px;color:var(--mu)}.tabrow span.on{background:var(--bg);color:var(--fg)}
+  .cons{border:1px solid var(--bd);border-radius:16px;padding:18px;display:grid;grid-template-columns:auto 1fr;gap:26px;align-items:center;background:var(--bg)}
+  .cons ul{margin:0;padding-left:18px;color:var(--fg2)}.cons li{margin:3px 0}
+  table.cmp{width:100%;border-collapse:collapse;border:1px solid var(--bd);border-radius:12px;overflow:hidden}
+  table.cmp th,table.cmp td{padding:9px 14px;border-bottom:1px solid var(--bd);text-align:left}
+  table.cmp th{background:var(--bg2);font-weight:600;font-size:12px;color:var(--fg2)}
+  .st{color:var(--ac);letter-spacing:2px}
+  .concl{margin-top:14px;padding:14px 18px;border-radius:12px;background:var(--ac-soft);color:var(--fg)}
+  .rbox{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:12px}
+  .rbox div{padding:14px 8px;border-radius:12px;display:grid;justify-items:center;gap:8px;background:var(--bg);border:1px solid var(--bd);font-size:11px;color:var(--mu)}
+</style>
+</head>
+<body>
+<header class="top">
+  <b>MiniPost · Logo</b><a href="index.html">总览</a><a href="prototype.html">原型</a><a href="gallery.html">画廊</a><a href="system.html">设计系统</a>
+  <span class="sp"></span>
+  <div class="dots" id="dots"></div>
+  <button class="tg" id="mode">深色</button>
+</header>
+<main>
+  <section class="hero">
+    <div class="big" id="heroTile"></div>
+    <div>
+      <h1>折纸 · 一个动作，就是 MiniPost</h1>
+      <p>纸飞机的两个折面——亮面承光、暗面落影。形状只有两块三角，所以小到 16px 仍然成形；颜色全部由主题的 <code>--lg-a / --lg-b</code> 派生，切换任意配色、明暗，图标自动换色。</p>
+      <div class="chips"><span class="chip">两个折面</span><span class="chip">跟随 5 套配色</span><span class="chip">16px 可辨</span><span class="chip">发送时可动</span></div>
+      <div style="margin-top:20px" id="heroLock"></div>
+    </div>
+  </section>
+
+  <h2>四个方向</h2><p class="sub">每个方向都给出：应用图标 · 实际尺寸 · 5 种图标风格（macOS 彩色 / 暗色 / 着色 / 单色 / 玻璃）。点右下角「播放动效」查看发送时的动画。</p>
+  <div class="cards" id="cards"></div>
+
+  <h2>跟随主题</h2><p class="sub">同一套几何，随 5 套配色自动换色（本页当前为 <b id="modeLbl">浅色</b> 模式，右上角可切换）。</p>
+  <div class="card"><table class="mx" id="matrix"></table></div>
+
+  <h2>应用场景</h2><p class="sub">Dock、菜单栏、标题栏、标签页、欢迎页和横向组合。</p>
+  <div class="scn">
+    <div class="dock-bg"><div class="mbar" id="mbar"></div><div class="dock" id="dock"></div></div>
+    <div class="tbar">
+      <div class="mini-win"><div class="h"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span id="tTitle" style="display:inline-flex;gap:6px;align-items:center;margin-left:8px"></span></div>
+        <div class="tabrow" id="tabs"></div><div class="b" id="welcome"></div></div>
+      <div class="panel" id="lockRow"></div>
+    </div>
+  </div>
+
+  <h2>构造</h2><p class="sub">64 × 64 画布，内容区 44 × 46，四边留白 ≥ 9；4 个关键点定义全部形状。</p>
+  <div class="cons"><div id="cons"></div>
+    <ul><li>四个关键点：<b>L</b>(9,30)、<b>T</b>(55,9)、<b>B</b>(36,55)、<b>N</b>(27,36)。</li>
+      <li>亮面 = L-T-N，暗面 = N-T-B，折线 N→T 指向右上，暗示请求的方向。</li>
+      <li>暗面使用 62% 不透明度，不引入额外颜色，任何配色都不会失衡。</li>
+      <li>描边 3 单位并同色圆角相接，圆润而不糊；16px 时加粗到 4.4，保证锯齿最少。</li>
+      <li>应用图标圆角 22.4%（macOS squircle），顶部 28% 白色高光，底部渐变由 <code>--lg-a → --lg-b</code> 提供。</li></ul>
+  </div>
+
+  <h2>对比与推荐</h2>
+  <table class="cmp"><thead><tr><th>方案</th><th>辨识度</th><th>小尺寸</th><th>优雅度</th><th>动效潜力</th><th>一句话</th></tr></thead><tbody>
+    <tr><td><b>折纸 Fold ★</b></td><td class="st">★★★★★</td><td class="st">★★★★★</td><td class="st">★★★★★</td><td class="st">★★★★★</td><td>语义最直接，几何最干净</td></tr>
+    <tr><td>字母 M</td><td class="st">★★★★☆</td><td class="st">★★★★★</td><td class="st">★★★★☆</td><td class="st">★★★☆☆</td><td>品牌字母，最稳</td></tr>
+    <tr><td>信封 Post</td><td class="st">★★★★☆</td><td class="st">★★★☆☆</td><td class="st">★★★★☆</td><td class="st">★★★★☆</td><td>线性风，贴近系统图标</td></tr>
+    <tr><td>邮票 Stamp</td><td class="st">★★★★☆</td><td class="st">★★★☆☆</td><td class="st">★★★☆☆</td><td class="st">★★★★☆</td><td>有故事，Dock 里有个性</td></tr>
+  </tbody></table>
+  <div class="concl"><b>推荐：折纸 Fold。</b>它是四个里唯一「一眼就是发送」的标识，且只由两块三角形构成，在 5 套配色 × 明暗下对比稳定。想要更强的品牌字母感可选 M；想要更像系统原生线性图标可选信封。原型里右上角的 Logo 下拉可以实时切换，全局生效。</div>
+</main>
+<script src="assets/logos.js"></script>
+<script>
+(function(){
+  var SCH=[['mist','#4f52d9','雾蓝'],['ink','#2b2d36','墨白'],['jade','#0f9d82','松石'],['amber','#d97706','琥珀'],['rose','#e11d6a','玫瑰']];
+  var q=new URLSearchParams(location.search), root=document.documentElement;
+  var scheme=q.get('scheme')||'mist', mode=q.get('mode')||'light';
+  var $=function(s){return document.querySelector(s)};
+  function apply(){root.dataset.scheme=scheme;root.dataset.mode=mode;$('#mode').textContent=mode==='light'?'深色':'浅色';$('#modeLbl').textContent=mode==='light'?'浅色':'深色';
+    document.querySelectorAll('.dots button').forEach(function(b){b.classList.toggle('on',b.dataset.s===scheme)});
+    document.querySelectorAll('[data-nest]').forEach(function(e){e.dataset.mode=mode});}
+  $('#dots').innerHTML=SCH.map(function(s){return '<button data-s="'+s[0]+'" title="'+s[2]+'" style="background:'+s[1]+'"></button>'}).join('');
+  $('#dots').onclick=function(e){var b=e.target.closest('button');if(b){scheme=b.dataset.s;apply()}};
+  $('#mode').onclick=function(){mode=mode==='light'?'dark':'light';apply()};
+
+  var L=MPLogo.list, STAR=L[0].id;
+  $('#heroTile').innerHTML=MPLogo.tile(STAR,{size:150});
+  $('#heroLock').innerHTML=MPLogo.lockup(STAR,{size:40,gap:12});
+
+  var VAR=[['color','彩色'],['dark','暗色'],['tint','着色'],['mono','单色'],['clear','玻璃']];
+  $('#cards').innerHTML=L.map(function(l){
+    var sizes=[96,64,40,32].map(function(s){return '<figure>'+MPLogo.tile(l.id,{size:s})+'<figcaption>'+s+'</figcaption></figure>'}).join('')+'<figure>'+MPLogo.mini(l.id,{size:16})+'<figcaption>16 glyph</figcaption></figure>';
+    var vars=VAR.map(function(v){return '<figure><div style="'+(v[0]==='clear'?'background:linear-gradient(135deg,#3b4a7a,#6b3f6e);padding:6px;border-radius:14px':'')+'">'+MPLogo.tile(l.id,{size:56,variant:v[0]})+'</div><figcaption>'+v[1]+'</figcaption></figure>'}).join('');
+    return '<div class="card'+(l.recommended?' rec':'')+'"><h3>'+l.name+(l.recommended?'<span class="chip">推荐</span>':'')+'</h3><p>'+l.desc+'</p>'+
+      '<div class="row">'+sizes+'</div><div class="row">'+vars+'</div>'+
+      '<div class="panel">'+MPLogo.glyph(l.id,{size:28,color:'accent'})+MPLogo.glyph(l.id,{size:28,color:'fg'})+'<span style="color:var(--mu);font-size:11.5px">线性/无底用法</span><button class="play" data-play>播放动效</button></div></div>';
+  }).join('');
+  $('#cards').onclick=function(e){var b=e.target.closest('[data-play]');if(!b)return;
+    var svgs=b.parentNode.querySelectorAll('svg');svgs.forEach(function(s){s.classList.add('go')});
+    var big=b.closest('.card').querySelector('.row svg');big.classList.add('go');
+    setTimeout(function(){svgs.forEach(function(s){s.classList.remove('go')});big.classList.remove('go')},2300)};
+
+  $('#matrix').innerHTML='<tr><th></th>'+SCH.map(function(s){return '<th>'+s[2]+'</th>'}).join('')+'</tr>'+
+    L.map(function(l){return '<tr><td>'+l.name+'</td>'+SCH.map(function(s){return '<td><div data-nest data-scheme="'+s[0]+'" data-mode="'+mode+'" style="display:inline-block;padding:4px;border-radius:16px;background:var(--bg2)">'+MPLogo.tile(l.id,{size:64})+'</div></td>'}).join('')+'</tr>'}).join('');
+
+  $('#mbar').innerHTML=MPLogo.glyph(STAR,{size:12,color:'currentColor'})+'<span>MiniPost</span><span style="font-weight:400;opacity:.8">文件　编辑　视图　窗口</span>';
+  $('#dock').innerHTML='<i></i><i></i>'+MPLogo.tile(STAR,{size:56})+'<i></i><i></i>';
+  $('#tTitle').innerHTML=MPLogo.glyph(STAR,{size:14,color:'accent'})+'<b style="font-weight:600">MiniPost</b><span style="color:var(--mu)">— 获取用户列表</span>';
+  $('#tabs').innerHTML='<span class="on">'+MPLogo.mini(STAR,{size:12})+'GET /users</span><span>POST /orders</span><span>＋</span>';
+  $('#welcome').innerHTML=MPLogo.tile(STAR,{size:56})+'<b style="color:var(--fg);font-size:14px">MiniPost</b>一个简洁、快速的 API 调试工具';
+  $('#lockRow').innerHTML=MPLogo.lockup(STAR,{size:30,gap:9})+'<span style="width:1px;height:26px;background:var(--bd2)"></span>'+MPLogo.lockup(STAR,{size:30,gap:9,variant:'mono'})+'<button class="play" data-play2>发送中</button>';
+  $('#lockRow').onclick=function(e){if(!e.target.closest('[data-play2]'))return;var s=$('#lockRow svg');s.classList.add('go');setTimeout(function(){s.classList.remove('go')},2300)};
+
+  // 构造图：网格 + 关键点
+  var P={L:[9,30],T:[55,9],B:[36,55],N:[27,36]},g='';
+  for(var i=0;i<=64;i+=8){g+='<path d="M'+i+' 0V64M0 '+i+'H64" stroke="var(--bd)" stroke-width=".3"/>'}
+  var pts=Object.keys(P).map(function(k){return '<circle cx="'+P[k][0]+'" cy="'+P[k][1]+'" r="1.1" fill="var(--ac)"/><text x="'+(P[k][0]+(k==='N'?-4.5:2))+'" y="'+(P[k][1]+(k==='B'?5:-1.5))+'" font-size="3.6" fill="var(--fg2)" font-family="monospace">'+k+'</text>'}).join('');
+  $('#cons').innerHTML='<svg width="300" height="300" viewBox="0 0 64 64" style="background:var(--bg2);border-radius:14px">'+g+
+   '<rect x="9" y="9" width="46" height="46" fill="none" stroke="var(--err)" stroke-width=".35" stroke-dasharray="1.5 1.2"/>'+
+   '<g style="opacity:.92"><path d="M9 30 L55 9 L27 36 Z" fill="var(--ac)" stroke="var(--ac)" stroke-width="3" stroke-linejoin="round"/><path d="M27 36 L55 9 L36 55 Z" fill="var(--ac)" stroke="var(--ac)" stroke-width="3" stroke-linejoin="round" opacity=".62"/></g>'+
+   '<path d="M27 36 L55 9" stroke="#fff" stroke-width=".5" stroke-dasharray="1 1"/>'+pts+'</svg>';
+  apply();
+})();
+</script>
+</body>
+</html>

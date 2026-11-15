@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MiniPost 设计稿 · 全屏幕画廊</title>
+<style>
+  :root { --bg: #15161b; --fg: #e9eaf0; --mu: #9a9fb2; --card: #1e1f26; --bd: #ffffff14; --ac: #8c8fff; }
+  body.light { --bg: #eceef3; --fg: #1b1e29; --mu: #666d82; --card: #ffffff; --bd: #00000014; --ac: #4f52d9; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif; -webkit-font-smoothing: antialiased; transition: background .2s; }
+  header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 10px 24px; background: color-mix(in oklab, var(--bg) 82%, transparent); backdrop-filter: blur(16px); border-bottom: 1px solid var(--bd); }
+  header h1 { margin: 0; font-size: 15px; letter-spacing: -.01em; }
+  header .grp { display: flex; align-items: center; gap: 8px; } header label { color: var(--mu); font-size: 11px; }
+  .seg { display: inline-flex; padding: 2px; gap: 2px; background: color-mix(in oklab, var(--fg) 8%, transparent); border-radius: 9px; }
+  .seg button { height: 26px; padding: 0 12px; border: 0; border-radius: 7px; background: none; color: var(--mu); font: inherit; font-weight: 600; cursor: pointer; transition: all .15s; }
+  .seg button.on { background: var(--card); color: var(--fg); box-shadow: 0 1px 3px #0003; } .seg button:hover { color: var(--fg); }
+  .dots { display: flex; gap: 7px; } .dots button { width: 18px; height: 18px; border-radius: 50%; border: 0; background: var(--c); cursor: pointer; position: relative; box-shadow: inset 0 0 0 1px #ffffff30; transition: transform .15s cubic-bezier(.34,1.4,.64,1); }
+  .dots button:hover { transform: scale(1.2); } .dots button.on::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--fg); }
+  input[type=range] { width: 110px; accent-color: var(--ac); }
+  nav a { color: var(--mu); text-decoration: none; margin-left: 14px; font-weight: 550; } nav a:hover { color: var(--fg); }
+  main { padding: 8px 24px 80px; }
+  section h2 { font-size: 14px; margin: 26px 0 12px; display: flex; align-items: center; gap: 10px; }
+  section h2 span { color: var(--mu); font-weight: 450; font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--w), 1fr)); gap: 18px; }
+  .card { cursor: zoom-in; border-radius: 12px; background: var(--card); border: 1px solid var(--bd); overflow: hidden; transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s; }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 14px 34px #0004; }
+  .card .th { position: relative; overflow: hidden; width: 100%; aspect-ratio: 1180 / 740; background: var(--bg); }
+  .card iframe { position: absolute; left: 0; top: 0; width: 1180px; height: 740px; border: 0; transform-origin: top left; pointer-events: none; background: transparent; }
+  .card .ct { padding: 8px 12px; display: flex; align-items: center; gap: 8px; font-weight: 600; } .card .ct span { color: var(--mu); font-weight: 450; font-size: 11px; margin-left: auto; font-family: ui-monospace, monospace; }
+  #lb { position: fixed; inset: 0; z-index: 100; background: #0009; backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; flex-direction: column; gap: 10px; }
+  #lb.on { display: flex; animation: f .2s; } @keyframes f { from { opacity: 0 } }
+  #lb .box { position: relative; border-radius: 12px; overflow: hidden; box-shadow: 0 30px 80px #000a; }
+  #lb iframe { border: 0; transform-origin: top left; position: absolute; left: 0; top: 0; width: 1180px; height: 740px; }
+  #lb .cap { color: #fff; display: flex; gap: 14px; align-items: center; } #lb .cap a { color: #b9bcff; text-decoration: none; } #lb .cap kbd { background: #ffffff22; padding: 1px 6px; border-radius: 4px; font: 11px ui-monospace; }
+</style>
+</head>
+<body>
+<header>
+  <h1>全屏幕画廊</h1>
+  <div class="grp"><label>方案</label><div class="seg" id="g-dir"></div></div>
+  <div class="grp"><label>配色</label><div class="dots" id="g-scheme"></div><div class="seg" id="g-mode"></div></div>
+  <div class="grp"><label>缩略图</label><input type="range" id="g-size" min="280" max="560" value="360"></div>
+  <span style="flex:1"></span>
+  <nav><a href="index.html">总览</a><a href="prototype.html">原型</a><a href="logo.html">Logo</a><a href="system.html">设计系统</a></nav>
+</header>
+<main id="main"></main>
+<div id="lb"><div class="box" id="lbbox"><iframe id="lbf"></iframe></div><div class="cap"><b id="lbt"></b><a id="lbo" target="_blank">在原型中打开 ↗</a><span><kbd>←</kbd> <kbd>→</kbd> 切换 · <kbd>esc</kbd> 关闭</span></div></div>
+<script src="assets/icons.js"></script><script src="assets/data.js"></script><script src="assets/logos.js"></script><script src="assets/app.js"></script><script src="assets/overlays.js"></script><script src="assets/screens.js"></script>
+<script>
+(function () {
+  // 复用原型里的屏幕清单（screens.js 在 DOMContentLoaded 里会尝试初始化，这里没有 #win，init 会安全退出）
+  const SC = window.MPA.SCREENS;
+  const COLORS = { mist: '#4f52d9', ink: '#17171a', jade: '#08806f', amber: '#c2570c', rose: '#d6336c' };
+  const q = new URLSearchParams(location.search);
+  const st = { dir: q.get('dir') || 'a', scheme: q.get('scheme') || 'mist', mode: q.get('mode') || 'light' };
+  const $ = (s) => document.querySelector(s);
+  const flat = SC.reduce((a, g) => a.concat(g[1].map((s) => [g[0]].concat(s))), []);
+  const url = (id, d) => 'prototype.html?chrome=0&dir=' + st.dir + '&scheme=' + st.scheme + '&mode=' + st.mode + '&screen=' + id;
+  function draw() {
+    document.body.classList.toggle('light', st.mode === 'light');
+    $('#g-dir').innerHTML = [['a', 'A 静雅'], ['b', 'B 聚焦'], ['c', 'C 流光']].map((d) => '<button data-k="dir" data-v="' + d[0] + '" class="' + (st.dir === d[0] ? 'on' : '') + '">' + d[1] + '</button>').join('');
+    $('#g-scheme').innerHTML = Object.keys(COLORS).map((k) => '<button data-k="scheme" data-v="' + k + '" style="--c:' + COLORS[k] + '" class="' + (st.scheme === k ? 'on' : '') + '"></button>').join('');
+    $('#g-mode').innerHTML = [['light', '浅色'], ['dark', '深色']].map((d) => '<button data-k="mode" data-v="' + d[0] + '" class="' + (st.mode === d[0] ? 'on' : '') + '">' + d[1] + '</button>').join('');
+    const w = +$('#g-size').value;
+    document.documentElement.style.setProperty('--w', w + 'px');
+    $('#main').innerHTML = SC.map((g) => '<section><h2>' + g[0] + '<span>' + g[1].length + ' 个屏幕</span></h2><div class="grid">' + g[1].map((s) => '<div class="card" data-id="' + s[0] + '"><div class="th"><iframe loading="lazy" data-src="' + url(s[0]) + '"></iframe></div><div class="ct">' + s[1] + '<span>' + s[0] + '</span></div></div>').join('') + '</div></section>').join('');
+    scale(); lazy();
+  }
+  function scale() { document.querySelectorAll('.card .th').forEach((th) => { const k = th.clientWidth / 1180; th.firstElementChild.style.transform = 'scale(' + k + ')'; }); }
+  function lazy() {
+    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { const f = e.target.firstElementChild; if (!f.src) f.src = f.dataset.src; io.unobserve(e.target); } }), { rootMargin: '300px' });
+    document.querySelectorAll('.card .th').forEach((t) => io.observe(t));
+  }
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('header button[data-k]');
+    if (b) { st[b.dataset.k] = b.dataset.v; draw(); return; }
+    const c = ev.target.closest('.card'); if (c) openLb(c.dataset.id);
+    if (ev.target.id === 'lb') closeLb();
+  });
+  $('#g-size').addEventListener('input', () => { document.documentElement.style.setProperty('--w', $('#g-size').value + 'px'); scale(); });
+  window.addEventListener('resize', scale);
+  let cur = 0;
+  function openLb(id) {
+    cur = flat.findIndex((s) => s[1] === id); showLb();
+    $('#lb').classList.add('on');
+  }
+  function showLb() {
+    const s = flat[cur], k = Math.min((innerWidth - 80) / 1180, (innerHeight - 100) / 740, 1.4);
+    const box = $('#lbbox'); box.style.width = 1180 * k + 'px'; box.style.height = 740 * k + 'px';
+    const f = $('#lbf'); f.style.transform = 'scale(' + k + ')'; f.src = url(s[1]);
+    $('#lbt').textContent = s[0] + ' · ' + s[2]; $('#lbo').href = url(s[1]).replace('chrome=0', 'chrome=1');
+  }
+  function closeLb() { $('#lb').classList.remove('on'); $('#lbf').src = 'about:blank'; }
+  document.addEventListener('keydown', (e) => {
+    if (!$('#lb').classList.contains('on')) return;
+    if (e.key === 'Escape') closeLb();
+    else if (e.key === 'ArrowRight') { cur = (cur + 1) % flat.length; showLb(); }
+    else if (e.key === 'ArrowLeft') { cur = (cur - 1 + flat.length) % flat.length; showLb(); }
+  });
+  draw();
+})();
+</script>
+</body>
+</html>

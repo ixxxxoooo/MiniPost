@@ -1,0 +1,46 @@
+/* 文档型页面（index / system）共用样式：顶部导航 + 版心 + 区块标题 */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.6 var(--font-ui); -webkit-font-smoothing: antialiased; }
+a { color: var(--ac); text-decoration: none; }
+code { font: 11.5px var(--font-mono); background: var(--bg2); padding: 1px 6px; border-radius: 5px; color: var(--fg2); }
+.top { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 16px; padding: 10px 32px; background: color-mix(in oklab, var(--bg) 82%, transparent); backdrop-filter: blur(16px); border-bottom: 1px solid var(--bd); }
+.top .brand { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 13.5px; color: var(--fg); }
+.top nav { display: flex; gap: 4px; }
+.top nav a { color: var(--mu); font-size: 12.5px; padding: 4px 10px; border-radius: 8px; }
+.top nav a:hover, .top nav a.on { color: var(--ac); background: var(--ac-soft); }
+.top .sp { flex: 1; }
+.dots { display: flex; gap: 6px; }
+.dots button { width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; outline: none; transition: transform .15s; }
+.dots button:hover { transform: scale(1.15); }
+.dots button.on { border-color: var(--fg); box-shadow: 0 0 0 2px var(--bg) inset; }
+.tg { border: 1px solid var(--bd2); background: var(--bg); color: var(--fg); border-radius: 8px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+.tg:hover { border-color: var(--ac); color: var(--ac); }
+main { max-width: 1120px; margin: 0 auto; padding: 32px 32px 100px; }
+h2 { font-size: 20px; margin: 56px 0 4px; letter-spacing: -.015em; }
+h2 small { font-size: 12px; color: var(--mu); font-weight: 450; margin-left: 10px; letter-spacing: 0; }
+h3 { font-size: 14px; margin: 24px 0 8px; }
+.sub { color: var(--mu); margin: 0 0 18px; max-width: 720px; }
+.card { border: 1px solid var(--bd); border-radius: 16px; background: var(--bg); padding: 18px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.btnx { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 10px; border: 1px solid var(--bd2); background: var(--bg); color: var(--fg); font-weight: 600; cursor: pointer; font-size: 13px; }
+.btnx:hover { border-color: var(--ac); color: var(--ac); }
+.btnx.pri { background: var(--ac); border-color: var(--ac); color: var(--acf); box-shadow: 0 6px 18px color-mix(in oklab, var(--ac) 35%, transparent); }
+.btnx.pri:hover { background: var(--ach); color: var(--acf); }
+.badge2 { display: inline-flex; align-items: center; padding: 1px 9px; border-radius: 99px; background: var(--ac-soft); color: var(--ac); font-size: 11.5px; font-weight: 650; }
+table.t { width: 100%; border-collapse: collapse; border: 1px solid var(--bd); border-radius: 12px; overflow: hidden; }
+table.t th, table.t td { padding: 10px 14px; border-bottom: 1px solid var(--bd); text-align: left; vertical-align: top; }
+table.t tr:last-child td { border-bottom: 0; }
+table.t th { background: var(--bg2); font-weight: 600; font-size: 12px; color: var(--fg2); }
+table.t td b { font-weight: 650; }
+.mu2 { color: var(--mu); }
+.demo.win { width: auto; height: auto; border-radius: 12px; box-shadow: none; background: var(--bg); border: 1px solid var(--bd); padding: 16px; user-select: auto; overflow: visible; }
+.demo.win.flat { border: 0; padding: 0; background: none; }
+.swgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.sw1 { border: 1px solid var(--bd); border-radius: 12px; overflow: hidden; background: var(--bg); }
+.sw1 i { display: block; height: 52px; border-bottom: 1px solid var(--bd); }
+.sw1 div { padding: 7px 10px; font-size: 11.5px; line-height: 1.35; }
+.sw1 b { display: block; font: 600 11.5px var(--font-mono); }
+.sw1 span { color: var(--mu); font: 10.5px var(--font-mono); }
+.pager { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
