@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="zh-CN" data-scheme="mist" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MiniPost · 设计系统</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/doc.css">
+<style>
+  .mo{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+  .mo .c{border:1px solid var(--bd);border-radius:14px;padding:12px;display:grid;gap:10px;background:var(--bg)}
+  .mo .c h4{margin:0;font-size:12.5px;display:flex;justify-content:space-between;align-items:center}
+  .mo .c h4 span{font:10.5px var(--font-mono);color:var(--mu);font-weight:450}
+  .mo .st{height:84px;border-radius:10px;background:var(--bg2);position:relative;overflow:hidden;display:grid;place-items:center}
+  .mo p{margin:0;font-size:11px;color:var(--mu);line-height:1.45}
+  .rp{border:0;background:var(--ac-soft);color:var(--ac);font-size:11px;border-radius:99px;padding:2px 10px;cursor:pointer;font-weight:600}
+  .rp:hover{background:var(--ac);color:var(--acf)}
+  .fake{padding:7px 12px;border-radius:9px;background:var(--bg);border:1px solid var(--bd);box-shadow:var(--shadow-md);font-size:11.5px;display:inline-flex;gap:6px;align-items:center}
+  .lines{display:grid;gap:5px;width:70%}.lines i{height:9px;border-radius:5px;background:var(--bd);display:block}
+  .lines i.sk{background:linear-gradient(90deg,var(--bd) 25%,var(--bg) 50%,var(--bd) 75%);background-size:200% 100%;animation:shimmer 1.3s linear infinite}
+  .ease{height:60px;position:relative;margin:4px 0}
+  .ease i{position:absolute;left:0;top:50%;width:18px;height:18px;margin-top:-9px;border-radius:50%;background:var(--ac)}
+  .ease.go i{animation:slide 1.6s infinite}
+  @keyframes slide{0%{transform:translateX(0)}45%,55%{transform:translateX(var(--d))}100%{transform:translateX(0)}}
+  .tscale{display:grid;gap:0}
+  .tscale div{display:flex;align-items:baseline;gap:18px;padding:9px 0;border-bottom:1px solid var(--bd)}
+  .tscale div:last-child{border-bottom:0}
+  .tscale span{width:150px;color:var(--mu);font:11px var(--font-mono);flex:none}
+  .sp-row{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}.sp-row figure{margin:0;text-align:center;font:10.5px var(--font-mono);color:var(--mu)}
+  .sp-row figure i{display:block;background:var(--ac-soft);border:1px dashed var(--ac);margin:0 auto 5px}
+  .rd{width:64px;height:64px;background:var(--bg2);border:1px solid var(--bd2);display:block;margin:0 auto 5px}
+  .shd{width:90px;height:60px;border-radius:12px;background:var(--bg);display:block;margin:0 auto 8px}
+  .rules{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .rules div{padding:14px 16px;border:1px solid var(--bd);border-radius:12px;background:var(--bg)}
+  .rules b{display:block;margin-bottom:2px}.rules span{color:var(--mu);font-size:12px}
+  .sc{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 24px}
+  .sc div{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+  .sc .kbd{font-size:11px}
+  /* v2 动效演示用到的小样式 */
+  .seg.fx{position:relative}.seg.fx b{width:54px;padding:0;position:relative;z-index:1}
+  .seg.fx .th{position:absolute;left:2px;top:2px;width:54px;height:22px;border-radius:6px;background:var(--bg);box-shadow:var(--shadow-sm),0 0 0 .5px var(--bd2);animation:thumbGo 3s var(--ease-spring) infinite}
+  @keyframes thumbGo{0%,25%{transform:translateX(0)}35%,60%{transform:translateX(56px)}70%,95%{transform:translateX(112px)}100%{transform:translateX(0)}}
+  .vtd{position:absolute;inset:0;background:#1f2027;clip-path:circle(0 at 24% 50%);animation:vtGo 3.2s var(--ease-inout) infinite alternate;display:grid;place-items:center;color:#eceef4;font-weight:600}
+  @keyframes vtGo{0%,12%{clip-path:circle(0 at 24% 50%)}88%,100%{clip-path:circle(140% at 24% 50%)}}
+  .spot{width:150px;padding:10px 12px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);box-shadow:var(--shadow-xs);font-size:11.5px;transition:transform var(--dur-xl) var(--ease-soft),box-shadow var(--dur-xl)}
+  .spot:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);background-image:radial-gradient(160px circle at var(--mx,50%) var(--my,0%),var(--ac-soft),transparent 70%)}
+  .glow{width:120px;height:56px;border-radius:50%;background:radial-gradient(closest-side,var(--ac-soft2),transparent);filter:blur(10px);animation:drift 5s ease-in-out infinite alternate}
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="brand" id="brand"></span>
+  <nav><a href="index.html">总览</a><a href="prototype.html">可交互原型</a><a href="gallery.html">全屏幕画廊</a><a href="logo.html">Logo</a><a href="system.html" class="on">设计系统</a></nav>
+  <span class="sp"></span><div class="dots" id="dots"></div><button class="tg" id="mode">深色</button>
+</header>
+<main>
+  <h2 style="margin-top:8px">设计系统<small>令牌 · 组件 · 动效 · 原则</small></h2>
+  <p class="sub">所有页面都由这一份令牌驱动。切换右上角的配色和明暗，下面的色板、组件、动效都会实时变化——和原型里使用的是同一份 <code>tokens.css</code> / <code>app.css</code>。</p>
+
+  <h2>1 · 颜色令牌 <small id="curScheme"></small></h2>
+  <p class="sub">5 套配色 × 明 / 暗 = 10 套主题。每套只定义 11 个基础色，其余（选中、悬停、柔和底色、Logo 渐变）全部由 <code>color-mix()</code> 派生，所以新增一套配色只需要写 11 行。</p>
+  <h3>界面基础色</h3><div class="swgrid" id="swBase"></div>
+  <h3>语义色（所有配色共用，明暗各一套）</h3><div class="swgrid" id="swSem"></div>
+  <h3>5 套配色</h3>
+  <div class="grid3" style="grid-template-columns:repeat(5,1fr)" id="schemes"></div>
+
+  <h2>2 · 字体与排版</h2>
+  <p class="sub">界面字号以 12px 为基准（紧凑），代码与数字使用等宽字体。字重只用 450 / 550 / 650 三档，避免视觉噪点。</p>
+  <div class="card tscale">
+    <div style="font-size:20px;font-weight:650;letter-spacing:-.015em"><span>--fs-xl · 20 / 650</span>页面标题 · 项目主页</div>
+    <div style="font-size:15px;font-weight:650"><span>--fs-lg · 15 / 650</span>弹窗标题 · 空状态主文案</div>
+    <div style="font-size:13px;font-weight:550"><span>--fs-md · 13 / 550</span>区块标题 · 设置项名称</div>
+    <div style="font-size:12px"><span>--fs-base · 12 / 450</span>正文、列表行、按钮、输入框（默认）</div>
+    <div style="font-size:11px;color:var(--mu)"><span>--fs-sm · 11 / 450</span>说明文字、元信息、表头</div>
+    <div style="font-size:10px;color:var(--mu);font-weight:600;letter-spacing:.04em"><span>--fs-xs · 10 / 600</span>方法缩写 · 徽标 · 角标</div>
+    <div style="font:12px var(--font-mono)"><span>--font-mono · 12</span>{{host}}/users?page=1&amp;size=20 · 200 OK · 128 ms</div>
+  </div>
+
+  <h2>3 · 间距、圆角与阴影</h2>
+  <p class="sub">间距采用 2 / 4 / 6 / 8 / 12 / 16 的紧凑阶梯；圆角分 4 / 6 / 8 / 12 四档，控件 8、卡片与弹窗 12；阴影三档，只在浮层上使用。</p>
+  <div class="grid3" style="grid-template-columns:1.2fr 1fr 1fr">
+    <div class="card"><b>间距</b><div class="sp-row" style="margin-top:14px">
+      <figure><i style="width:2px;height:2px"></i>2</figure><figure><i style="width:4px;height:4px"></i>4</figure><figure><i style="width:6px;height:6px"></i>6</figure>
+      <figure><i style="width:8px;height:8px"></i>8</figure><figure><i style="width:12px;height:12px"></i>12</figure><figure><i style="width:16px;height:16px"></i>16</figure></div>
+      <p class="mu2" style="margin:14px 0 0;font-size:12px">行高 26 · 标题栏 40 · 标签 34 · 工具条 32。</p></div>
+    <div class="card"><b>圆角</b><div class="sp-row" style="margin-top:14px">
+      <figure><i class="rd" style="border-radius:4px"></i>4</figure><figure><i class="rd" style="border-radius:6px"></i>6</figure>
+      <figure><i class="rd" style="border-radius:8px"></i>8</figure><figure><i class="rd" style="border-radius:12px"></i>12</figure></div></div>
+    <div class="card" style="background:var(--bg2)"><b>阴影</b><div class="sp-row" style="margin-top:14px;gap:10px">
+      <figure><i class="shd" style="box-shadow:var(--shadow-sm);width:60px"></i>sm</figure><figure><i class="shd" style="box-shadow:var(--shadow-md);width:60px"></i>md</figure><figure><i class="shd" style="box-shadow:var(--shadow-lg);width:60px"></i>lg</figure></div></div>
+  </div>
+
+  <h2>4 · 组件</h2>
+  <p class="sub">全部为实时 DOM，可以悬停、按下、聚焦。状态色统一：悬停 5.5% 前景、按下 9%、选中 8% 前景底，强调色用于主操作与当前态。</p>
+  <div class="grid2">
+    <div><h3 style="margin-top:0">按钮 · 图标按钮</h3>
+      <div class="demo win"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn pri">发送 <span class="kbd" style="background:rgba(255,255,255,.2);border-color:transparent;color:inherit">⌘↵</span></button><button class="btn">次要按钮</button><button class="btn ghost">幽灵按钮</button><button class="btn dng">删除</button><button class="btn pri sm">小号</button><button class="btn dis">禁用</button>
+        <button class="ib" id="ibA"></button><button class="ib on" id="ibB"></button><button class="ib" id="ibC"></button></div></div></div>
+    <div><h3 style="margin-top:0">输入 · 选择 · 开关</h3>
+      <div class="demo win"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <label class="inp" style="width:170px"><span id="icSearch"></span><input placeholder="搜索请求、环境…"></label>
+        <span class="sel"><span>开发环境</span><span id="icChev"></span></span>
+        <span class="seg"><b class="on">中文</b><b>English</b></span>
+        <span class="sw on" onclick="this.classList.toggle('on')"></span><span class="sw" onclick="this.classList.toggle('on')"></span>
+        <span class="cb on" id="cbA"></span><span class="cb"></span></div></div></div>
+    <div><h3>徽标 · 状态 · 键帽</h3>
+      <div class="demo win"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span class="pill ok">200 OK</span><span class="pill warn">301</span><span class="pill err">500</span><span class="pill info">流式</span><span class="pill ac">已选择</span><span class="pill">128 ms</span>
+        <span class="tag">新增</span><span class="tag mute">只读</span><span class="cnt">12</span><span class="cnt ac">3</span>
+        <span class="kbd">⌘K</span><span class="kbd">⌘ ↵</span>
+        <span class="m m-GET">GET</span><span class="m m-POST">POST</span><span class="m m-PUT">PUT</span><span class="m m-PATCH">PATCH</span><span class="m m-DELETE">DEL</span></div></div></div>
+    <div><h3>标签 · 环境胶囊</h3>
+      <div class="demo win"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span class="chip"><span class="pav" style="background:#4f52d9">A</span>Acme 开放平台</span>
+        <span class="chip"><span class="pdot" style="background:var(--ok)"></span>开发环境</span>
+        <span class="chip"><span class="pdot" style="background:var(--warn)"></span>预发布</span>
+        <span class="chip"><span class="pdot" style="background:var(--err)"></span>生产环境</span></div></div></div>
+  </div>
+
+  <h2>5 · 动效规范</h2>
+  <p class="sub">动效只用于「建立空间关系」与「反馈状态」：浮层从触发点附近弹出，内容原地换入，选中指示器在选项之间连续滑动，等待有明确进度语言。时长 120 / 180 / 280 / 380 / 560ms 五档，进入用 <code>ease-emph</code>，轻微弹性只用于开关、标签、Toast、指示器。同一视图内的普通点击不会重播入场动画。系统开启「减少动态效果」时全部降级为瞬时切换。</p>
+  <div class="card" style="margin-bottom:16px"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:22px">
+    <div><b style="font-size:12px">--ease-emph</b> <code>cubic-bezier(.22,1,.36,1)</code><div class="ease go" style="--d:150px"><i style="animation-timing-function:cubic-bezier(.22,1,.36,1)"></i></div><span class="mu2" style="font-size:11px">入场、列表交错、指示器收尾（v2 默认）</span></div>
+    <div><b style="font-size:12px">--ease-out</b> <code>cubic-bezier(.2,.8,.2,1)</code><div class="ease go" style="--d:150px"><i style="animation-timing-function:cubic-bezier(.2,.8,.2,1)"></i></div><span class="mu2" style="font-size:11px">展开、弹层、颜色与描边过渡</span></div>
+    <div><b style="font-size:12px">--ease-spring</b> <code>cubic-bezier(.34,1.4,.64,1)</code><div class="ease go" style="--d:150px"><i style="animation-timing-function:cubic-bezier(.34,1.4,.64,1)"></i></div><span class="mu2" style="font-size:11px">开关、标签、Toast：轻微回弹</span></div>
+    <div><b style="font-size:12px">--ease-inout</b> <code>cubic-bezier(.65,0,.35,1)</code><div class="ease go" style="--d:150px"><i style="animation-timing-function:cubic-bezier(.65,0,.35,1)"></i></div><span class="mu2" style="font-size:11px">进度、位移较大的过渡</span></div>
+  </div><div style="display:flex;gap:26px;margin-top:6px;font-size:12px;flex-wrap:wrap"><span><b>120ms</b> <span class="mu2">悬停、按下、颜色</span></span><span><b>180ms</b> <span class="mu2">菜单、切换、淡入</span></span><span><b>280ms</b> <span class="mu2">整页换入、展开、列表行</span></span><span><b>380ms</b> <span class="mu2">对话框、卡片抬升、指示器滑动（420）</span></span><span><b>560ms</b> <span class="mu2">Toast、首次载入、主题揭幕（640）</span></span></div></div>
+
+  <div class="mo" id="mo"></div>
+
+  <h2>6 · 交互原则</h2>
+  <div class="rules">
+    <div><b>① 发送永远在手边</b><span>发送按钮和 ⌘↵ 始终可达；环境切换靠近发送，避免发错环境。</span></div>
+    <div><b>② 空间感一致</b><span>菜单从触发点弹出；右键菜单贴着光标；⌘K 居中；Toast 固定右上并可堆叠。</span></div>
+    <div><b>③ 状态可读</b><span>发送中、成功、失败、流式、空响应各有明确的形态，而不是同一个转圈。</span></div>
+    <div><b>④ 错误给下一步</b><span>失败不只说「失败」，而是给出检查项和「重试 / 在控制台查看 / 打开设置」。</span></div>
+    <div><b>⑤ 破坏性操作可撤销</b><span>删除优先用 Toast「撤销 ⌘Z」，只有不可逆操作才弹确认框。</span></div>
+    <div><b>⑥ 全键盘可用</b><span>所有主流程有快捷键；弹层 Esc 关闭、↑↓ 选择、↵ 确认；焦点环清晰。</span></div>
+  </div>
+
+  <h2>7 · 快捷键</h2>
+  <div class="card"><div class="sc" id="sc"></div></div>
+</main>
+<script src="assets/icons.js"></script>
+<script src="assets/data.js"></script>
+<script src="assets/logos.js"></script>
+<script>
+(function () {
+  var SCH = [['mist', '雾蓝', '#4f52d9'], ['ink', '墨白', '#2b2d36'], ['jade', '松石', '#0f9d82'], ['amber', '琥珀', '#d97706'], ['rose', '玫瑰', '#e11d6a']];
+  var q = new URLSearchParams(location.search), root = document.documentElement, $ = function (s) { return document.querySelector(s); };
+  var scheme = q.get('scheme') || 'mist', mode = q.get('mode') || 'light';
+
+  // 色板：读取当前主题的真实计算值
+  var BASE = [['--chrome', '窗口底'], ['--side', '侧栏'], ['--bg', '内容底'], ['--bg2', '次级底'], ['--bd', '分割线'], ['--bd2', '控件边框'], ['--fg', '主文字'], ['--fg2', '次文字'], ['--mu', '弱文字'], ['--ac', '强调色'], ['--ach', '强调悬停'], ['--ac-soft', '强调柔底']];
+  var SEM = [['--ok', '成功'], ['--warn', '警告'], ['--err', '错误'], ['--info', '信息'], ['--get', 'GET'], ['--post', 'POST'], ['--put', 'PUT'], ['--patch', 'PATCH'], ['--del', 'DELETE']];
+  function sw(list, host) {
+    var cs = getComputedStyle(root);
+    $(host).innerHTML = list.map(function (t) {
+      var v = cs.getPropertyValue(t[0]).trim();
+      return '<div class="sw1"><i style="background:var(' + t[0] + ')"></i><div><b>' + t[0] + '</b>' + t[1] + '<br><span>' + v.replace(/color-mix\(.*/, '派生 color-mix') + '</span></div></div>';
+    }).join('');
+  }
+  function apply() {
+    root.dataset.scheme = scheme; root.dataset.mode = mode;
+    $('#mode').textContent = mode === 'light' ? '深色' : '浅色';
+    document.querySelectorAll('.dots button').forEach(function (b) { b.classList.toggle('on', b.dataset.s === scheme); });
+    $('#curScheme').textContent = (SCH.filter(function (s) { return s[0] === scheme })[0] || [])[1] + ' · ' + (mode === 'light' ? '浅色' : '深色');
+    document.querySelectorAll('[data-nest]').forEach(function (e) { e.dataset.mode = mode; });
+    sw(BASE, '#swBase'); sw(SEM, '#swSem');
+    $('#brand').innerHTML = MPLogo.tile('fold', { size: 22 }) + 'MiniPost 设计稿';
+  }
+  $('#dots').innerHTML = SCH.map(function (s) { return '<button data-s="' + s[0] + '" title="' + s[1] + '" style="background:' + s[2] + '"></button>'; }).join('');
+  // 主题变化时走圆形揭幕（fx.js 提供；不可用时直接切换）
+  var vt = function (f) { if (window.MPFX) MPFX.vt(f); else f(); };
+  $('#dots').onclick = function (e) { var b = e.target.closest('button'); if (b) { scheme = b.dataset.s; vt(apply); } };
+  $('#mode').onclick = function () { mode = mode === 'light' ? 'dark' : 'light'; vt(apply); };
+
+  // 5 套配色小预览（嵌套 data 属性获得各自令牌）
+  $('#schemes').innerHTML = SCH.map(function (s) {
+    return '<div data-nest data-scheme="' + s[0] + '" data-mode="' + mode + '" class="card" style="padding:12px;background:var(--chrome)"><div style="display:flex;gap:6px;margin-bottom:8px"><i style="flex:1;height:36px;border-radius:8px;background:var(--side);border:1px solid var(--bd)"></i><i style="flex:2;height:36px;border-radius:8px;background:var(--bg);border:1px solid var(--bd)"></i></div>' +
+      '<div style="display:flex;gap:5px;margin-bottom:8px"><i style="width:22px;height:8px;border-radius:4px;background:var(--ac)"></i><i style="width:36px;height:8px;border-radius:4px;background:var(--bd2)"></i></div>' +
+      '<b style="font-size:12.5px;color:var(--fg)">' + s[1] + '</b><div style="font:10.5px var(--font-mono);color:var(--mu)">' + s[0] + '</div></div>';
+  }).join('');
+
+  // 组件里的图标
+  $('#ibA').innerHTML = I('copy', 15); $('#ibB').innerHTML = I('sidebar', 15); $('#ibC').innerHTML = I('trash', 15);
+  $('#icSearch').innerHTML = I('search', 13); $('#icChev').innerHTML = I('chevD', 12); $('#cbA').innerHTML = I('check', 10);
+
+  // 动效演示
+  var MO = [
+    ['弹层 popIn', '180ms · ease-out', '菜单、对话框、⌘K：从下方 6px、97% 缩放淡入。',
+      function () { return '<div class="fake" style="animation:popIn .18s var(--ease-out)">' + I('copy', 12) + '复制 cURL</div>'; }],
+    ['内容切换 paneIn', '180ms · ease-out', 'Params/Body/Auth 等分页内容换入，轻微上移淡入。',
+      function () { return '<div class="lines" style="animation:paneIn .18s var(--ease-out)"><i></i><i></i><i style="width:60%"></i></div>'; }],
+    ['列表行 rowIn', '每行延迟 30ms', '搜索结果、历史、事件流逐行进入，不超过 8 行。',
+      function () { var r = ''; for (var i = 0; i < 4; i++) r += '<i style="height:9px;border-radius:5px;background:var(--bd2);display:block;width:' + (90 - i * 12) + '%;animation:rowIn .24s var(--ease-out) both;animation-delay:' + i * 30 + 'ms"></i>'; return '<div class="lines" style="gap:6px">' + r + '</div>'; }],
+    ['标签 tabIn', '180ms · spring', '新建标签从下方弹入，关闭后左右标签平滑补位。',
+      function () { return '<div class="fake" style="animation:tabIn .22s var(--ease-spring);border-radius:8px 8px 0 0">' + '<span class="m m-GET">GET</span>新请求</div>'; }],
+    ['Toast toastIn', '280ms · spring', '从右侧滑入并带 4s 倒计时细线，悬停暂停。',
+      function () { return '<div class="fake" style="animation:toastIn .28s var(--ease-spring)"><span class="pdot" style="background:var(--ok)"></span>已复制 cURL 命令</div>'; }],
+    ['发送 · 彗星线', '循环 1.2s', '请求区顶部的细光带从左到右划过，不遮挡内容。',
+      function () { return '<div style="position:absolute;left:0;right:0;top:0;height:2px;overflow:hidden"><i style="position:absolute;top:0;height:2px;width:30%;background:linear-gradient(90deg,transparent,var(--ac),transparent);animation:comet 1.2s linear infinite"></i></div><span class="mu2">发送中…</span>'; }],
+    ['发送 · 按钮进度', '循环 1.4s', '发送按钮内展示环形进度，文案变为「取消」。',
+      function () { return '<button class="btn pri"><span style="width:12px;height:12px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spin .8s linear infinite;display:inline-block"></span>取消</button>'; }],
+    ['骨架 shimmer', '循环 1.3s', '响应区等待首包时的占位，三行长短不一。',
+      function () { return '<div class="lines"><i class="sk"></i><i class="sk" style="width:80%"></i><i class="sk" style="width:55%"></i></div>'; }],
+    ['开关 spring', '180ms · spring', '圆点带轻微过冲，反馈「已切换」。',
+      function () { return '<span class="sw" id="swd" style="transform:scale(1.4)"></span>'; }, function () { var e = document.getElementById('swd'); setTimeout(function () { e.classList.add('on'); }, 50); }],
+    ['脉冲 ping', '循环 1.6s', '流式连接建立、更新就绪等「活着」的状态点。',
+      function () { return '<span style="position:relative;width:10px;height:10px;display:inline-block"><i style="position:absolute;inset:0;border-radius:50%;background:var(--ok)"></i><i style="position:absolute;inset:0;border-radius:50%;background:var(--ok);animation:ping 1.6s ease-out infinite"></i></span>'; }],
+    ['滑动指示器 FLIP', '420ms · spring', '分段控件的滑块、子标签下划线、标签顶线、设置导航竖条，在选项间连续滑动并带轻微回弹。',
+      function () { return '<div class="seg fx"><i class="th"></i><b>请求</b><b>历史</b><b>环境</b></div>'; }],
+    ['主题圆形揭幕', '640ms · inout', '切换明暗 / 配色时，新主题从点击位置圆形扩散覆盖旧主题（View Transition）。',
+      function () { return '<span class="mu2">浅色</span><div class="vtd">深色</div>'; }],
+    ['光斑跟随', '指针驱动', '卡片、主题缩略图、变量卡片悬停时，高光跟随指针移动，并带 2px 抬升。',
+      function () { return '<div class="spot"><b>用户服务</b><br><span class="mu2">12 个请求 · 悬停试试</span></div>'; }],
+    ['按钮光泽 sheen', '700ms · emph', '主按钮悬停时，一道高光从左到右划过，并带彩色光晕上浮。',
+      function () { return '<button class="btn pri">' + I('send', 13) + '悬停试试</button>'; }],
+    ['复选勾描绘', '300ms · out', '复选框选中时，对勾沿路径描出，同时底色渐变与光晕浮现。',
+      function () { return '<span class="cb" id="cbd" style="transform:scale(1.5)">' + I('check', 10) + '</span>'; }, function () { var e = document.getElementById('cbd'); setTimeout(function () { e.classList.add('on'); }, 120); }],
+    ['流动光晕 aurora', '循环 5–14s', '欢迎页、方案 C 的窗口背景、总览 Hero 里缓慢漂移的柔光，让大面积留白有呼吸。',
+      function () { return '<div class="glow"></div>'; }],
+  ];
+  $('#mo').innerHTML = MO.map(function (m, i) {
+    return '<div class="c"><h4>' + m[0] + '<button class="rp" data-i="' + i + '">重播</button></h4><div class="st" id="st' + i + '"></div><p><b style="color:var(--fg2);font-weight:600">' + m[1] + '</b><br>' + m[2] + '</p></div>';
+  }).join('');
+  function play(i) { var st = document.getElementById('st' + i); st.innerHTML = MO[i][3](); if (MO[i][4]) MO[i][4](); }
+  MO.forEach(function (_, i) { play(i); });
+  $('#mo').onclick = function (e) { var b = e.target.closest('.rp'); if (b) play(+b.dataset.i); };
+
+  $('#sc').innerHTML = MP.shortcuts.map(function (s) { return '<div><span>' + s[0] + '</span><span class="kbd">' + s[1] + '</span></div>'; }).join('');
+  apply();
+})();
+</script>
+<script src="assets/fx.js"></script>
+</body>
+</html>

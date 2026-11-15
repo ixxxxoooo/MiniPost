@@ -1,0 +1,103 @@
+/* 文档型页面（index / system）共用样式：顶部导航 + 版心 + 区块标题 */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.6 var(--font-ui); -webkit-font-smoothing: antialiased; }
+a { color: var(--ac); text-decoration: none; }
+code { font: 11.5px var(--font-mono); background: var(--bg2); padding: 1px 6px; border-radius: 5px; color: var(--fg2); }
+.top { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 16px; padding: 10px 32px; background: color-mix(in oklab, var(--bg) 82%, transparent); backdrop-filter: blur(16px); border-bottom: 1px solid var(--bd); }
+.top .brand { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 13.5px; color: var(--fg); }
+.top nav { display: flex; gap: 4px; }
+.top nav a { color: var(--mu); font-size: 12.5px; padding: 4px 10px; border-radius: 8px; }
+.top nav a:hover, .top nav a.on { color: var(--ac); background: var(--ac-soft); }
+.top .sp { flex: 1; }
+.dots { display: flex; gap: 6px; }
+.dots button { width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; outline: none; transition: transform .15s; }
+.dots button:hover { transform: scale(1.15); }
+.dots button.on { border-color: var(--fg); box-shadow: 0 0 0 2px var(--bg) inset; }
+.tg { border: 1px solid var(--bd2); background: var(--bg); color: var(--fg); border-radius: 8px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+.tg:hover { border-color: var(--ac); color: var(--ac); }
+main { max-width: 1120px; margin: 0 auto; padding: 32px 32px 100px; }
+h2 { font-size: 20px; margin: 56px 0 4px; letter-spacing: -.015em; }
+h2 small { font-size: 12px; color: var(--mu); font-weight: 450; margin-left: 10px; letter-spacing: 0; }
+h3 { font-size: 14px; margin: 24px 0 8px; }
+.sub { color: var(--mu); margin: 0 0 18px; max-width: 720px; }
+.card { border: 1px solid var(--bd); border-radius: 16px; background: var(--bg); padding: 18px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.btnx { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 10px; border: 1px solid var(--bd2); background: var(--bg); color: var(--fg); font-weight: 600; cursor: pointer; font-size: 13px; }
+.btnx:hover { border-color: var(--ac); color: var(--ac); }
+.btnx.pri { background: var(--ac); border-color: var(--ac); color: var(--acf); box-shadow: 0 6px 18px color-mix(in oklab, var(--ac) 35%, transparent); }
+.btnx.pri:hover { background: var(--ach); color: var(--acf); }
+.badge2 { display: inline-flex; align-items: center; padding: 1px 9px; border-radius: 99px; background: var(--ac-soft); color: var(--ac); font-size: 11.5px; font-weight: 650; }
+table.t { width: 100%; border-collapse: collapse; border: 1px solid var(--bd); border-radius: 12px; overflow: hidden; }
+table.t th, table.t td { padding: 10px 14px; border-bottom: 1px solid var(--bd); text-align: left; vertical-align: top; }
+table.t tr:last-child td { border-bottom: 0; }
+table.t th { background: var(--bg2); font-weight: 600; font-size: 12px; color: var(--fg2); }
+table.t td b { font-weight: 650; }
+.mu2 { color: var(--mu); }
+.demo.win { width: auto; height: auto; border-radius: 12px; box-shadow: none; background: var(--bg); border: 1px solid var(--bd); padding: 16px; user-select: auto; overflow: visible; }
+.demo.win.flat { border: 0; padding: 0; background: none; }
+.swgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.sw1 { border: 1px solid var(--bd); border-radius: 12px; overflow: hidden; background: var(--bg); }
+.sw1 i { display: block; height: 52px; border-bottom: 1px solid var(--bd); }
+.sw1 div { padding: 7px 10px; font-size: 11.5px; line-height: 1.35; }
+.sw1 b { display: block; font: 600 11.5px var(--font-mono); }
+.sw1 span { color: var(--mu); font: 10.5px var(--font-mono); }
+.pager { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+/* ==========================================================================
+   v2 精修：文档页与原型共用同一套质感令牌（阴影 / 高光 / 渐变 / 缓动）
+   ========================================================================== */
+body { background: radial-gradient(1000px 420px at 8% -8%, var(--ac-soft), transparent 62%), radial-gradient(800px 380px at 100% 0%, color-mix(in oklab, var(--ac) 7%, transparent), transparent 60%), var(--bg); background-attachment: fixed; transition: background-color .5s; }
+a { transition: color var(--dur-fast), opacity var(--dur-fast); }
+code { box-shadow: inset 0 0 0 .5px var(--hair); }
+
+.top { background: color-mix(in oklab, var(--bg) 78%, transparent); backdrop-filter: blur(22px) saturate(1.6); border-bottom-color: transparent; box-shadow: 0 1px 0 var(--hair), 0 8px 24px -16px rgba(20, 24, 40, .25); }
+.top .brand { transition: transform var(--dur-base) var(--ease-spring); } .top .brand:hover { transform: scale(1.02); }
+.top nav a { position: relative; transition: color var(--dur-fast), background var(--dur-fast), transform var(--dur-fast) var(--ease-spring); }
+.top nav a:active { transform: scale(.95); }
+.top nav a.on { font-weight: 600; box-shadow: inset 0 0 0 1px var(--ac-soft2); }
+.dots button { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28), 0 2px 6px -1px rgba(0, 0, 0, .3); transition: transform var(--dur-base) var(--ease-spring), box-shadow var(--dur-base); }
+.dots button:hover { transform: scale(1.22); } .dots button:active { transform: scale(1.05); }
+.dots button.on { animation: ringPop .4s var(--ease-spring); }
+.tg { background: var(--grad-raise); box-shadow: var(--shadow-xs), var(--hl); transition: border-color var(--dur-fast), color var(--dur-fast), transform var(--dur-fast) var(--ease-spring), box-shadow var(--dur-base); }
+.tg:hover { box-shadow: var(--shadow-sm), var(--hl); } .tg:active { transform: scale(.95); }
+
+h2 { position: relative; }
+h2::before { content: ''; display: inline-block; width: 4px; height: .82em; margin-right: 10px; vertical-align: -.08em; border-radius: 3px; background: var(--grad-ac); box-shadow: 0 0 10px var(--ac-glow-s); }
+h3 { letter-spacing: -.005em; }
+
+.card { box-shadow: var(--shadow-xs); transition: box-shadow var(--dur-xl) var(--ease-out), transform var(--dur-xl) var(--ease-soft), border-color var(--dur-base); }
+.grid2 > div > .demo.win, .grid3 > .card, .card.lift { transition: box-shadow var(--dur-xl) var(--ease-out), transform var(--dur-xl) var(--ease-soft), border-color var(--dur-base); }
+.grid3 > .card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); border-color: var(--bd2); }
+.demo.win { box-shadow: var(--shadow-xs); }
+.btnx { background: var(--grad-raise); box-shadow: var(--shadow-xs), var(--hl); position: relative; overflow: hidden; isolation: isolate; transition: border-color var(--dur-fast), color var(--dur-fast), box-shadow var(--dur-base), transform var(--dur-fast) var(--ease-spring), background var(--dur-fast); }
+.btnx:hover { box-shadow: var(--shadow-sm), var(--hl); transform: translateY(-1px); }
+.btnx:active { transform: scale(.97); }
+.btnx.pri { background: var(--grad-ac); border-color: color-mix(in oklab, var(--ac) 86%, black); box-shadow: 0 1px 2px var(--ac-glow), 0 8px 20px -6px var(--ac-glow), var(--hl-ac); }
+.btnx.pri:hover { background: var(--grad-ac-h); box-shadow: 0 2px 4px var(--ac-glow), 0 12px 26px -6px var(--ac-glow), var(--hl-ac); }
+.btnx.pri::after { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(105deg, transparent 32%, rgba(255, 255, 255, .34) 50%, transparent 68%); transform: translateX(-130%); }
+.btnx.pri:hover::after { transform: translateX(130%); transition: transform .8s var(--ease-emph); }
+.badge2 { box-shadow: inset 0 0 0 1px var(--ac-soft2); }
+table.t { box-shadow: var(--shadow-xs); overflow: hidden; }
+table.t tbody tr { transition: background var(--dur-fast); } table.t tbody tr:hover { background: var(--hover); }
+table.t th { background: linear-gradient(180deg, color-mix(in oklab, var(--bg2) 80%, var(--bg)), var(--bg2)); }
+.sw1 { box-shadow: var(--shadow-xs); transition: transform var(--dur-base) var(--ease-spring), box-shadow var(--dur-base); } .sw1:hover { transform: translateY(-2px) scale(1.02); box-shadow: var(--shadow-md); }
+
+/* 总览页 Hero 的流动光晕、方向卡片与配色卡片 */
+.hero { position: relative; overflow: hidden; isolation: isolate; box-shadow: var(--shadow-md); }
+.hero::before, .hero::after { content: ''; position: absolute; z-index: -1; pointer-events: none; border-radius: 50%; filter: blur(40px); }
+.hero::before { width: 420px; height: 320px; left: -80px; top: -120px; background: radial-gradient(closest-side, var(--ac-soft2), transparent); animation: drift 20s ease-in-out infinite alternate; }
+.hero::after { width: 380px; height: 300px; right: -60px; bottom: -120px; background: radial-gradient(closest-side, color-mix(in oklab, var(--ac) 16%, #ff8bd0 20%), transparent); opacity: .6; animation: drift 24s ease-in-out -8s infinite alternate-reverse; }
+.hero .lg { animation: floaty 6s ease-in-out infinite; }
+.dir { box-shadow: var(--shadow-xs); transition: transform var(--dur-xl) var(--ease-soft), box-shadow var(--dur-xl) var(--ease-out), border-color var(--dur-base); }
+.dir:hover { transform: translateY(-4px); }
+.sch a { box-shadow: var(--shadow-xs); transition: transform var(--dur-xl) var(--ease-soft), box-shadow var(--dur-base), border-color var(--dur-base); } .sch a:hover { box-shadow: var(--shadow-md); border-color: var(--ac-line); }
+.cover > div, .howto > div, .rules > div { transition: transform var(--dur-xl) var(--ease-soft), box-shadow var(--dur-xl) var(--ease-out), border-color var(--dur-base); }
+.cover > div:hover, .rules > div:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--bd2); }
+.rec-box { box-shadow: var(--shadow-sm); }
+
+/* 滚动揭示（fx.js 添加 .rv / .in；未加载脚本时内容照常显示） */
+.fx-reveal .rv { opacity: 0; transform: translateY(18px); }
+.fx-reveal .rv.in { opacity: 1; transform: none; transition: opacity .7s var(--ease-emph), transform .7s var(--ease-emph), box-shadow var(--dur-xl) var(--ease-out), border-color var(--dur-base); }
+@media (prefers-reduced-motion: reduce) { .fx-reveal .rv { opacity: 1; transform: none; } .hero::before, .hero::after, .hero .lg { animation: none; } }
