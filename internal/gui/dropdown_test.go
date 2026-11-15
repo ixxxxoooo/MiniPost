@@ -148,8 +148,8 @@ func TestMotionTokensMatchDesignV2(t *testing.T) {
 // 面板切换在开启动效时是“先退后进”：切换后的第一帧旧面板仍作为退场副本留在画面里，退场结束后只剩新面板；
 // 关闭动效（测试默认）时立即显示新面板。
 func TestPaneSwitchExitsThenEnters(t *testing.T) {
-	paneMotion = true // 必须在第一次渲染前打开：退场动画取自旧面板上一帧的过渡设置
-	defer func() { paneMotion = false }()
+	motionEnabled = true // 必须在第一次渲染前打开：退场动画取自旧面板上一帧的过渡设置
+	defer func() { motionEnabled = false }()
 	_, tt, _, rs := sendWith(t, jsonResp())
 	rs.sub = 1
 	tt.Frame()
@@ -186,4 +186,53 @@ func imgDiff(a, b *image.RGBA) int {
 		}
 	}
 	return n
+}
+
+// 标签列表是自绘面板：每行有方法与标题、所在文件夹，当前标签有勾选，未保存标签有圆点；点击某行切换到该标签。
+func TestTabListDropdownSwitchesTab(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.openRequest(a.coll.Requests[0].ID)
+	a.openRequest(a.coll.Requests[1].ID)
+	a.tabs[1].dirty = true
+	tt.Frame()
+	if err := tt.Click("显示所有标签"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.tabListOpen || !tt.HasText("打开的标签 · 2") || !tt.HasText("根目录") {
+		t.Fatalf("应展开标签列表面板，实际 %q", tt.Texts())
+	}
+	if a.active != 1 {
+		t.Fatalf("前置条件：当前应是第二个标签，实际 %d", a.active)
+	}
+	if err := tt.Click("alpha"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.tabListOpen || a.active != 0 {
+		t.Fatalf("点击第一行应切到第一个标签并收起面板：open=%v active=%d", a.tabListOpen, a.active)
+	}
+}
+
+// 对话框两段式入场：开启动效时第一帧只有遮罩、面板内容从第二帧起才出现（这样 dlgIn / qkIn 才能播放）；
+// 关闭动效时一帧到位。
+func TestDialogEntersInTwoPhases(t *testing.T) {
+	motionEnabled = true
+	defer func() { motionEnabled = false }()
+	a, tt, _ := zhApp(t)
+	a.openQuick()
+	tt.Frame()
+	if tt.HasText("搜索请求、环境、命令…") {
+		t.Fatal("第一帧不应已构建面板内容")
+	}
+	tt.Advance(60 * time.Millisecond)
+	tt.Frame()
+	if !a.overlays.quick.open || !tt.HasText("没有匹配的结果") && !tt.HasText("命令") {
+		t.Fatalf("第二帧起应显示快速打开面板，实际 %q", tt.Texts())
+	}
+	// 快速打开面板贴顶显示（距顶 70 + 搜索行），且横向居中（窗口宽 1200，面板宽 580，右缘应在 890 附近，esc 小键帽在右缘内侧）
+	r, ok := tt.Find("esc")
+	if !ok || r.Y < 70 || r.Y > 140 || r.X < 800 || r.X > 890 {
+		t.Fatalf("快速打开面板应贴顶且横向居中，esc 键帽位置 %+v ok=%v", r, ok)
+	}
 }

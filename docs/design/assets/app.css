@@ -743,8 +743,8 @@
 .m-GET { --mc: var(--get); } .m-POST { --mc: var(--post); } .m-PUT { --mc: var(--put); } .m-PATCH { --mc: var(--patch); }
 .m-DELETE { --mc: var(--del); } .m-HEAD { --mc: var(--head); } .m-OPTIONS { --mc: var(--opt); }
 /* 方法徽章：底色用伪元素外扩绘制，不改变徽章自身盒子，避免影响布局 */
-.row .m, .qk-r .m, .tab .m { position: relative; isolation: isolate; text-align: center; }
-.row .m::before, .qk-r .m::before, .tab .m::before { content: ""; position: absolute; inset: -2.5px -3px; z-index: -1; border-radius: 4px; background: color-mix(in oklab, var(--mc, var(--mu)) 12%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in oklab, var(--mc, var(--mu)) 22%, transparent); }
+.row .m, .qk-r .m, .tab .m, .pop .pi .m { position: relative; isolation: isolate; text-align: center; }
+.row .m::before, .qk-r .m::before, .tab .m::before, .pop .pi .m::before { content: ""; position: absolute; inset: -2.5px -3px; z-index: -1; border-radius: 4px; background: color-mix(in oklab, var(--mc, var(--mu)) 12%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in oklab, var(--mc, var(--mu)) 22%, transparent); }
 .tab .m { text-align: left; }
 .tab .m::before { inset: -2px -3px; }
 .url .mth { background: color-mix(in oklab, var(--mc, var(--mu)) 6%, transparent); transition: background var(--dur-fast); }
@@ -987,6 +987,8 @@
 
 /* ---------- 关键帧（v2：重写同名的 popIn / paneIn / rowIn / toastIn，并新增若干） ---------- */
 @keyframes popIn { from { opacity: 0; transform: translateY(8px) scale(.96); filter: blur(3px) } to { opacity: 1; transform: none; filter: none } }
+/* 快速打开：从顶部落下，比普通对话框更轻 */
+@keyframes qkIn { from { opacity: 0; transform: translateY(-10px) scale(.97); filter: blur(4px) } to { opacity: 1; transform: none; filter: none } }
 @keyframes dlgIn { from { opacity: 0; transform: translateY(14px) scale(.955); filter: blur(4px) } to { opacity: 1; transform: none; filter: none } }
 @keyframes paneIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
 @keyframes paneOut { from { opacity: 1; transform: none } to { opacity: 0; transform: translateY(-4px) } }
@@ -1078,13 +1080,12 @@
 .win[data-dir="c"] .tab:hover { background: color-mix(in oklab, var(--bg) 55%, transparent); color: var(--fg); }
 .win[data-dir="c"] .tab .tt { font-weight: 500; }
 .win[data-dir="c"] .tab.on { height: 32px; margin: 0 0 -1px; background: var(--bg); color: var(--fg); clip-path: none; z-index: 2;
-  /* 整圈轮廓取「强调色混边框色」，比普通边框亮；顶部再叠一道细→粗→细的强调光 */
+  /* 整圈轮廓取「强调色混边框色」，比普通边框亮；线宽处处统一（1px），顶部不再叠强调光 */
   --tab-ln: color-mix(in oklab, var(--ac) 58%, var(--bd));
-  box-shadow: -1px 0 0 var(--tab-ln), 1px 0 0 var(--tab-ln), 0 -1px 0 var(--tab-ln), 0 -6px 14px -8px var(--ac-glow-s); }
+  box-shadow: -1px 0 0 var(--tab-ln), 1px 0 0 var(--tab-ln), 0 -1px 0 var(--tab-ln); }
 .win[data-dir="c"] .tab.on .tt { font-weight: 650; }
-/* 顶部强调光：中间最粗，向两端渐细，沿圆角顺势收尾（椭圆渐变 = 细→粗→细） */
-.win[data-dir="c"] .tab.on::before { left: 0; right: 0; top: -1px; bottom: auto; height: 3.5px; border-radius: 0; background: var(--ac); clip-path: ellipse(50% 100% at 50% 0); filter: drop-shadow(0 1px 5px var(--ac-glow)); box-shadow: none; }
-/* 两侧凹圆角：底色同内容区，弧线带同款轮廓色，并从上到下渐淡（轮廓在底部收细） */
+.win[data-dir="c"] .tab.on::before { display: none; }
+/* 两侧凹圆角：底色同内容区，弧线带同款轮廓色 */
 .win[data-dir="c"] .tab.on::after { display: block; content: ''; position: absolute; left: -10px; right: -10px; bottom: 0; height: 10px; pointer-events: none;
   background: radial-gradient(circle at 0 0, transparent 8.6px, var(--tab-ln) 9.2px, var(--tab-ln) 9.8px, var(--bg) 10.4px) left bottom / 10px 10px no-repeat, radial-gradient(circle at 100% 0, transparent 8.6px, var(--tab-ln) 9.2px, var(--tab-ln) 9.8px, var(--bg) 10.4px) right bottom / 10px 10px no-repeat; }
 .win[data-dir="c"] .tab:not(.on)::after { content: ''; position: absolute; right: -1px; top: 9px; bottom: 9px; width: 1px; background: color-mix(in oklab, var(--bd) 80%, transparent); transition: opacity var(--dur-fast); }
@@ -1096,3 +1097,14 @@
 /* 项目主题色：色相取自所选颜色，明度/彩度跟随当前配色，换配色时自动协调；首个色块「跟随外观」 */
 .swatches i.auto { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--bg) 70%, transparent); }
 .swatches i.auto::before { content: ''; position: absolute; inset: 6px; border-radius: 50%; background: var(--acf); opacity: .9; }
+
+/* 标签列表下拉：方法徽标 + 标题 + 所在文件夹（弱）+ 未保存点 / 当前勾选，条目多时列表区滚动 */
+.pop .pl { max-height: 320px; overflow-y: auto; }
+.pop .pi .m { width: 34px; flex: none; font: 750 9.5px var(--font-mono); letter-spacing: .02em; }
+.pop .pi .fd { font-style: normal; color: var(--mu); font-size: 10.5px; flex: none; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pop .pi .ico { width: 20px; height: 20px; border-radius: 6px; background: var(--bg2); display: grid; place-items: center; color: var(--fg2); flex: none; margin: 0 7px 0 7px; }
+.pop .pi.on > svg:last-child { color: var(--ac); flex: none; }
+.pop .pi .pdot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+
+/* 快速打开入场：面板自上落下（qkIn） */
+.scrim.top.anim .dlg.qk { animation: qkIn var(--dur-xl) var(--ease-soft); transform-origin: top center; }

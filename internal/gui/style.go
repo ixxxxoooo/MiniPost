@@ -746,24 +746,47 @@ func (a *app) dialogDim(c *ui.Context, open *bool, w, h, radius, dim float32, fn
 
 // dialogAt 在 dialogDim 的基础上可让面板贴顶显示：top > 0 时面板距窗口顶部 top（设计稿 .scrim.top 的 padding-top:70，用于快速打开）。
 func (a *app) dialogAt(c *ui.Context, open *bool, w, h, radius, dim, top float32, fn func()) {
+	in := motionDlg
+	if top > 0 {
+		in = motionQuick // 贴顶的面板（快速打开）从上方落下
+	}
 	p := a.p
 	cw, ch := c.Size()
+	// MyGo 的 Enter 只对“出现在已存在父级里”的元素生效，而对话框的面板与遮罩同帧诞生，不会有入场。
+	// 所以分两段：第一帧只出遮罩（遮罩自己淡入，也让界面继续出帧），面板内容从第二帧起才构建，
+	// 此时它的父级早已存在，dlgIn / qkIn 才能播放。关闭动效（测试）时一帧到位。
+	first := false
+	if motionEnabled {
+		if a.dlgSeen == nil {
+			a.dlgSeen = map[*bool]uint64{}
+		}
+		last, ok := a.dlgSeen[open]
+		first = !ok || last+1 != a.frameNo
+		a.dlgSeen[open] = a.frameNo
+	}
 	ui.DialogBase(c, open, func(back, panel ui.Element) {
 		// 设计稿 .dlg：大圆角（--r-lg）、近乎不透明的玻璃底（无法做背景模糊，故用高不透明度）、细边框 + 顶部高光 + 大投影
-		scrim := ui.RGBA(0, 0, 0, dim)
-		back.Background(scrim)
+		back.Background(ui.RGBA(0, 0, 0, dim))
+		if motionEnabled {
+			back.Transition(ui.ElementTransition{Duration: durBase, Ease: easeOut, Colors: true, Enter: &ui.Motion{}}) // 设计稿 scrimIn
+		}
 		if top > 0 {
-			back.AlignItems(ui.Start).Justify(ui.Start).Padding(top, 0, 0, 0)
+			back.AlignItems(ui.Center).Justify(ui.Start).Padding(top, 0, 0, 0) // 横向仍居中，只把纵向起点定在顶部
+		}
+		if first {
+			return
 		}
 		radius = max(radius, radiusLg)
-		panel.Width(w).Radius(radius).Gradient(p.elevated(), p.elevated(), 180).Border(1, p.border).Clip().
+		body := ui.Column(c.Key("dlg-body")).Width(w).Radius(radius).Gradient(p.elevated(), p.elevated(), 180).Border(1, p.border).Clip().
 			Shadow(0, 14, 40, -8, p.shadowLg()).Shadow(0, 2, 6, 0, p.shadowLg()).InsetShadow(0, 1, 0, 0, ui.RGBA(255, 255, 255, 0.18))
 		if h > 0 {
-			panel.Height(h)
+			body = body.Height(h)
 		}
-		panel.MaxWidth(cw * 0.92).MaxHeight(ch * 0.88)
-		panel.Transition(enterWith(motionDlg, durXL, 0, easeSoft)) // 设计稿 dlgIn：自下 14px、缩放 .955 淡入
-		fn()
+		body = body.MaxWidth(cw * 0.92).MaxHeight(ch * 0.88)
+		if motionEnabled {
+			body = body.Transition(enterWith(in, durXL, 0, easeSoft)) // 设计稿 dlgIn / qkIn
+		}
+		body.Children(fn)
 	})
 }
 

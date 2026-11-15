@@ -190,8 +190,9 @@ var compareScenes = []compareScene{
 		_ = tt.Click("Body")
 	}},
 	{"tabs-list", func(t *testing.T, a *app, tt *ui.Tester, be *fakeBackend) {
-		defaultTabs(t, a, tt)
-		tt.Press(1151, 67) // 右上角“显示所有标签”图标按钮（无文字，只能按坐标点）
+		openTabs(a, tt, 1, "r1", "r2", "r3", "r4", "r5", "r6")
+		a.tabs[2].dirty = true
+		_ = tt.Click("显示所有标签")
 		for i := 0; i < 30; i++ {
 			tt.Advance(100 * time.Millisecond)
 			tt.Frame()

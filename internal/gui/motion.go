@@ -34,10 +34,12 @@ var transSlide = ui.ElementTransition{Duration: durSlide, Ease: easeSlide, Posit
 // popIn（浮层、菜单）：自下 8px、缩放 .96 → 原位；dlgIn（对话框）更大一些：自下 14px、缩放 .955；
 // itemIn（浮层里的条目）：自下 5px，逐条错开；paneIn（面板切换）：自下 6px。toastIn 在 toast.go 里随卡片自绘。
 var (
-	motionPop  = &ui.Motion{Y: 8, Scale: 0.96}
-	motionDlg  = &ui.Motion{Y: 14, Scale: 0.955}
-	motionItem = &ui.Motion{Y: 5}
-	motionPane = &ui.Motion{Y: 6}
+	motionPop = &ui.Motion{Y: 8, Scale: 0.96, Blur: 3}
+	motionDlg = &ui.Motion{Y: 14, Scale: 0.955, Blur: 4}
+	// motionQuick 是快速打开面板的入场（设计稿 qkIn）：自顶部落下 10px，缩放 .97，带轻微模糊。
+	motionQuick = &ui.Motion{Y: -10, Scale: 0.97, Blur: 4}
+	motionItem  = &ui.Motion{Y: 5}
+	motionPane  = &ui.Motion{Y: 6}
 	// motionPaneOut 是面板退场（设计稿 paneOut：上移 4px 淡出）。
 	motionPaneOut = &ui.Motion{Y: -4}
 )
@@ -61,7 +63,7 @@ func enterWith(in *ui.Motion, dur, delay time.Duration, ease ui.Easing) ui.Eleme
 
 // itemEnter 是浮层里第 i 条的入场（设计稿 itemIn：delay = min(i,10)×18ms + 30ms）。
 func itemEnter(i int) ui.ElementTransition {
-	return enterWith(motionItem, durSlow, time.Duration(min(i, 10)*18+30)*time.Millisecond, easeEmph)
+	return enterWith(motionItem, durSlow, itemDelay(i), easeEmph)
 }
 
 // itemDelay 返回第 i 条的错开延迟，供测试核对设计稿公式。
@@ -79,7 +81,7 @@ func slideRect(parent, active ui.Rect) (r ui.Rect, ok bool) {
 // paneTransition 是“先退出、再进入”的面板切换（设计稿 fx.js 的 ghostPanes + paneIn）：
 // 旧面板用 paneOut 在 110ms 内淡出，新面板等它离开后用 paneIn 淡入上移。只作用于透明度与位移，不动画尺寸。
 func paneTransition() ui.ElementTransition {
-	if !paneMotion {
+	if !motionEnabled {
 		return ui.ElementTransition{Duration: -1} // 关闭动效：直接显示，不留退场副本
 	}
 	return ui.ElementTransition{
@@ -95,6 +97,6 @@ func (a *app) pane(c *ui.Context, key string, fn func()) {
 	ui.Column(c.Key("pane:" + key)).Grow(1).Basis(0).Transition(paneTransition()).Children(fn)
 }
 
-// paneMotion 控制面板切换是否带“先退后进”动画。单元测试里关闭它（切换后立刻要能读到新面板的内容），
+// motionEnabled 控制面板切换“先退后进”与对话框两段式入场是否开启。单元测试里关闭它（切换后立刻要能读到新内容），
 // 专门验证动画的测试再单独打开。
-var paneMotion = true
+var motionEnabled = true

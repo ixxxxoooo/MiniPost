@@ -20,11 +20,16 @@ MiniPost is a lightweight, macOS-only API debugging tool. Since 2.0 the UI is wr
 
 - **Requests**: all HTTP methods, query params, headers, JSON / raw / form-urlencoded / form-data bodies, Basic / Bearer / API Key auth, `{{variable}}` substitution from environments (plus built-in dynamic variables evaluated at send time: `{{$timestamp}}`, `{{$timestampMs}}`, `{{$isoTimestamp}}`, `{{$randomUUID}}`, `{{$randomInt}}`), cookie jar, auto headers.
 - **Projects and collections**: multiple projects with a per-project theme color, nested folders, move, duplicate, rename, search, history, import (Postman, OpenAPI, cURL) and export (Postman collection, cURL).
-- **Chrome-like tabs**: the active tab merges with the content area, middle-click to close, `⌃Tab` to cycle, right-click for save / copy cURL / close others / close to the right.
+- **Chrome-like tabs**: the active tab merges with the content area through a single uniform outline, middle-click to close, `⌃Tab` to cycle, right-click for save / copy cURL / close others / close to the right; the tab-list button opens a styled panel with colored method badges, folder and unsaved markers.
+- **Quick open**: `⌘K` opens a search panel for requests, environments and commands; the project, environment and send menus share the same polished dropdown style.
 - **Responses**: JSON / XML / JS / Hex / Base64 views, filter, JSON preview, copy and download, headers and cookies, request error diagnostics, live streaming (SSE / chunked).
 - **Environments and cookies**: per-project variables, one-click switch, cookie manager.
 - **Auto update**: checks hourly in the background, downloads automatically and asks to restart with one click.
 - **Local and private**: data lives in `~/.minipost` (owner-only permissions); logs never contain request bodies, tokens or cookies.
+
+<p align="center">
+  <img src="docs/images/quick-open.png" alt="Quick open panel" width="880">
+</p>
 
 <p align="center">
   <img src="docs/images/streaming.png" alt="Streaming response with a project theme color" width="880">
@@ -35,6 +40,7 @@ MiniPost is a lightweight, macOS-only API debugging tool. Since 2.0 the UI is wr
 | Action | Shortcut |
 | --- | --- |
 | Send request | `⌘ Enter` |
+| Quick open (requests / environments / commands) | `⌘ K` |
 | Save / close tab | `⌘ S` / `⌘ W` |
 | New request / folder | `⌘ N` / `⌘ ⇧ N` |
 | Import cURL / collection | `⌘ I` / `⌘ O` |

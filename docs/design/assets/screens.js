@@ -81,7 +81,7 @@
       ['ctx-req', '右键菜单 · 请求', (s) => { s.sel = 'r2'; pop(s, { type: 'ctx', kind: 'req', anchor: '#win .tree .row[data-id=r2]' }); }],
       ['ctx-folder', '右键菜单 · 文件夹', (s) => pop(s, { type: 'ctx', kind: 'folder', anchor: '#win .tree .row[data-id=f2]' })],
       ['ctx-tab', '右键菜单 · 标签', (s) => pop(s, { type: 'ctx', kind: 'tab', anchor: '#win .tab[data-i="0"]' })],
-      ['tabs-list', '标签列表下拉', (s) => pop(s, { type: 'tabsAll', anchor: '[data-a=tabsAll]', align: 'right' })],
+      ['tabs-list', '标签列表下拉', (s) => { withTabs(s, [tab('r1', 'params', 'ok'), tab('r2'), tab('r3'), tab('r4'), tab('r5'), tab('r6')], 1); s.tabs[2].dirty = true; pop(s, { type: 'tabsAll', anchor: '[data-a=tabsAll]', align: 'right' }); }],
       ['mth-menu', '请求方法下拉', (s) => pop(s, { type: 'mth', anchor: '.url .mth' })],
       ['send-menu', '发送下拉', (s) => pop(s, { type: 'send', anchor: '.send', align: 'right' })],
     ]],

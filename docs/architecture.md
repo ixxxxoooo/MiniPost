@@ -41,7 +41,7 @@ MiniPost 是 macOS 专用的轻量 HTTP 调试工具，界面是纯 Go 的 MyGo 
 | --- | --- |
 | `AppIcon.icon`、`resources/` | 应用图标（Icon Composer 图层图标与 1024 位图回退），由 `scripts/icon/gen_icon.py` 生成 |
 | `scripts/` | 构建、开发、发版与授权脚本；`scripts/version` 输出 `mygo.json` 的版本号 |
-| `docs/` | 架构文档、README 截图（`images/`）、图标预览（`icon/`）、历史设计文档（`archive/`） |
+| `docs/` | 架构文档、README 截图（`images/`）、图标预览（`icon/`）、UI 设计稿（`design/`：可在浏览器打开的原型与令牌，见 `design/TOKENS.md`） |
 | `mygo.json` | MyGo 应用配置：名称、版本、最低系统版本、图标、更新源 |
 
 ## 快捷键与右键菜单

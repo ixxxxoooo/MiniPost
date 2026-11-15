@@ -46,7 +46,6 @@
     const FLIP = [
       { box: '.seg', all: ':scope > b', on: ':scope > b.on', ps: '::before', w: true },
       { box: '.rq-tabs, .resp-h', all: ':scope > .ut', on: ':scope > .ut.on', ps: '::after', w: true },
-      { box: '.tabs-sc', all: ':scope > .tab', on: ':scope > .tab.on', ps: '::before', w: true },
       { box: '.set-n', all: ':scope > .ni', on: ':scope > .ni.on', ps: '::before', w: false },
     ];
     const scaleOf = (win) => (win.getBoundingClientRect().width / win.offsetWidth) || 1;

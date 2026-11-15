@@ -50,15 +50,15 @@ func px(img *image.RGBA, x, y int) [3]uint8 {
 
 func rgb(c ui.Color) [3]uint8 { return [3]uint8{c.R, c.G, c.B} }
 
-// accentRun 在标签条里选中标签的顶部强调线（设计稿 .tab.on::before：中间粗两端细的透镜形，宽度略小于标签）上
-// 取样：在标签顶部附近逐行扫描强调色像素，取最长的那一段连续强调色，返回它的起点 x 与长度；没有则返回 -1, 0。
-// 顶线会在标签之间滑动（Match 过渡），先让动画走完再取样。
+// accentRun 在标签条里选中标签的顶部轮廓线（tabOutline：统一 1px、强调色混边框色，两端是圆角）上取样：
+// 在标签顶部附近逐行扫描轮廓色像素，取最长的一段连续轮廓色，返回它的起点 x 与长度；没有则返回 -1, 0。
+// 轮廓会在标签之间滑动（Match 过渡），先让动画走完再取样。函数名沿用旧版（那时顶线是强调色）。
 func accentRun(a *app, tt *ui.Tester) (x, n int) {
 	for i := 0; i < 8; i++ {
 		tt.Advance(100 * time.Millisecond)
 	}
 	img := tt.Image()
-	acc := rgb(a.p.accent)
+	acc := rgb(a.p.border.Mix(a.p.accent, 0.58))
 	x = -1
 	for y := sizeToolbar + 2; y <= sizeToolbar+14; y++ {
 		start, run := -1, 0
@@ -94,7 +94,7 @@ func TestActiveTabIsRaisedPill(t *testing.T) {
 		t.Fatal("选中的标签底部应有强调线")
 	}
 	img := tt.Image()
-	// 透镜形顶线几乎铺满标签宽度（比标签窄约 8px），标签右缘约在 x+n+4；取右缘内侧 14px、上沿下方 12px 的位置（避开顶线光晕与文字）。
+	// 顶部轮廓线是直线段，两端各让出 10px 圆角，标签右缘约在 x+n+10；取右缘内侧 14px、上沿下方 12px 的位置（避开文字）。
 	inside := px(img, x+n-14, sizeToolbar+6+12)
 	if inside != rgb(a.p.surface) {
 		t.Fatalf("选中标签内部应是内容底色 %v，实际 %v", rgb(a.p.surface), inside)
@@ -120,9 +120,9 @@ func TestTabWidthStableOnSwitch(t *testing.T) {
 	tt.Frame()
 	tt.Frame()
 	x1, n1 := accentRun(a, tt)
-	// 顶线是中间粗两端细的透镜形，两端渐细处颜色会被抗锯齿冲淡，所以整段强调色比标签窄一点（约 8~16px）
-	if n0 != n1 || n0 > tabMaxWidth || n0 < tabMaxWidth-20 {
-		t.Errorf("两个标签的强调线应一样宽，约 %d（标签宽 %d），实际 %d、%d", tabMaxWidth-8, tabMaxWidth, n0, n1)
+	// 顶部轮廓是直线段，两端各让出 10px 圆角，所以整段比标签窄约 20px（抗锯齿再吃掉几像素）
+	if n0 != n1 || n0 > tabMaxWidth-16 || n0 < tabMaxWidth-28 {
+		t.Errorf("两个标签的顶部轮廓应一样长，约 %d（标签宽 %d），实际 %d、%d", tabMaxWidth-20, tabMaxWidth, n0, n1)
 	}
 	if x1-x0 != tabMaxWidth+tabGap {
 		t.Errorf("第二个标签应从第一个标签右边 %d（标签宽 + 间距）处开始，实际相差 %d", tabMaxWidth+tabGap, x1-x0)

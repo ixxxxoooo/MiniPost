@@ -6,6 +6,7 @@ import (
 
 // view 是窗口的根视图，每一帧由 MyGo 调用。
 func (a *app) view(c *ui.Context) {
+	a.frameNo++
 	a.sysLocale = c.Locale()
 	a.applyTheme(c)
 	if a.native && a.menuLocale != a.locale() {
