@@ -27,6 +27,25 @@ func TestTabMiddleClickCloses(t *testing.T) {
 	}
 }
 
+// 回归：中键关闭后界面必须立即刷新。以前关闭动作排到帧末才执行，帧已经画完却不再重建，
+// 画面和命中区域还停在旧标签上；紧接着的下一次中键点击会落到已关闭的旧标签上被丢弃（表现为“有时候中键点了没反应”）。
+func TestTabMiddleClickRepeatedWithoutMove(t *testing.T) {
+	motionEnabled = true // 和真实运行一致：开启动效
+	t.Cleanup(func() { motionEnabled = false })
+	a, tt, _ := zhApp(t)
+	a.openRequest(a.coll.Requests[0].ID)
+	a.openRequest(a.coll.Requests[1].ID)
+	tt.Frame()
+	x, y := a.set.SidebarWidth+90, float32(sizeToolbar+sizeTabStrip/2)
+	for i, want := range []int{1, 0} {
+		tt.PressButton(2, x, y)
+		tt.ReleaseButton(2, x, y)
+		if len(a.tabs) != want {
+			t.Fatalf("第 %d 次中键后应剩 %d 个标签，实际 %d", i+1, want, len(a.tabs))
+		}
+	}
+}
+
 // 左键按下抬起不会被当成中键关闭。
 func TestTabLeftClickDoesNotClose(t *testing.T) {
 	a, tt, _ := zhApp(t)

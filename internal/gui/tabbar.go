@@ -86,7 +86,10 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab, w float32) {
 			case ev.Kind == ui.InputPointerDown && ev.Button == 2:
 				return true
 			case ev.Kind == ui.InputPointerUp && ev.Button == 2 && !ev.Canceled:
-				a.later(func() { a.closeTab(a.tabIndex(t)) })
+				// 输入回调运行在构建之外，直接关闭即可：返回 true 后引擎会再排一帧显示结果。
+				// 若像左键那样排到帧末（a.later）执行，该帧已画完且不会再重建，画面和命中区域会停在旧标签上，
+				// 紧接着的下一次中键点击就落在已关闭的旧标签上被丢弃。
+				a.closeTab(a.tabIndex(t))
 				return true
 			}
 			return false
