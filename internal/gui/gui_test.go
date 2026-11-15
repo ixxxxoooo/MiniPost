@@ -44,7 +44,7 @@ func TestHomeShownWhenNoProject(t *testing.T) {
 	a := newApp(be)
 	a.set.Locale = localeZH
 	tt := ui.NewTester(a.view, 1200, 760)
-	if !tt.HasText("项目主页") || !tt.HasText("新建项目") {
+	if !tt.HasText("创建你的第一个项目") || !tt.HasText("新建项目") {
 		t.Fatalf("没有项目时应显示项目首页，实际文本 %q", tt.Texts())
 	}
 }

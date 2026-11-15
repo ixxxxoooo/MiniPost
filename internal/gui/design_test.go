@@ -282,7 +282,7 @@ func homeApp(t *testing.T) (*app, *ui.Tester, *fakeBackend) {
 func TestHomeLayoutMatchesDesign(t *testing.T) {
 	_, tt, _ := homeApp(t)
 	for _, want := range []string{
-		"项目主页", "新建项目", "共 3 个项目", "排序", "最近更新", "项目名称", "主题色", "实时预览",
+		"项目", "新建项目", "共 3 个项目", "排序", "最近更新", "项目名称", "主题色", "实时预览",
 		"打开项目", "重命名", "导出", "2 个请求 · 0 个文件夹", "1 个请求 · 0 个文件夹",
 	} {
 		if !tt.HasText(want) {
@@ -494,7 +494,7 @@ func TestEnvSidebarListShowsActiveAndCount(t *testing.T) {
 	a.setEnv("e1")
 	a.side.tab = 2
 	tt.Frame()
-	for _, want := range []string{"开发环境", "当前", "1", "切换环境后，请求里的 {{变量名}} 会立即换成对应值。"} {
+	for _, want := range []string{"开发环境", "当前", "1", "切换后 {{变量}} 立即替换"} {
 		if !tt.HasText(want) {
 			t.Errorf("环境侧栏缺少 %q：%q", want, tt.Texts())
 		}
@@ -533,7 +533,7 @@ func TestConsoleFilter(t *testing.T) {
 	if idx, errs := a.conVisible(); len(idx) != 4 || errs != 2 {
 		t.Fatalf("全部应 4 条且 2 条错误，实际 %d/%d", len(idx), errs)
 	}
-	for _, want := range []string{"全部", "成功", "错误", "4 条"} {
+	for _, want := range []string{"全部", "成功", "错误 2", "4"} {
 		if !tt.HasText(want) {
 			t.Errorf("控制台缺少 %q：%q", want, tt.Texts())
 		}
@@ -545,7 +545,7 @@ func TestConsoleFilter(t *testing.T) {
 	if idx, _ := a.conVisible(); len(idx) != 1 || a.con.entries[idx[0]].url != "https://x/ok" {
 		t.Fatalf("成功只应剩 /ok，实际 %v", idx)
 	}
-	if err := tt.Click("错误"); err != nil {
+	if err := tt.Click("错误 2"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -608,15 +608,12 @@ func TestAuthTabDropdown(t *testing.T) {
 	snapshot(t, tt, "auth_bearer")
 }
 
-// Body 标签显示类型徽标；格式化按钮为中文。
+// Body 页的格式化按钮为中文，类型选项齐全（流光方案里 Body 标签只带“有内容”的小圆点，没有类型徽标）。
 func TestBodyTabBadgeAndBeautify(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	a.openRequest(a.coll.Requests[0].ID)
 	a.activeTab().draft.Body.Type = client.BodyJSON
 	tt.Frame()
-	if !tt.HasText("JSON") {
-		t.Fatalf("Body 标签应带 JSON 徽标：%q", tt.Texts())
-	}
 	if err := tt.Click("Body"); err != nil {
 		t.Fatal(err)
 	}
@@ -691,7 +688,9 @@ func TestPrefsAppearanceCards(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	for _, want := range []string{"外观主题", "配色", "新增", "雾蓝", "墨白", "松石", "语言", "界面字体", "10", "15", "16"} {
+	tt.Scroll(600, 350, 0, 400) // 对话框只有 520 高，字号档位在折叠线之下
+	tt.Frame()
+	for _, want := range []string{"外观主题", "配色", "新增 2 套", "雾蓝", "墨白", "松石", "琥珀", "玫瑰", "语言", "界面字体", "10", "15", "16"} {
 		if !tt.HasText(want) {
 			t.Fatalf("外观页缺少 %q：%q", want, tt.Texts())
 		}
@@ -908,10 +907,7 @@ func TestSidebarFolderCountAndFooter(t *testing.T) {
 		t.Fatal("夹具里应有文件夹包含请求")
 	}
 	snapshot(t, tt, "d_sidebar")
-	// 保留“根目录”行（也是拖回根目录的目标），底部不再放键盘按钮
-	if !tt.HasText("根目录") {
-		t.Fatal("侧栏应显示“根目录”行")
-	}
+	// 设计稿的树里没有“根目录”行，拖回根目录由树下方的空白拖放区承担，底部也不放键盘按钮
 	if !tt.HasText("个请求") {
 		t.Fatalf("侧栏底部应显示统计: %q", tt.Texts())
 	}

@@ -118,8 +118,8 @@ func (a *app) envPage(c *ui.Context, t *tab) {
 					a.envTable(c, ed)
 				})
 			})
-			ui.Row(c).FillWidth().Height(30).Shrink(0).PaddingX(16).Gap(8).AlignItems(ui.Center).BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(func() {
-				icon(c, "info", 12, p.success)
+			ui.Row(c).FillWidth().Height(32).Shrink(0).PaddingX(18).Gap(6).AlignItems(ui.Center).Background(p.surface2.Alpha(0.4)).BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(func() {
+				icon(c, "lock", 12, p.muted)
 				txt(c, a.t("未设置当前值时使用初始值。带锁的变量会在界面上遮罩，且不会写入日志。", "When no current value is set the initial value is used. Locked variables are masked in the UI and never written to logs."), fsSmall, p.muted, 0)
 			})
 		})
@@ -127,54 +127,43 @@ func (a *app) envPage(c *ui.Context, t *tab) {
 	})
 }
 
-// envHeader 是环境页顶部：环境名（16/600，可直接改）、“当前使用”标记、说明，以及删除 / 设为当前 / 保存。
+// envHeader 是环境页顶部（设计稿 .envp-h）：左侧环境名（16/600，可直接改）与说明，
+// 右侧顶对齐的三个按钮：删除（危险色图标）、当前使用 / 设为当前环境、保存（主按钮）。
 func (a *app) envHeader(c *ui.Context, t *tab) {
 	p := a.p
 	ed := t.env
 	active := a.envID == ed.env.ID
-	ui.Row(c).FillWidth().Shrink(0).Padding(14, 16, 12, 20).Gap(12).AlignItems(ui.Center).Children(func() {
-		ui.Column(c).Grow(1).Basis(0).Gap(4).Children(func() {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				row := ui.Row(c.Key("env-name")).MinWidth(120).MaxWidth(360).Height(28).Radius(6).AlignItems(ui.Center)
-				bdc := ui.RGBA(0, 0, 0, 0)
-				switch {
-				case row.FocusWithin():
-					bdc = p.accent
-				case row.Hovered():
-					bdc = p.border
-				}
-				row.Border(1, bdc).Children(func() {
-					ui.TextInputBase(c, &ed.env.Name).Placeholder(a.t("环境名称", "Environment name")).PlaceholderColor(p.muted).
-						FontSize(16).FontWeight(600).TextColor(p.fg).Grow(1).Basis(0).FillHeight().PaddingX(6)
-				})
-				if active {
-					ui.Row(c).Height(18).PaddingX(7).Radius(9).Background(p.success.Alpha(0.14)).AlignItems(ui.Center).Shrink(0).Children(func() {
-						txt(c, a.t("当前使用", "In use"), fsTiny, p.success, 600)
-					})
-				}
+	ui.Row(c).FillWidth().Shrink(0).Padding(16, 18, 10, 18).Gap(12).AlignItems(ui.Start).Children(func() {
+		ui.Column(c).Grow(1).Basis(0).Gap(3).Children(func() {
+			row := ui.Row(c.Key("env-name")).MinWidth(120).MaxWidth(360).Height(22).Radius(6).AlignItems(ui.Center)
+			bdc := ui.RGBA(0, 0, 0, 0)
+			switch {
+			case row.FocusWithin():
+				bdc = p.accent
+			case row.Hovered():
+				bdc = p.border
+			}
+			row.Border(1, bdc).Children(func() {
+				ui.TextInputBase(c, &ed.env.Name).Placeholder(a.t("环境名称", "Environment name")).PlaceholderColor(p.muted).
+					FontSize(16).FontWeight(600).TextColor(p.fg).Grow(1).Basis(0).FillHeight().PaddingX(0)
 			})
-			ui.Row(c).Gap(4).AlignItems(ui.Center).Margin(0, 0, 0, 6).Children(func() {
-				txt(c, a.t("变量可在请求的任意位置写成", "Use variables anywhere in a request as"), fsBase, p.fg2, 0)
-				ui.Row(c).Height(18).PaddingX(6).Radius(4).Background(p.accent.Alpha(0.12)).AlignItems(ui.Center).Children(func() {
-					txtMono(c, a.t("{{变量名}}", "{{name}}"), fsSmall, p.accent, 0)
+			ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+				txt(c, a.t("变量可在请求的任意位置写成", "Use variables anywhere in a request as"), fsBase, p.muted, 0)
+				ui.Row(c).Height(18).PaddingX(3).Radius(4).Background(p.acSoft).Border(1, p.acSoft2).AlignItems(ui.Center).Children(func() {
+					txtMono(c, a.t("{{变量名}}", "{{name}}"), fsBase, p.accent, 0)
 				})
-				txt(c, a.t("使用，切换环境后自动替换。", "; they are replaced when you switch environments."), fsBase, p.fg2, 0)
+				txt(c, a.t("使用，切换环境后自动替换。", "; they are replaced when you switch environments."), fsBase, p.muted, 0)
 			})
 		})
-		border := p.btnBorder
-		if a.button(c, btnOpts{w: 26, h: 26, radius: radiusBtn, border: &border, key: "env-del", tip: a.t("删除环境", "Delete environment")}, func(bool) {
-			icon(c, "delete", 12, p.danger)
-		}) {
+		if a.btn(c, dbtn{key: "env-del", icon: "trash", danger: true, w: 37, tip: a.t("删除环境", "Delete environment")}) {
 			id, name := ed.env.ID, ed.env.Name
 			a.later(func() { a.deleteEnvironment(id, name) })
 		}
-		if a.button(c, btnOpts{h: 26, radius: radiusBtn, padX: 10, border: &border, disabled: active, key: "env-use"}, func(bool) {
-			col := p.fg
-			if active {
-				col = p.muted
-			}
-			txt(c, a.t("设为当前环境", "Use this environment"), fsBase, col, 0)
-		}) {
+		useLabel, useIcon := a.t("设为当前环境", "Use this environment"), ""
+		if active {
+			useLabel, useIcon = a.t("当前使用", "In use"), "check"
+		}
+		if a.btn(c, dbtn{key: "env-use", icon: useIcon, label: useLabel}) && !active {
 			id, name := ed.env.ID, ed.env.Name
 			a.later(func() {
 				a.setEnv(id)
@@ -182,16 +171,7 @@ func (a *app) envHeader(c *ui.Context, t *tab) {
 				logger.Info("已从环境页设为当前环境", "envID", id)
 			})
 		}
-		dirty := ed.dirty()
-		bg := p.accent
-		if a.button(c, btnOpts{h: 26, radius: radiusBtn, padX: 12, gap: 6, bg: &bg, hoverBg: &p.accentHover, disabled: !dirty, key: "env-save", tip: a.t("保存", "Save") + " (⌘S)"}, func(bool) {
-			fg := p.accentFg
-			if !dirty {
-				fg = fg.Alpha(0.6)
-			}
-			txt(c, a.t("保存", "Save"), fsBase, fg, 600)
-			txtMono(c, "⌘S", 9, fg.Alpha(0.8), 0)
-		}) {
+		if a.btn(c, dbtn{key: "env-save", icon: "save", label: a.t("保存", "Save"), kind: dlgPrimary, disabled: !ed.dirty(), tip: a.t("保存", "Save") + " (⌘S)"}) {
 			a.later(func() { a.saveTab(t) })
 		}
 	})
@@ -207,21 +187,27 @@ func (a *app) envDynamicPanel(c *ui.Context, ed *envEdit) {
 		"randomUUID":   {"随机 UUID v4", "Random UUID v4"},
 		"randomInt":    {"0–1000 的随机整数", "Random integer 0–1000"},
 	}
-	ui.Column(c.Key("env-dyn")).Width(240).FillHeight().Shrink(0).Background(p.sidebar).BorderWidth(0, 0, 0, 1).BorderColor(p.border).Children(func() {
-		ui.Row(c).FillWidth().Shrink(0).Padding(14, 14, 8, 14).Gap(6).AlignItems(ui.Center).Children(func() {
-			icon(c, "commandLine", 12, p.accent)
-			txt(c, a.t("动态变量", "Dynamic variables"), fsBase, p.fg, 600)
-			txt(c, a.t("发送时求值", "evaluated on send"), fsSmall, p.muted, 0)
-		})
+	ui.Column(c.Key("env-dyn")).Width(232).FillHeight().Shrink(0).Background(p.sidebar).BorderWidth(0, 0, 0, 1).BorderColor(p.border).Children(func() {
 		ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
-			ui.Column(c).FillWidth().PaddingX(12).PaddingY(4).Gap(8).Children(func() {
+			ui.Column(c).FillWidth().Padding(12).Gap(8).Children(func() {
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					icon(c, "zap", 13, p.fg)
+					txt(c, a.t("动态变量", "Dynamic variables"), fsBase, p.fg, 650)
+					txt(c, a.t("发送时求值", "evaluated on send"), fsSmall, p.muted, 0)
+				})
 				for i, name := range httputil.DynamicVarNames {
 					d := desc[name]
-					ui.Column(c.Key("dyn"+name)).FillWidth().Padding(8, 10).Gap(2).Radius(radiusInput).Background(p.surface).Border(1, p.border).Children(func() {
-						txtMono(c, "{{$"+name+"}}", fsBase, p.accent, 600).Selectable()
-						txt(c, a.t(d[0], d[1]), fsSmall, p.fg2, 0)
+					card := ui.Column(c.Key("dyn"+name)).FillWidth().Padding(8, 10).Gap(2).Radius(radiusR).Background(p.surface)
+					if card.Hovered() {
+						card = card.Border(1, p.acLine)
+					} else {
+						card = card.Border(1, p.border)
+					}
+					card.Children(func() {
+						txtMono(c, "{{$"+name+"}}", fsSmall+0.5, p.accent, 600).Selectable()
+						txt(c, a.t(d[0], d[1]), fsBase, p.fg2, 0)
 						if i < len(ed.samples) {
-							txtEMono(c, ed.samples[i], fsSmall, p.muted, 0)
+							txtEMono(c, ed.samples[i], fsSmall, p.fg2, 0)
 						}
 					})
 				}
@@ -233,15 +219,16 @@ func (a *app) envDynamicPanel(c *ui.Context, ed *envEdit) {
 // envTable 是变量表（设计稿）：启用勾选 | 变量名 | 初始值 | 当前值 | 说明 | 密文锁 | 删除；行与行之间只有细横线，没有竖线。
 func (a *app) envTable(c *ui.Context, ed *envEdit) {
 	p := a.p
-	const colEnable, colAct = 44, 32
+	const colEnable, colAct = 34, 28
+	line := p.border.Alpha(0.7)
 	ui.Column(c).FillWidth().Children(func() {
-		ui.Row(c).FillWidth().Height(28).AlignItems(ui.Center).BorderWidth(1, 0, 1, 0).BorderColor(p.border).Children(func() {
+		ui.Row(c).FillWidth().Height(kvHeadH).AlignItems(ui.Center).Background(p.surface2.Mix(p.surface, 0.42)).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
 			ui.Box(c).Width(colEnable).Shrink(0)
 			for i, h := range []struct {
 				zh, en string
 				grow   float32
 			}{{"变量名", "Variable", 1.1}, {"初始值", "Initial value", 1.2}, {"当前值", "Current value", 1.2}, {"说明", "Description", 0.9}} {
-				ui.Row(c.Key("h" + itoa(i))).Grow(h.grow).Basis(0).PaddingX(4).Children(func() { txt(c, a.t(h.zh, h.en), fsSmall, p.muted, 0) })
+				ui.Row(c.Key("h" + itoa(i))).Grow(h.grow).Basis(0).PaddingX(8).Children(func() { txt(c, a.t(h.zh, h.en), fsSmall, p.muted, 600) })
 			}
 			ui.Box(c).Width(colAct * 2).Shrink(0)
 		})
@@ -250,7 +237,7 @@ func (a *app) envTable(c *ui.Context, ed *envEdit) {
 		for i := range vars {
 			v := &vars[i]
 			last := i == len(vars)-1 && isBlankVar(*v)
-			row := ui.Row(c.Key(v.ID)).FillWidth().Height(32).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(p.border)
+			row := ui.Row(c.Key(v.ID)).FillWidth().Height(kvRowH).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(line)
 			hover := row.Hovered() && !last
 			if hover {
 				row = row.Background(p.surface2)
@@ -266,16 +253,18 @@ func (a *app) envTable(c *ui.Context, ed *envEdit) {
 					col = p.muted
 				}
 				cell := func(key string, val *string, ph string, grow float32, mono, mask bool) {
-					in := ui.TextInputBase(c.Key(key), val).Placeholder(ph).PlaceholderColor(p.muted).FontSize(fsBase).TextColor(col).Grow(grow).Basis(0).Height(32).PaddingX(4)
-					if mono {
-						in = in.Font(monoFont)
-					}
-					if last && key != "k" {
-						in.Disabled(true).Opacity(0.5)
-					}
-					if mask {
-						in.Password()
-					}
+					ui.Row(c.Key("w"+key)).Grow(grow).Basis(0).Height(kvRowH-1).BorderWidth(0, 0, 0, 1).BorderColor(line).Children(func() {
+						in := ui.TextInputBase(c.Key(key), val).Placeholder(ph).PlaceholderColor(p.muted).FontSize(fsBase).TextColor(col).Grow(1).Basis(0).Height(kvRowH - 1).PaddingX(8)
+						if mono {
+							in = in.Font(monoFont)
+						}
+						if last && key != "k" {
+							in.Disabled(true).Opacity(0.5)
+						}
+						if mask {
+							in.Password()
+						}
+					})
 				}
 				kph := a.t("变量名", "Variable")
 				if last {

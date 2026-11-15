@@ -80,7 +80,7 @@ func TestSettingsColorScheme(t *testing.T) {
 	if got := store.Load(); got.ColorScheme != "mist" {
 		t.Fatalf("默认配色应为 mist，实际 %q", got.ColorScheme)
 	}
-	for _, want := range []string{"mist", "ink", "jade"} {
+	for _, want := range []string{"mist", "ink", "jade", "amber", "rose"} {
 		s := DefaultSettings()
 		s.ColorScheme = want
 		if err := store.Save(s); err != nil {

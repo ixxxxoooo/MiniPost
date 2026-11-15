@@ -41,28 +41,6 @@ func TestTabLeftClickDoesNotClose(t *testing.T) {
 	}
 }
 
-// 选中标签的底部没有线、与下方内容区同色；其余位置的标签栏底部也没有分隔线。
-func TestActiveTabMergesWithContent(t *testing.T) {
-	a, tt, _ := zhApp(t)
-	a.openRequest(a.coll.Requests[0].ID)
-	tt.Frame()
-	snapshot(t, tt, "tabs")
-	img := tt.Image()
-	stripBottom := sizeToolbar - 1 + sizeTabStrip - 1 // 标签栏最后一行像素（标题栏不再画底线，标签栏从 sizeToolbar-1 开始）
-	x := int(a.set.SidebarWidth) + 100                // 选中标签内部、文字右侧（标签最小宽 120）
-	below := img.RGBAAt(x, stripBottom+3)             // 内容区
-	at := img.RGBAAt(x, stripBottom)
-	if at != below {
-		t.Fatalf("选中标签底部应与内容区同色（无线）: 标签栏底 %v，内容区 %v", at, below)
-	}
-	// 标签栏空白处（右侧）底部也没有横线：与上方一行同色。
-	far := img.RGBAAt(img.Bounds().Max.X-300, stripBottom)
-	above := img.RGBAAt(img.Bounds().Max.X-300, stripBottom-4)
-	if far != above {
-		t.Fatalf("标签栏底部不应有分隔线: %v vs %v", far, above)
-	}
-}
-
 // px 取画面上一个像素的 RGB。
 func px(img *image.RGBA, x, y int) [3]uint8 {
 	c := img.RGBAAt(x, y)
@@ -71,80 +49,50 @@ func px(img *image.RGBA, x, y int) [3]uint8 {
 
 func rgb(c ui.Color) [3]uint8 { return [3]uint8{c.R, c.G, c.B} }
 
-// 标签条顶部只有一条线：选中的标签用强调色上边框盖住它，其余位置是普通边框色；
-// 线的下一行不能再有第二条线，上一行（标题栏）也不能有线——不会出现两条线叠在一起。
-// 侧栏顶部已改为分段控件，不再画顶线（见 TestSideSegmentedTabs）。
-func TestTabStripHasSingleTopLine(t *testing.T) {
-	a, tt, _ := zhApp(t)
-	a.openRequest(a.coll.Requests[0].ID)
-	a.openRequest(a.coll.Requests[1].ID)
-	a.activate(1)
-	tt.Frame()
-	tt.Frame()
+// accentRun 在标签条里选中标签的底部强调线（tabItem 里 2px 的强调色线，左右各缩进 10）所在的那一行上
+// 扫描强调色像素，返回第一段连续强调色的起点 x 与长度；没有则返回 -1, 0。
+// 选中的标签是 28 高的胶囊，从标签栏顶部往下 5px 开始，所以强调线在 sizeToolbar+5+28-1。
+func accentRun(a *app, tt *ui.Tester) (x, n int) {
 	img := tt.Image()
-	p := a.p
-	y := sizeToolbar - 1 // 标签条的第一行：顶线所在
-	sw := int(a.set.SidebarWidth)
-	cases := []struct {
-		name string
-		x    int
-		want [3]uint8
-	}{
-		{"请求标签条空白处", img.Bounds().Max.X - 300, rgb(p.border)},
-		{"未选中的请求标签", sw + 60, rgb(p.border)},
-		{"选中的请求标签", sw + int(a.tabs[0].shownW) + 40, rgb(p.tabActiveBorder)},
-	}
-	for _, c := range cases {
-		if got := px(img, c.x, y); got != c.want {
-			t.Errorf("%s：顶线颜色 %v，应为 %v", c.name, got, c.want)
-		}
-		if above, line := px(img, c.x, y-1), px(img, c.x, y); above == line {
-			t.Errorf("%s：线的上一行（标题栏）也是线色 %v，出现了两条线", c.name, above)
-		}
-		// 选中项的强调色边框恰好 tabAccentWidth 行；其余位置的线只有 1 行。
-		thick := 1
-		if c.want == rgb(p.tabActiveBorder) {
-			thick = tabAccentWidth
-		}
-		for k := 1; k < thick; k++ {
-			if px(img, c.x, y+k) != c.want {
-				t.Errorf("%s：强调色边框应有 %d 行，第 %d 行颜色不对", c.name, thick, k+1)
+	y := sizeToolbar + 5 + tabHeight - 1
+	acc := rgb(a.p.accent)
+	x = -1
+	for i := 0; i < img.Bounds().Dx(); i++ {
+		if px(img, i, y) == acc {
+			if x < 0 {
+				x = i
 			}
-		}
-		if below := px(img, c.x, y+thick); below == c.want {
-			t.Errorf("%s：线比预期的 %d 行更粗", c.name, thick)
+			n++
+		} else if x >= 0 {
+			break
 		}
 	}
+	if x < 0 {
+		return -1, 0
+	}
+	return x, n
 }
 
-// 选中标签只有顶部有强调色，左右没有；标签之间的竖分隔线都只有 1px 宽，不会叠成粗线。
-func TestTabStripNoSideHighlightAndThinDividers(t *testing.T) {
+// 选中的标签是浮起的内容底胶囊：胶囊内部与内容区同色，其余位置的标签栏底色不同（设计稿 .tab.on）。
+func TestActiveTabIsRaisedPill(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	a.openRequest(a.coll.Requests[0].ID)
-	a.openRequest(a.coll.Requests[1].ID)
-	a.activate(0)
-	a.openRequest(a.coll.Requests[1].ID) // 选中第二个，前后各有分隔线
 	tt.Frame()
 	tt.Frame()
-	img := tt.Image()
-	y := sizeToolbar - 1 + sizeTabStrip - 4 // 标签条靠下的一行，避开文字和顶部强调线
-	acc, div := rgb(a.p.tabActiveBorder), rgb(a.p.tabDivider)
-	sw := int(a.set.SidebarWidth)
-	dividers := 0
-	for x := sw; x < img.Bounds().Max.X; x++ {
-		got := px(img, x, y)
-		if got == acc {
-			t.Fatalf("x=%d：选中标签的左右不应有强调色", x)
-		}
-		if got == div {
-			dividers++
-			if px(img, x+1, y) == div {
-				t.Errorf("x=%d：分隔线比 1px 更粗", x)
-			}
-		}
+	snapshot(t, tt, "tabs")
+	x, n := accentRun(a, tt)
+	if n == 0 {
+		t.Fatal("选中的标签底部应有强调线")
 	}
-	if dividers < 2 {
-		t.Errorf("应至少有 2 条标签分隔线，实际 %d", dividers)
+	img := tt.Image()
+	// 强调线两端各缩进 10，所以胶囊的左右边缘是 x-10 与 x+n+10；取右侧靠内 4px、上沿下方 3px 的位置（避开文字）。
+	inside := px(img, x+n+6, sizeToolbar+5+3)
+	if inside != rgb(a.p.surface) {
+		t.Fatalf("选中标签内部应是内容底色 %v，实际 %v", rgb(a.p.surface), inside)
+	}
+	outside := px(img, x+n+10+tabGap+40, sizeToolbar+5+3) // 胶囊右侧的空白标签栏
+	if outside == rgb(a.p.surface) {
+		t.Fatalf("标签栏空白处不应与内容底同色（标签栏是 chrome 与内容底的混合色）: %v", outside)
 	}
 }
 
@@ -155,56 +103,41 @@ func TestTabWidthStableOnSwitch(t *testing.T) {
 	a.openRequest(a.coll.Requests[1].ID)
 	a.tabs[0].draft.Name = "一个很长很长很长很长很长很长很长很长很长的标签标题 (long title)"
 	a.tabs[1].draft.Name = "另一个同样很长很长很长很长很长很长很长很长的标题 (long title)"
-	sw := int(a.set.SidebarWidth)
 	a.activate(0)
 	tt.Frame()
 	tt.Frame()
-	y := sizeToolbar - 1 // 顶部强调线所在行
-	img0 := tt.Image()
-	// 选中第一个标签时，第二个标签从 sw+tabMaxWidth 开始（第一个标签 + 无分隔线）；
-	// 选中第二个标签时，它的左边框也应从同一列开始。
+	x0, n0 := accentRun(a, tt)
 	a.activate(1)
 	tt.Frame()
 	tt.Frame()
-	img1 := tt.Image()
-	acc := rgb(a.p.tabActiveBorder)
-	// 第一个标签占 [sw, sw+tabMaxWidth)（标题很长，取最大宽度），分隔线在 sw+tabMaxWidth，第二个标签从 sw+tabMaxWidth+1 开始。
-	if px(img1, sw+tabMaxWidth+1, y) != acc || px(img1, sw+tabMaxWidth, y) == acc {
-		t.Errorf("选中第二个标签时顶部强调线应从 x=%d 开始", sw+tabMaxWidth+1)
+	x1, n1 := accentRun(a, tt)
+	// 强调线两端是圆角，最外侧一两个像素颜色会被抗锯齿冲淡，允许少 2px
+	if n0 != n1 || n0 > tabMaxWidth-20 || n0 < tabMaxWidth-22 {
+		t.Errorf("两个标签的强调线应一样宽，约 %d（标签宽 %d 两端各缩进 10），实际 %d、%d", tabMaxWidth-20, tabMaxWidth, n0, n1)
 	}
-	if px(img0, sw+tabMaxWidth-1, y) != acc || px(img0, sw+tabMaxWidth, y) == acc {
-		t.Errorf("选中第一个标签时顶部强调线应在 x=%d 结束", sw+tabMaxWidth-1)
+	if x1-x0 != tabMaxWidth+tabGap {
+		t.Errorf("第二个标签应从第一个标签右边 %d（标签宽 + 间距）处开始，实际相差 %d", tabMaxWidth+tabGap, x1-x0)
 	}
 }
 
 // 标签栏放不下所有标签时，切换/打开的标签要自动滚进可视区。
 func TestActiveTabScrollsIntoView(t *testing.T) {
 	a, _, _ := zhApp(t)
-	tt := ui.NewTester(a.view, 600, 760) // 窄窗口：标签栏只有约 150px 宽，放不下一个 220px 的标签
+	tt := ui.NewTester(a.view, 600, 760) // 窄窗口：标签栏只有约 90px 宽，放不下两个标签
 	a.openRequest(a.coll.Requests[0].ID)
 	a.openRequest(a.coll.Requests[1].ID)
 	for i := 0; i < 4; i++ {
 		tt.Frame()
 	}
-	sw, y := int(a.set.SidebarWidth), sizeToolbar-1
-	acc := rgb(a.p.tabActiveBorder)
-	visible := func() bool {
-		img := tt.Image()
-		for x := sw; x < sw+120; x++ { // 标签栏左侧 120px 内必须能看到选中标签的强调线
-			if px(img, x, y) == acc {
-				return true
-			}
-		}
-		return false
-	}
-	if !visible() {
+	// 标签栏有滚动裁剪：标签滚出可视区时，它的强调线也跟着被裁掉。
+	if _, n := accentRun(a, tt); n == 0 {
 		t.Fatal("打开第二个标签后，它应滚入可视区")
 	}
 	a.activate(0)
 	for i := 0; i < 4; i++ {
 		tt.Frame()
 	}
-	if !visible() {
+	if _, n := accentRun(a, tt); n == 0 {
 		t.Fatal("切回第一个标签后，它应滚入可视区")
 	}
 }
@@ -261,31 +194,22 @@ func TestTabBarPlusHasVisibleBackground(t *testing.T) {
 	}
 }
 
-// 标签宽度随标题自适应：短标题取下限，长标题取上限，中等长度的在两者之间且更长的更宽。
-func TestTabWidthAdaptsToTitle(t *testing.T) {
+// 标签宽度与标题无关：宽敞时都是基础宽度；标签栏变窄后按可用宽度平分，但不小于下限。
+func TestTabWidthIgnoresTitleAndShrinksWhenCrowded(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	a.openRequest(a.coll.Requests[0].ID)
 	a.openRequest(a.coll.Requests[1].ID)
-	names := []string{"a", "中等长度的标题", "中等长度的标题再长一些一些一些"}
-	a.tabs[0].draft.Name = names[0]
-	a.tabs[1].draft.Name = names[1]
-	tt.Frame()
-	short, mid := a.tabs[0].shownW, a.tabs[1].shownW
-	if short != tabMinWidth {
-		t.Fatalf("短标题应取下限 %d，实际 %.0f", tabMinWidth, short)
-	}
-	if !(mid > short && mid < tabMaxWidth) {
-		t.Fatalf("中等标题应在 (%d,%d) 之间，实际 %.0f", tabMinWidth, tabMaxWidth, mid)
-	}
-	a.tabs[1].draft.Name = names[2]
-	tt.Frame()
-	if longer := a.tabs[1].shownW; longer <= mid {
-		t.Fatalf("更长的标题应更宽: %.0f → %.0f", mid, longer)
-	}
+	a.tabs[0].draft.Name = "a"
 	a.tabs[1].draft.Name = "一个很长很长很长很长很长很长很长很长很长很长很长很长的标签标题 (long title)"
 	tt.Frame()
-	if a.tabs[1].shownW != tabMaxWidth {
-		t.Fatalf("超长标题应取上限 %d，实际 %.0f", tabMaxWidth, a.tabs[1].shownW)
+	if a.tabs[0].shownW != tabBaseWidth || a.tabs[1].shownW != tabBaseWidth {
+		t.Fatalf("宽敞时标签应都是基础宽度 %d，实际 %.0f、%.0f", tabBaseWidth, a.tabs[0].shownW, a.tabs[1].shownW)
+	}
+	narrow := ui.NewTester(a.view, 560, 760) // 可用宽度约 250：两个标签各约 120
+	narrow.Frame()
+	w := a.tabs[0].shownW
+	if !(w >= tabMinWidth && w < tabBaseWidth) || a.tabs[1].shownW != w {
+		t.Fatalf("变窄后两个标签应平分且在 [%d,%d) 之间，实际 %.0f、%.0f", tabMinWidth, tabBaseWidth, w, a.tabs[1].shownW)
 	}
 }
 
@@ -336,21 +260,21 @@ func TestTabWidthsDoNotJitter(t *testing.T) {
 	check("鼠标移开")
 }
 
-// 相邻标签首尾相接：第二个标签的左边正好是第一个标签的宽度加 1px 分隔线之后。
+// 相邻标签首尾相接：第二个标签的左边正好是第一个标签的宽度加标签间距之后。
 func TestAdaptiveTabsAreContiguous(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	a.openRequest(a.coll.Requests[0].ID)
 	a.openRequest(a.coll.Requests[1].ID)
-	a.tabs[0].draft.Name = "中等长度的标题"
+	a.activate(0)
 	tt.Frame()
 	tt.Frame()
-	img := tt.Image()
-	y := sizeToolbar - 1 // 顶线所在行；选中的第二个标签用强调色盖住它
-	sw := int(a.set.SidebarWidth)
-	acc := rgb(a.p.tabActiveBorder)
-	start := sw + int(a.tabs[0].shownW) + 1
-	if px(img, start, y) != acc || px(img, start-2, y) == acc {
-		t.Fatalf("选中的第二个标签应从 x=%d 开始", start)
+	x0, _ := accentRun(a, tt)
+	a.activate(1)
+	tt.Frame()
+	tt.Frame()
+	x1, _ := accentRun(a, tt)
+	if want := int(a.tabs[0].shownW) + tabGap; x1-x0 != want {
+		t.Fatalf("第二个标签应在第一个标签右边 %d 处开始，实际 %d", want, x1-x0)
 	}
 }
 
@@ -359,6 +283,7 @@ func TestAdaptiveTabsAreContiguous(t *testing.T) {
 func TestTabDirtyDotIsDrawn(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	a.openRequest(a.coll.Requests[0].ID)
+	a.openRequest(a.coll.Requests[1].ID) // 当前标签是第二个：未保存圆点只画在非当前、非悬停的标签上
 	tt.Frame()
 	if a.tabs[0].dirty {
 		t.Fatal("刚打开的请求不应是未保存状态")
@@ -379,6 +304,7 @@ func TestTabDirtyDotIsDrawn(t *testing.T) {
 	clean := strip()
 	orig := a.tabs[0].draft.URL
 	a.tabs[0].draft.URL = orig + "?changed=1"
+	a.tabs[0].refreshDirty() // 只有当前标签每帧刷新未保存状态，这里手动刷新非当前的第一个标签
 	tt.Frame()
 	if !a.tabs[0].dirty {
 		t.Fatal("改动草稿后应为未保存状态")
@@ -387,6 +313,7 @@ func TestTabDirtyDotIsDrawn(t *testing.T) {
 		t.Fatal("标脏后标签栏画面没有变化，未保存圆点没有画出来")
 	}
 	a.tabs[0].draft.URL = orig
+	a.tabs[0].refreshDirty()
 	tt.Frame()
 	if !same(clean, strip()) {
 		t.Fatal("改回原值后圆点应消失，标签栏应恢复原样")

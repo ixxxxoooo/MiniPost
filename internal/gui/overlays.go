@@ -64,13 +64,13 @@ func (a *app) promptView(c *ui.Context) {
 	p := a.p
 	ok := false
 	a.stdDialog(c, &pr.open, 420, func() { a.dlgTitle(c, &pr.open, pr.title, true) }, func() {
-		ui.Column(c).FillWidth().Padding(16).Gap(8).Children(func() {
+		ui.Column(c).FillWidth().Padding(14).Gap(6).Children(func() {
 			if pr.label != "" {
-				ui.Text(c, pr.label).FontSize(fsBase).TextColor(p.fg2)
+				ui.Text(c, pr.label).FontSize(fsSmall).TextColor(p.muted)
 			}
 			// 输入框在 Row 里横向撑满；直接放进 Column 时它的 Grow 是纵向的，高度会塌成 0。
 			ui.Row(c).FillWidth().Children(func() {
-				in := a.input(c, &pr.value, "", fieldOpts{h: 32, radius: radiusInput, fs: fsBase, key: "prompt-in", focus: true})
+				in := a.input(c, &pr.value, "", fieldOpts{h: 30, radius: radiusR, fs: fsBase, key: "prompt-in", focus: true})
 				if in.Submitted() {
 					ok = true
 				}
@@ -102,18 +102,20 @@ func (a *app) confirmView(c *ui.Context) {
 	if !cf.open {
 		return
 	}
-	p := a.p
 	run := false
-	a.compactDialog(c, &cf.open, 400, func() {
-		txt(c, cf.title, 15, p.fg, 600)
-		ui.Text(c, cf.message).FontSize(fsBase).FixedLineHeight(19).TextColor(p.fg2).Margin(6, 0, 0, 0)
+	danger := cf.danger || dangerLabels[cf.ok]
+	a.compactDialog(c, &cf.open, cf.title, func() {
+		kind := toastInfo
+		if danger {
+			kind = toastError
+		}
+		a.dlgMsg(c, kind, cf.message, "")
 	}, func() {
-		ui.Box(c).Grow(1)
 		if a.dlgButton(c, "confirm-cancel", a.t("取消", "Cancel"), dlgNormal, false) {
 			cf.open = false
 		}
 		kind := dlgPrimary
-		if cf.danger || dangerLabels[cf.ok] {
+		if danger {
 			kind = dlgDanger
 		}
 		if a.dlgButton(c, "confirm-ok", cf.ok, kind, false) {
@@ -138,32 +140,29 @@ func (a *app) closeView(c *ui.Context) {
 	changed := false
 	action := 0
 	prevSave := a.set.AlwaysSaveUnsaved
-	a.compactDialog(c, &cl.open, 420, func() {
-		txt(c, a.t("保存对「"+cl.name+"」的更改？", "Save changes to “"+cl.name+"”?"), 15, p.fg, 600)
-		ui.Text(c, a.t("不保存的话，修改会丢失。", "Your changes will be lost if you don't save.")).FontSize(fsBase).FixedLineHeight(19).TextColor(p.fg2).Margin(6, 0, 0, 0)
+	a.compactDialog(c, &cl.open, a.t("保存更改", "Save changes"), func() {
+		a.dlgMsg(c, toastWarn, a.t("请求「"+cl.name+"」有未保存的修改", "“"+cl.name+"” has unsaved changes"),
+			a.t("关闭后这些修改将会丢失，是否先保存？", "These changes will be lost if you close without saving."))
 		check := func(key string, on *bool, label string) {
-			ui.Row(c.Key(key)).Gap(8).AlignItems(ui.Center).Margin(12, 0, 0, 0).Children(func() {
+			ui.Row(c.Key(key)).Gap(8).AlignItems(ui.Center).Children(func() {
 				if a.checkbox(c, key, on, false) {
 					changed = true
 				}
-				txt(c, label, fsSmall, p.fg2, 0)
+				txt(c, label, fsBase, p.fg, 0)
 			})
 		}
 		check("always-save", &a.set.AlwaysSaveUnsaved, a.t("关闭 Tab 时默认保存未保存修改", "Save unsaved changes by default when closing tabs"))
 		check("always-discard", &a.set.AlwaysDiscardUnsaved, a.t("关闭 Tab 时默认丢弃未保存修改", "Discard unsaved changes by default when closing tabs"))
 	}, func() {
-		// 左侧是红色文字的“不保存”，右侧是 取消 / 保存
-		if a.button(c, btnOpts{h: 30, radius: radiusInput, padX: 8, key: "close-discard"}, func(bool) {
-			txt(c, a.t("不保存", "Don't save"), fsBase, p.danger, 0)
-		}) {
+		// 设计稿底栏靠右：不保存 / 取消 / 保存并关闭
+		if a.dlgButton(c, "close-discard", a.t("不保存", "Don't save"), dlgNormal, false) {
 			action = 1
 		}
-		ui.Box(c).Grow(1)
 		if a.dlgButton(c, "close-cancel", a.t("取消", "Cancel"), dlgNormal, false) {
 			cl.open = false
 			a.closeQueue = nil // 取消会放弃批量关闭中剩余的标签
 		}
-		if a.dlgButton(c, "close-save", a.t("保存", "Save"), dlgPrimary, false) {
+		if a.dlgButton(c, "close-save", a.t("保存并关闭", "Save & close"), dlgPrimary, false) {
 			action = 2
 		}
 	})

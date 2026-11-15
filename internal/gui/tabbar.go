@@ -6,48 +6,33 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// tabBar 绘制 28px 高的请求标签栏：左侧是各请求标签与“+”，右侧是标签列表。
+// tabBar 绘制请求标签栏（设计稿方案 C：高 sizeTabStrip=38，内边距 5/8，标签间距 3，底色是 chrome 与内容底的 7:3 混合）：
+// 左侧是各请求标签与“+”，右侧是标签列表。
 func (a *app) tabBar(c *ui.Context) {
 	p := a.p
-	ui.Row(c).FillWidth().Height(sizeTabStrip).Shrink(0).Background(p.tabStrip).AlignItems(ui.Stretch).Children(func() {
-		stripTopLine(c, p.border)
-		if len(a.tabs) == 0 {
-			// 无标签时“+”独占一格，右侧带分隔线
-			ui.Row(c).Width(40).PaddingX(6).AlignItems(ui.Center).Children(func() {
-				a.newTabButton(c)
-			})
-			vline(c, p.tabDivider)
-		}
+	ui.Row(c).FillWidth().Height(sizeTabStrip).Shrink(0).Background(p.toolbar.Mix(p.surface, 0.3)).Padding(5, 8).Gap(3).AlignItems(ui.Center).Children(func() {
 		ui.ScrollHorizontal(c).Grow(1).Basis(0).Scrollbars(false).Children(func() {
-			ui.Row(c).FillHeight().AlignItems(ui.End).Children(func() {
+			ui.Row(c).Height(28).Gap(tabGap).AlignItems(ui.Center).Children(func() {
+				w := a.tabCellWidth(c)
 				for i, t := range a.tabs {
-					a.tabItem(c, i, t)
+					a.tabItem(c, i, t, w)
 				}
-				if len(a.tabs) > 0 {
-					ui.Row(c).Height(sizeTabStrip - 1).MarginX(6).AlignItems(ui.Center).Children(func() {
-						a.newTabButton(c)
-					})
-				}
+				a.newTabButton(c)
 			})
 		})
 		if len(a.tabs) > 0 {
-			// 环境选择已移到标题栏，这里只剩“显示所有标签”
-			vline(c, p.tabDivider)
-			ui.Row(c).PaddingX(6).AlignItems(ui.Center).Shrink(0).Children(func() {
-				a.tabListButton(c)
-			})
+			a.tabListButton(c)
 		}
 	})
 }
 
-// newTabButton 是标签栏里的“+”新建请求按钮：常态就有淡底和前景色图标（不再是不起眼的灰色小图标），
-// 悬停时底色加深；点击在根目录新建一个请求并在新标签中打开（与 ⌘N 一致）。
+// newTabButton 是标签栏里的“+”新建请求按钮（22×22 的小图标按钮）：悬停浅底；
+// 点击在根目录新建一个请求并在新标签中打开（与 ⌘N 一致）。
 func (a *app) newTabButton(c *ui.Context) {
 	p := a.p
-	bg, hv := p.hover, p.selected
 	tip := a.t("新建请求", "New request")
-	if a.button(c, btnOpts{w: 26, h: 22, radius: radiusBtn - 1, tip: tip, bg: &bg, hoverBg: &hv, key: "ta:add"}, func(bool) {
-		icon(c, "add", 15, p.fg)
+	if a.button(c, btnOpts{w: 22, h: 22, radius: radiusSm, tip: tip, key: "ta:add"}, func(bool) {
+		icon(c, "add", 15, p.fg2)
 	}) {
 		a.later(func() { a.newRequest("") })
 	}
@@ -56,56 +41,37 @@ func (a *app) newTabButton(c *ui.Context) {
 // tabDrag 是拖动标签时携带的值。
 type tabDrag struct{ t *tab }
 
-// 请求标签按标题自适应宽度，限制在 [tabMinWidth, tabMaxWidth]；tabAccentWidth 是选中标签顶部强调线的粗细（与旧版 2px 的强调线一致）。
+// 请求标签（设计稿 .tab）：基础宽 tabBaseWidth，标签多了按可用宽度平分，但不小于 tabMinWidth；
+// 超出时标签栏横向滚动。tabGap 是标签间距。
 const (
-	tabMinWidth    = 120
-	tabMaxWidth    = 220
-	tabAccentWidth = 2
-	// 标签里标题之外固定占用的宽度：左右内边距 16 + 三处间距 12 + 未保存圆点位 6 + 关闭按钮 16，再留 4 的余量防止刚好被截断。
-	tabChrome = 16 + 12 + 6 + 16 + 4
+	tabBaseWidth = 164
+	tabMinWidth  = 90
+	tabMaxWidth  = tabBaseWidth
+	tabGap       = 3
+	tabHeight    = 28
+	// 标签里标题之外固定占用的宽度：左内边距 10 + 右内边距 6 + 方法徽章与间距 40 + 关闭按钮 18 + 间距 12。
+	tabChrome = 10 + 6 + 40 + 18 + 12
 )
 
-// tabLeadWidth 是标题前面的方法标签（或环境标签的地球图标）的宽度。
-func (a *app) tabLeadWidth(c *ui.Context, t *tab) float32 {
-	if t.env != nil {
-		return 11
+// tabCellWidth 是每个标签的宽度：可用宽度（窗口宽 - 侧栏 - 外边距 - 内边距 - “+”与标签列表按钮）按标签数平分，夹在 [tabMinWidth, tabBaseWidth] 之间。
+func (a *app) tabCellWidth(c *ui.Context) float32 {
+	winW, _ := c.Size()
+	avail := winW - shellGap - 16 - 22 - 22 - 12
+	if !a.set.SidebarCollapsed {
+		avail -= a.sidebarShown()
 	}
-	w, _ := c.MeasureText(0, ui.Span{Text: t.draft.Method, Font: monoFont, Size: 9, Weight: 700})
-	return w
+	n := float32(max(len(a.tabs), 1))
+	w := (avail - (n-1)*tabGap) / n
+	return float32(math.Floor(float64(min(max(w, tabMinWidth), tabBaseWidth))))
 }
 
-// tabWidthFor 计算标签宽度：方法标签 + 标题 + 固定占位，夹在 [tabMinWidth, tabMaxWidth] 之间。
-// 不抖动的关键：
-//   - 标题一律按选中态的字重（500）量宽，选中/未选中切换时宽度不变；
-//   - 未保存圆点和关闭按钮的位置始终预留，修改请求或悬停时宽度不变；
-//   - 只有标题、方法变化（改名、改方法）时才会改变宽度。
-func (a *app) tabWidthFor(c *ui.Context, t *tab) float32 {
-	lead := a.tabLeadWidth(c, t)
-	title, _ := c.MeasureText(0, ui.Span{Text: t.title(), Size: fsV2xs, Weight: 500})
-	w := min(max(lead+title+tabChrome, tabMinWidth), tabMaxWidth)
-	return float32(math.Ceil(float64(w)))
-}
-
-// stripTopLine 画标签条顶部的 1px 横线（铺满整条，作为最底层）。
-// 选中的标签从这一行开始，用自己的强调色上边框把线盖住，所以同一个位置永远只有一条线；
-// 其余标签从线下面一行开始。标题栏本身不再画底线，避免与这条线叠成两条。
-func stripTopLine(c *ui.Context, col ui.Color) {
-	ui.Box(c).Absolute().Top(0).Left(0).Right(0).Height(1).Background(col).ZIndex(-1)
-}
-
-// tabItem 绘制一个请求标签：方法、标题、未保存圆点与悬停时出现的关闭按钮。
-// 标签是方正的：选中的标签只在顶部画一条 2px 强调线，背景和下方内容区一致，看起来与内容区连成一体。
-// 相邻标签之间只有一条 1px 竖分隔线。鼠标中键点击标签可关闭它。
-func (a *app) tabItem(c *ui.Context, i int, t *tab) {
+// tabItem 绘制一个请求标签（设计稿 .tab，28 高、圆角 9）：方法徽章、标题、未保存圆点与悬停/选中时出现的关闭按钮。
+// 选中的标签是浮起的内容底胶囊（细投影 + 描边），底部带 2px 强调线；鼠标中键点击标签可关闭它。
+func (a *app) tabItem(c *ui.Context, i int, t *tab, w float32) {
 	p := a.p
 	active := i == a.active && !a.showHome
-	h := float32(sizeTabStrip - 1) // 未选中的标签在顶线下面
-	if active {
-		h = sizeTabStrip // 选中的标签从顶线所在行开始，用自己的上边框盖住它
-	}
-	// 宽度按标题自适应，但用固定字重量宽并预留圆点/关闭按钮的位置，所以切换、编辑、悬停时都不会抖动。
-	t.shownW = a.tabWidthFor(c, t)
-	cell := ui.Row(c.Key("tab:" + t.draft.ID)).Height(h).Width(t.shownW).Shrink(0).Drag(tabDrag{t: t}).
+	t.shownW = w
+	cell := ui.Row(c.Key("tab:" + t.draft.ID)).Height(tabHeight).Width(w).Shrink(0).Radius(9).Drag(tabDrag{t: t}).
 		ContextMenu(func(m *ui.Menu) { a.tabMenu(m, i) }).
 		HandleInput(func(ev ui.InputEvent) bool {
 			// 中键按下时接管这次点按，抬起时关闭（和浏览器标签页的习惯一致）。
@@ -132,52 +98,55 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 		dropHere = true
 	}
 	hover := cell.Hovered()
-	// 标题可用宽度 = 标签宽 - 标题之外固定占用的部分 - 方法标签
-	titleRoom := t.shownW - tabChrome - a.tabLeadWidth(c, t)
-	cell = a.tipIfLong(c, cell, t.title(), fsV2xs, 500, titleRoom)
+	// 标题可用宽度 = 标签宽 - 标题之外固定占用的部分
+	cell = a.tipIfLong(c, cell, t.title(), fsV2xs, 500, w-tabChrome)
 	switch {
 	case active:
-		cell = cell.Background(p.surface).BorderWidth(tabAccentWidth, 0, 0, 0).BorderColor(p.tabActiveBorder)
+		cell = p.shadowSm(cell.Background(p.surface).Shadow(0, 0, 0, 1, p.border))
 	case hover:
 		cell = cell.Background(p.hover)
 	}
 	cell.Children(func() {
 		if dropHere {
-			ui.Box(c).Absolute().Top(0).Bottom(0).Left(0).Width(2).Background(p.accent).ZIndex(1)
+			ui.Box(c).Absolute().Top(2).Bottom(2).Left(-2).Width(2).Radius(1).Background(p.accent).ZIndex(1)
 		}
-		ui.Column(c).Grow(1).Basis(0).FillHeight().Children(func() {
-			ui.Row(c).Grow(1).Basis(0).FillWidth().PaddingX(8).Gap(4).AlignItems(ui.Center).Children(func() {
-				if t.env != nil {
-					icon(c, "globe", 11, p.accent).Shrink(0)
-				} else {
-					txtMono(c, methodAbbr(t.draft.Method), 9, p.method(t.draft.Method), 700).Shrink(0)
-				}
-				col, w := p.fg2, 0
-				if active {
-					col, w = p.fg, 500
-				}
-				txtE(c, t.title(), fsV2xs, col, w).Grow(1).Basis(0)
-				// 未保存圆点：位置始终预留（不脏时透明），避免编辑时标签宽度变化。
-				dot := ui.Box(c).Size(6, 6).Radius(3).Shrink(0)
-				if t.dirty {
-					dot.Background(p.accent) // Element 是节点句柄，原地生效，无需回写
-				}
-				closeCol := p.muted
-				cb := ui.ButtonBase(c.Key("tc:"+t.draft.ID)).Size(16, 16).Radius(4).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
-					Tooltip(a.t("关闭 (⌘W)", "Close (⌘W)")).Label(a.t("关闭 (⌘W)", "Close (⌘W)"))
-				if cb.Hovered() {
-					cb = cb.Background(p.hover)
-					closeCol = p.fg
-				}
-				cb.Children(func() {
-					if hover || active {
-						icon(c, "clear", 10, closeCol)
-					}
-				})
-				if cb.Clicked() {
-					a.later(func() { a.closeTab(i) })
+		if active {
+			// 底部强调线：左右各缩进 10，贴着标签底边
+			ui.Box(c).Absolute().Left(10).Right(10).Bottom(0).Height(2).Radius(2, 2, 0, 0).Background(p.accent)
+		}
+		ui.Row(c).Grow(1).Basis(0).FillWidth().Padding(0, 6, 0, 7).Gap(6).AlignItems(ui.Center).Children(func() {
+			if t.env != nil {
+				icon(c, "globe", 13, p.accent).Shrink(0).MarginStart(3)
+			} else {
+				a.methodBadge(c, t.draft.Method, 0).MarginEnd(-3)
+			}
+			col, wt := p.fg2, 500
+			if active {
+				col, wt = p.fg, 600
+			} else if hover {
+				col = p.fg
+			}
+			txtE(c, t.title(), fsV2xs, col, wt).Grow(1).Basis(0)
+			// 未保存圆点（7px 强调色）：悬停或选中时让位给关闭按钮。
+			if t.dirty && !hover && !active {
+				ui.Box(c).Size(7, 7).Radius(3.5).Background(p.accent).Margin(0, 5, 0, 5).Shrink(0)
+				return
+			}
+			closeCol := p.muted
+			cb := ui.ButtonBase(c.Key("tc:"+t.draft.ID)).Size(18, 18).Radius(5).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
+				Tooltip(a.t("关闭 (⌘W)", "Close (⌘W)")).Label(a.t("关闭 (⌘W)", "Close (⌘W)"))
+			if cb.Hovered() {
+				cb = cb.Background(p.press)
+				closeCol = p.fg
+			}
+			cb.Children(func() {
+				if hover || active {
+					icon(c, "clear", 10, closeCol)
 				}
 			})
+			if cb.Clicked() {
+				a.later(func() { a.closeTab(i) })
+			}
 		})
 	})
 	if cell.Clicked() && !active {
@@ -185,10 +154,6 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab) {
 			a.showHome = false
 			a.activate(i)
 		})
-	}
-	// 标签右侧的竖分隔线（选中标签只有顶部强调线，两侧照常画分隔线）。
-	{
-		ui.Box(c.Key("tabdiv:" + t.draft.ID)).Width(1).Height(sizeTabStrip - 1).Shrink(0).Background(p.tabDivider)
 	}
 }
 
@@ -243,7 +208,7 @@ func (a *app) tabMenu(m *ui.Menu, i int) {
 // tabListButton 是“显示所有标签”的下拉按钮。
 func (a *app) tabListButton(c *ui.Context) {
 	p := a.p
-	ui.ButtonBase(c.Key("tablist")).Size(22, 22).Radius(radiusBtn - 1).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
+	ui.ButtonBase(c.Key("tablist")).Size(22, 22).Radius(radiusSm).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
 		Tooltip(a.t("显示所有标签", "Show all tabs")).
 		PopoverMenuButton(func(m *ui.Menu) {
 			for i, t := range a.tabs {
@@ -260,7 +225,7 @@ func (a *app) tabListButton(c *ui.Context) {
 				}
 			}
 		}).
-		Children(func() { icon(c, "arrowDown", 11, p.muted) })
+		Children(func() { icon(c, "tbChevDown", 12, p.fg2) })
 }
 
 // tabIndex 返回标签当前的下标，找不到（已关闭）返回 -1。

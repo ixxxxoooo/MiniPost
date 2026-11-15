@@ -108,9 +108,9 @@ func (a *app) cookiesView(c *ui.Context) {
 	a.dialog(c, &s.open, 800, 480, 14, func() {
 		ui.Column(c).FillWidth().FillHeight().Children(func() {
 			// 顶部：图标 + 标题 + 统计胶囊 + 关闭
-			ui.Row(c).Height(46).FillWidth().Shrink(0).PaddingX(16).Gap(8).AlignItems(ui.Center).Children(func() {
-				icon(c, "cookie", 14, p.fg2)
-				txt(c, a.t("Cookie 管理器", "Cookie Jar"), fsBase+1, p.fg, 600)
+			ui.Row(c).Height(48).FillWidth().Shrink(0).PaddingX(14).Gap(10).AlignItems(ui.Center).Children(func() {
+				a.dlgIcon(c, "cookie")
+				txt(c, a.t("Cookie 管理器", "Cookie Jar"), fsBase+1, p.fg, 650)
 				ui.Row(c).Height(18).PaddingX(8).Radius(9).Background(p.surface2).Border(1, p.border).AlignItems(ui.Center).Children(func() {
 					txt(c, cookieSummary(a, len(all), countDomains(all)), fsTiny, p.fg2, 0)
 				})

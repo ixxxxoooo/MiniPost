@@ -103,8 +103,8 @@ func TestDragRequestIntoFolderAndBackToRoot(t *testing.T) {
 	}
 	tt.Frame()
 	ax, ay = center(t, tt, "alpha")
-	rx, ry := center(t, tt, "根目录")
-	drag(tt, ax, ay, rx, ry)
+	// 根目录没有单独的行：拖到请求树下方的空白区即可（窗口 1200x760，树只有几行）
+	drag(tt, ax, ay, 100, 520)
 	if got := parentOf(a, "alpha"); got != "" {
 		t.Fatalf("alpha 应回到根目录, 实际父级 %q", got)
 	}

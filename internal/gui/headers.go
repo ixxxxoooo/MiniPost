@@ -20,8 +20,9 @@ func (a *app) headersTab(c *ui.Context, t *tab) {
 	}
 	a.kvTableOpts(c, &visible, kvOpts{
 		id:    d.ID + ":headers",
-		keyPH: a.t("Header 名", "Header Name"),
-		valPH: a.t("Header 值", "Header Value"),
+		keyPH: a.t("请求头", "Header"),
+		valPH: a.t("值", "Value"),
+		hint:  a.t("请求头 · 取消勾选即可临时禁用", "Headers · uncheck a row to disable it temporarily"),
 		t:     t,
 	})
 	d.Headers = append(visible, markers...)

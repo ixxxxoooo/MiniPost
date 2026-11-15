@@ -34,7 +34,7 @@ func TestDarkPaletteLayers(t *testing.T) {
 	}
 }
 
-// 实际渲染：深色下标签栏、侧栏、内容区三处的像素亮度依次升高。
+// 实际渲染：深色下内容卡片的像素亮度高于半透明的标签栏与侧栏。
 func TestDarkModeRenderedLayers(t *testing.T) {
 	_, tt, _ := visualApp(t, true)
 	_ = tt.Click("健康检查")
@@ -43,7 +43,8 @@ func TestDarkModeRenderedLayers(t *testing.T) {
 	side := img.RGBAAt(20, 700)
 	content := img.RGBAAt(900, 420)
 	strip := img.RGBAAt(1100, int(sizeToolbar)+int(sizeTabStrip)/2+2)
-	if !(lum(strip) < lum(side) && lum(side) < lum(content)) {
-		t.Fatalf("亮度应为 标签栏(%v) < 侧栏(%v) < 内容区(%v)", strip, side, content)
+	// 流光方案里侧栏与标签栏是半透明的（叠在极光上），彼此高低不固定，但内容卡片始终最亮。
+	if !(lum(strip) < lum(content) && lum(side) < lum(content)) {
+		t.Fatalf("内容区(%v) 应比 标签栏(%v)、侧栏(%v) 更亮", content, strip, side)
 	}
 }

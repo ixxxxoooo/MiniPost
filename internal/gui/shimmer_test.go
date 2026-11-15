@@ -130,21 +130,31 @@ func TestShimmerDrawnWhileSending(t *testing.T) {
 				a.project().ThemeColor = tc.theme
 			}
 			tb := a.activeTab()
-			tb.sending, tb.sendAt = true, time.Now().Add(-shimmerPeriod*6/10)
-			tt.Frame()
-			busy := tt.Image()
-			snapshot(t, tt, "sending")
-			if !tt.HasText("正在等待 example.com 响应首字节…") {
-				t.Fatalf("发送中应显示提示，实际 %q", tt.Texts())
+			title := ui.Rect{}
+			n := 0
+			// 扫光位置取决于挂钟时间；-race 下一帧可能很慢，扫光恰好扫出画面，所以最多重试几次。
+			for try := 0; try < 9 && n == 0; try++ {
+				phase := time.Duration(1+try) * shimmerPeriod / 10 // 每次换一个相位，覆盖整个扫光周期
+				tb.sending, tb.sendAt = true, time.Now().Add(-phase)
+				tt.Frame()
+				busy := tt.Image()
+				if try == 0 {
+					snapshot(t, tt, "sending")
+					if !tt.HasText("正在等待 example.com 响应首字节…") {
+						t.Fatalf("发送中应显示提示，实际 %q", tt.Texts())
+					}
+				}
+				r, ok := tt.Find("响应体")
+				if !ok {
+					t.Fatal("找不到响应标签")
+				}
+				title = r
+				tb.sending, tb.sendAt = false, time.Now().Add(-time.Hour)
+				tt.Frame()
+				idle := tt.Image()
+				n = accentPixels(t, tt, busy, idle, int(title.Y), tc.want)
 			}
-			title, ok := tt.Find("响应体")
-			if !ok {
-				t.Fatal("找不到响应标签")
-			}
-			tb.sending, tb.sendAt = false, time.Now().Add(-time.Hour)
-			tt.Frame()
-			idle := tt.Image()
-			if n := accentPixels(t, tt, busy, idle, int(title.Y), tc.want); n == 0 {
+			if n == 0 {
 				t.Fatalf("发送中响应区顶部应出现主题色扫光线（%s）", tc.name)
 			}
 		})

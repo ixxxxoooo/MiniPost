@@ -13,20 +13,21 @@ import (
 	"minipost/internal/pkg/logger"
 )
 
-// 表格列权重：取自旧版 table-fixed 在 1280 宽窗口下的实测列宽，随容器宽度等比伸缩。
+// 表格列：对照设计稿 grid-template-columns: 34px 1fr 1.5fr 1fr 28px。
+// 正数是伸缩权重；负数表示固定像素宽度（取绝对值）。
 const (
-	colCheck = 37.4
-	colKey   = 245.5
-	colValue = 409.2
-	colDesc  = 245.5
-	colAct   = 85.4
+	colCheck = -34
+	colKey   = 1
+	colValue = 1.5
+	colDesc  = 1
+	colAct   = -28
 )
 
 // 键值表的行高、表头高度与单元格字号（对照原型：行更高、字更大，读起来更松）。
 const (
-	kvRowH  = 32
-	kvHeadH = 30
-	kvFont  = 13
+	kvRowH  = 28
+	kvHeadH = 26
+	kvFont  = 12
 )
 
 // kvOpts 描述键值表的列与自动请求头行。
@@ -42,7 +43,7 @@ type kvOpts struct {
 // kvSubhead 绘制表格上方的一行：左侧是自动请求头折叠开关（或说明文字），右侧是“批量编辑”。
 func (a *app) kvSubhead(c *ui.Context, rows *[]*client.Row, o kvOpts, auto []client.AutoHeader) {
 	p := a.p
-	ui.Row(c).FillWidth().Height(32).Shrink(0).PaddingX(12).AlignItems(ui.Center).Gap(6).Children(func() {
+	ui.Row(c).FillWidth().Height(29).Shrink(0).PaddingX(12).AlignItems(ui.Center).Gap(8).Children(func() {
 		if len(auto) > 0 && o.t != nil {
 			name := "arrowRight"
 			if o.t.autoOpen {
@@ -67,7 +68,7 @@ func (a *app) kvSubhead(c *ui.Context, rows *[]*client.Row, o kvOpts, auto []cli
 				o.t.autoOpen = !o.t.autoOpen
 			}
 		} else if o.hint != "" {
-			txt(c, o.hint, fsBase, p.muted, 0)
+			txt(c, o.hint, fsSmall, p.muted, 0)
 		}
 		ui.Spacer(c)
 		if a.button(c, btnOpts{h: 22, padX: 4, gap: 4, noHover: true, key: "bulk-" + o.id}, func(hover bool) {
@@ -76,7 +77,7 @@ func (a *app) kvSubhead(c *ui.Context, rows *[]*client.Row, o kvOpts, auto []cli
 				col = p.accentHover
 			}
 			icon(c, "formatList", 12, col)
-			txt(c, a.t("批量编辑", "Bulk Edit"), fsBase, col, 600)
+			txt(c, a.t("批量编辑", "Bulk Edit"), fsSmall, col, 600)
 		}) {
 			a.bulk[o.id] = serializeBulk(*rows)
 		}
@@ -85,14 +86,21 @@ func (a *app) kvSubhead(c *ui.Context, rows *[]*client.Row, o kvOpts, auto []cli
 
 // tableCell 画一个带下分隔线和右分隔线（列间竖线）的表格单元。
 func (a *app) tableCell(c *ui.Context, grow, h float32, children func()) {
-	ui.Row(c).Grow(grow).Basis(0).Height(h).Shrink(1).AlignItems(ui.Center).
-		BorderWidth(0, 1, 1, 0).BorderColor(a.p.border).Children(children)
+	a.cellBox(c, grow, h).BorderWidth(0, 1, 1, 0).BorderColor(a.p.border.Alpha(0.7)).Children(children)
+}
+
+// cellBox 按列定义（见 colCheck 等）生成固定宽度或按权重伸缩的单元格容器。
+func (a *app) cellBox(c *ui.Context, grow, h float32) ui.Element {
+	r := ui.Row(c).Height(h).AlignItems(ui.Center)
+	if grow < 0 {
+		return r.Width(-grow).Shrink(0)
+	}
+	return r.Grow(grow).Basis(0).Shrink(1)
 }
 
 // tableCellEnd 是表格最后一个单元（行末操作列）：只有下分隔线，没有右竖线。
 func (a *app) tableCellEnd(c *ui.Context, grow, h float32, children func()) {
-	ui.Row(c).Grow(grow).Basis(0).Height(h).Shrink(1).AlignItems(ui.Center).
-		BorderWidth(0, 0, 1, 0).BorderColor(a.p.border).Children(children)
+	a.cellBox(c, grow, h).BorderWidth(0, 0, 1, 0).BorderColor(a.p.border.Alpha(0.7)).Children(children)
 }
 
 // tableFrame 是表格的滚动容器：铺满面板宽度，行与行、列与列之间是 1px 细线。
@@ -119,11 +127,11 @@ func (a *app) kvCellInput(c *ui.Context, key string, v *string, ph string, mono 
 	return in
 }
 
-// kvHeaderCell 绘制表头单元：12px 半粗，次要色。
+// kvHeaderCell 绘制表头单元：11px 半粗，次要色。
 func (a *app) kvHeaderCell(c *ui.Context, grow float32, label string, extra func()) {
-	a.tableCell(c, grow, kvHeadH, func() {
+	a.cellBox(c, grow, kvHeadH).BorderWidth(0, 0, 1, 0).BorderColor(a.p.border).Children(func() {
 		ui.Row(c).FillWidth().PaddingX(8).AlignItems(ui.Center).Children(func() {
-			txtE(c, label, fsBase, a.p.muted, 500).Grow(1)
+			txtE(c, label, fsSmall, a.p.muted, 600).Grow(1)
 			if extra != nil {
 				extra()
 			}
@@ -133,9 +141,9 @@ func (a *app) kvHeaderCell(c *ui.Context, grow float32, label string, extra func
 
 // kvHeaderCellEnd 是最后一列的表头单元：没有右竖线。
 func (a *app) kvHeaderCellEnd(c *ui.Context, grow float32, label string) {
-	a.tableCellEnd(c, grow, kvHeadH, func() {
+	a.cellBox(c, grow, kvHeadH).BorderWidth(0, 0, 1, 0).BorderColor(a.p.border).Children(func() {
 		ui.Row(c).FillWidth().PaddingX(8).AlignItems(ui.Center).Children(func() {
-			txtE(c, label, fsBase, a.p.muted, 500).Grow(1)
+			txtE(c, label, fsSmall, a.p.muted, 600).Grow(1)
 		})
 	})
 }
@@ -156,15 +164,15 @@ func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {
 	}
 	a.kvSubhead(c, rows, o, auto)
 	a.tableFrame(c, func() {
-		// 表头
-		ui.Row(c).FillWidth().Children(func() {
+		// 表头：底边实线 + 柔和底色
+		ui.Row(c).FillWidth().Background(p.surface2.Mix(p.surface, 0.42)).Children(func() {
 			a.kvHeaderCell(c, colCheck, "", nil)
 			a.kvHeaderCell(c, colKey, o.keyPH, nil)
 			a.kvHeaderCell(c, colValue, o.valPH, nil)
 			if !o.noDesc {
 				a.kvHeaderCellEnd(c, colDesc, a.t("说明", "Description"))
 			}
-			a.tableCellEnd(c, colAct, kvHeadH, func() {})
+			a.cellBox(c, colAct, kvHeadH).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {})
 		})
 		// 自动请求头（只读，可单独关闭）
 		if o.t != nil && o.t.autoOpen {
@@ -335,16 +343,16 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 	remove := -1
 	a.tableFrame(c, func() {
 		ui.Row(c).FillWidth().Children(func() {
-			a.kvHeaderCell(c, 28, "", nil)
+			a.kvHeaderCell(c, colCheck, "", nil)
 			a.kvHeaderCell(c, colKey, a.t("键", "Key"), nil)
-			a.tableCell(c, 72, kvHeadH, func() {
+			a.tableCell(c, -76, kvHeadH, func() {
 				ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
 					txt(c, a.t("类型", "Type"), fsSmall, p.fg2, 600)
 				})
 			})
 			a.kvHeaderCell(c, colValue, a.t("值", "Value"), nil)
 			a.kvHeaderCellEnd(c, colDesc, a.t("说明", "Description"))
-			a.tableCellEnd(c, 32, kvHeadH, func() {})
+			a.tableCellEnd(c, colAct, kvHeadH, func() {})
 		})
 		for i, r := range *rows {
 			i, r := i, r
@@ -352,7 +360,7 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 			rowEl := ui.Row(c.Key(r.ID)).FillWidth()
 			hover := rowEl.Hovered()
 			rowEl.Children(func() {
-				a.tableCell(c, 28, kvRowH, func() {
+				a.tableCell(c, colCheck, kvRowH, func() {
 					ui.Row(c).FillWidth().Height(kvRowH - 2).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
 						changed = a.kvCheck(c, r.ID, &r.Enabled, last) || changed
 					})
@@ -365,7 +373,7 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 					}
 					changed = in.Changed() || changed
 				})
-				a.tableCell(c, 72, kvRowH, func() {
+				a.tableCell(c, -76, kvRowH, func() {
 					ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
 						label := a.t("文本", "Text")
 						if r.Type == "file" {
@@ -403,7 +411,7 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 				a.tableCellEnd(c, colDesc, kvRowH, func() {
 					changed = a.kvCellInput(c, "d:"+r.ID, &r.Description, a.t("说明", "Description"), false, p.fg2, dim, last).Changed() || changed
 				})
-				a.tableCellEnd(c, 32, kvRowH, func() {
+				a.tableCellEnd(c, colAct, kvRowH, func() {
 					ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
 						if !last && hover && a.miniDelete(c, "del:"+r.ID, nil) {
 							remove = i

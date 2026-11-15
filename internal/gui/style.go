@@ -20,13 +20,14 @@ var assetFS embed.FS
 
 // 尺寸常量（单位 DIP，与旧版 CSS 像素一致）。
 const (
-	sizeToolbar   = 38  // 顶部自绘标题栏高度（含 1px 底线）
-	sizeBottom    = 25  // 底栏高度
-	sizeTabStrip  = 32  // 侧栏标签条与请求标签栏高度
+	sizeToolbar   = 46  // 顶部自绘标题栏高度（方案 C：透明，露出极光）
+	sizeBottom    = 24  // 状态栏高度
+	sizeTabStrip  = 38  // 请求标签栏高度（方案 C 的 --tabh）
 	sizeURLBar    = 34  // 地址栏（一体式控件）高度
-	sizeMethodCol = 32  // 侧栏树与历史里方法列的固定宽度
+	sizeMethodCol = 32  // 侧栏树与历史里方法列的固定宽度（徽章宽 = 该值 + 4）
 	sizeBtn       = 24  // 工具栏图标按钮
-	radiusBtn     = 7   // 按钮圆角
+	radiusBtn     = 7   // 按钮圆角（小型图标按钮）
+	radiusR       = 10  // 方案 C 的标准圆角（--r）：输入框、按钮、胶囊以外的控件
 	radiusInput   = 8   // 输入框圆角
 	radiusCard    = 10  // 卡片圆角
 	fsBase        = 12  // 基础字号
@@ -34,6 +35,7 @@ const (
 	fsTiny        = 10  // 微型字号
 	fsLarge       = 13  // 大字号（URL、响应标题）
 	sizeSideMin   = 180 // 侧栏最小宽度
+	sizeSideHead  = 40  // 侧栏顶部分段控件行高（内边距 8/6 + 26）
 )
 
 // 旧版用 CSS 变量 --size-font-2xs/xs/sm 表示随「界面字体」设置缩放的字号（N、N+1、N+2，默认 N=12）；
@@ -69,6 +71,16 @@ type palette struct {
 
 	jsonKey, jsonString, jsonNumber, jsonBool, jsonBracket ui.Color
 	hover                                                  ui.Color
+
+	// 流光（设计稿方案 C）新增令牌，全部由基础色派生：
+	// press 为按下底（前景 9%）；acSoft/acSoft2/acLine 为强调色 12%/20%/45%；
+	// glow/glowS 为强调色光晕（42%/26%）；glass 为浮层玻璃底（elev 84%）；hair 为发丝线；
+	// okSoft 等为语义色的淡底。
+	press                               ui.Color
+	acSoft, acSoft2, acLine             ui.Color
+	glow, glowS                         ui.Color
+	glass, hair                         ui.Color
+	okSoft, warnSoft, errSoft, infoSoft ui.Color
 }
 
 // elevated 对应旧版 --surface-elevated（弹出层背景）：亮色为白色，暗色为 rgb(48,48,48)。
@@ -77,6 +89,32 @@ func (p *palette) elevated() ui.Color {
 		return p.surface2
 	}
 	return p.surface
+}
+
+// shadowMd 给元素加上设计稿的 --shadow-md（浮起的卡片）：1px 描边环 + 大范围柔和投影 + 近处细投影。
+func (p *palette) shadowMd(e ui.Element) ui.Element {
+	if p.dark {
+		return e.Shadow(0, 0, 0, 1, p.border).Shadow(0, 10, 24, -6, ui.RGBA(0, 0, 0, 0.5)).Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.3))
+	}
+	return e.Shadow(0, 0, 0, 1, p.border).Shadow(0, 8, 22, -6, ui.RGBA(20, 24, 40, 0.14)).Shadow(0, 1, 3, 0, ui.RGBA(20, 24, 40, 0.05))
+}
+
+// shadowSm 给元素加上设计稿的 --shadow-sm（分段滑块、选中标签等小块浮起）：细投影 + 0.5px 环。
+func (p *palette) shadowSm(e ui.Element) ui.Element {
+	if p.dark {
+		return e.Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.32)).Shadow(0, 0, 0, 0.5, ui.RGBA(255, 255, 255, 0.04))
+	}
+	return e.Shadow(0, 1, 2, 0, ui.RGBA(20, 24, 40, 0.06)).Shadow(0, 0, 0, 0.5, ui.RGBA(20, 24, 40, 0.04))
+}
+
+// gradAccent 把元素填成设计稿的强调色渐变（--grad-ac：上方 16% 提亮到纯强调色）并加顶部高光；hover 时用悬停色。
+func (p *palette) gradAccent(e ui.Element, hover bool) ui.Element {
+	base := p.accent
+	if hover {
+		base = p.accentHover
+	}
+	top := base.Mix(ui.RGB(255, 255, 255), 0.16)
+	return e.Gradient(top, base, 180).InsetShadow(0, 1, 0, 0, ui.RGBA(255, 255, 255, 0.24))
 }
 
 // shadowLg 对应旧版 --shadow-lg：0 8px 24px，亮色 0.12、暗色 0.4 的黑色。
@@ -93,7 +131,7 @@ type schemeTokens struct {
 	chrome, side, bg, bg2, bd, bd2, fg, fg2, mu, ac, ach, acf string
 }
 
-// colorSchemes 按设计稿「令牌与通用组件」：mist 雾蓝 / ink 墨白 / jade 松石，各有 [亮, 暗] 两档。
+// colorSchemes 按设计稿「令牌与通用组件」：mist 雾蓝 / ink 墨白 / jade 松石 / amber 琥珀 / rose 玫瑰，各有 [亮, 暗] 两档。
 var colorSchemes = map[string][2]schemeTokens{
 	"mist": {
 		{"#f1f2f6", "#f5f6f9", "#ffffff", "#eef0f5", "#e2e5ec", "#cfd4de", "#1b1e29", "#4b5266", "#6a7287", "#4f52d9", "#4144c4", "#ffffff"},
@@ -107,10 +145,18 @@ var colorSchemes = map[string][2]schemeTokens{
 		{"#eff3f2", "#f4f7f6", "#ffffff", "#ebf0ee", "#dde5e2", "#c9d4d0", "#17201e", "#46524f", "#66726f", "#08806f", "#066b5c", "#ffffff"},
 		{"#0f1514", "#131a19", "#172020", "#1f2a29", "#243230", "#30403d", "#e8f0ee", "#a1b2ae", "#84968f", "#3fd0b8", "#62dcc7", "#04201b"},
 	},
+	"amber": {
+		{"#f6f3ee", "#f9f7f3", "#ffffff", "#f3efe8", "#e8e2d8", "#d6cdbf", "#231d14", "#5a5042", "#7a6f5f", "#c2570c", "#a84a08", "#ffffff"},
+		{"#17140f", "#1b1812", "#211d16", "#2b261d", "#342e23", "#453d2e", "#f3ede2", "#beb4a1", "#968b77", "#ff9a3c", "#ffb066", "#2a1500"},
+	},
+	"rose": {
+		{"#f7f1f3", "#faf5f7", "#ffffff", "#f5edf0", "#ebe0e4", "#dac9cf", "#261a1f", "#5c4750", "#7d6670", "#d6336c", "#b8275a", "#ffffff"},
+		{"#181114", "#1c1418", "#221a1e", "#2c2227", "#372a31", "#493943", "#f6ecf0", "#c2aab4", "#9a8590", "#ff7aa5", "#ff9bbb", "#2d0614"},
+	},
 }
 
 // colorSchemeNames 是设置页里配色方案的顺序，与 colorSchemes 的键一致。
-var colorSchemeNames = []string{"mist", "ink", "jade"}
+var colorSchemeNames = []string{"mist", "ink", "jade", "amber", "rose"}
 
 // semanticTokens 是各配色共用的语义色（请求方法、状态、JSON 高亮），亮暗各一套。
 type semanticTokens struct {
@@ -149,8 +195,22 @@ func schemePalette(scheme string, dark bool) *palette {
 		get: ui.Hex(sem.get), post: ui.Hex(sem.post), put: ui.Hex(sem.put), patch: ui.Hex(sem.pat),
 		del: ui.Hex(sem.del), head: ui.Hex(sem.head), options: ui.Hex(sem.opt),
 		jsonKey: ui.Hex(sem.k), jsonString: ui.Hex(sem.s), jsonNumber: ui.Hex(sem.n), jsonBool: ui.Hex(sem.b), jsonBracket: ui.Hex(sem.p),
-		hover: hov,
+		hover:  hov,
+		press:  fg.Alpha(0.09),
+		acSoft: ac.Alpha(0.12), acSoft2: ac.Alpha(0.20), acLine: ac.Alpha(0.45),
+		glow: ac.Alpha(0.42), glowS: ac.Alpha(0.26),
+		glass: glassBase(ui.Hex(t.bg), ui.Hex(t.bg2), dark).Alpha(0.84), hair: ui.Hex(t.bd).Alpha(0.62),
+		okSoft: ui.Hex(sem.ok).Alpha(0.14), warnSoft: ui.Hex(sem.warn).Alpha(0.16),
+		errSoft: ui.Hex(sem.err).Alpha(0.13), infoSoft: ui.Hex(sem.put).Alpha(0.14),
 	}
+}
+
+// glassBase 返回浮层（对话框、菜单、提示）的底色：亮色为内容底，暗色为次级底（设计稿 --elev）。
+func glassBase(bg, bg2 ui.Color, dark bool) ui.Color {
+	if dark {
+		return bg2
+	}
+	return bg
 }
 
 // withAccent 按项目主题色覆盖强调色及相关令牌，规则同旧版 applyProjectThemeColor。
@@ -162,6 +222,8 @@ func (p *palette) withAccent(hex string) *palette {
 	q := *p
 	q.accent = base
 	q.tabActiveBorder = base
+	q.acSoft, q.acSoft2, q.acLine = base.Alpha(0.12), base.Alpha(0.20), base.Alpha(0.45)
+	q.glow, q.glowS = base.Alpha(0.42), base.Alpha(0.26)
 	if p.dark {
 		q.accentHover = base.Mix(ui.RGB(255, 255, 255), 0.16)
 		q.sideActive = base.Alpha(0.24)
@@ -241,8 +303,22 @@ var (
 	svgCache = map[string]*ui.SVG{}
 )
 
-// svgIcon 读取内置图标（internal/gui/icons/*.svg），按名称缓存。
+// iconAlias 把界面代码里沿用的旧图标名映射到设计稿图标集（icons/*.svg 全部取自 docs/design/assets/icons.js）。
+var iconAlias = map[string]string{
+	"add": "plus", "arrowDown": "chevD", "arrowRight": "chevR", "arrowLeft": "chevL", "clear": "x", "delete": "trash",
+	"fileAdd": "filePlus", "folderAdd": "folderPlus", "tick": "check", "tbBack": "arrowL", "tbForward": "arrowR",
+	"tbChevDown": "chevD", "tbHome": "home", "tbMoon": "moon", "tbSun": "sun", "tbSettings": "sliders", "tbSidebar": "sidebar",
+	"tbImport": "download", "commandLine": "terminal", "settings": "sliders", "paintBoard": "palette", "formatList": "list",
+	"wrapText": "wrap", "viewOff": "eyeOff", "sidebarCollapse": "sidebar", "sidebarExpand": "sidebar",
+	"toastError": "errorC", "toastSuccess": "okC", "toastWarn": "warn", "fileImport": "download",
+	"arrowUpDown": "refresh", "arrowLeftRight": "swap",
+}
+
+// svgIcon 读取内置图标（internal/gui/icons/*.svg），按名称缓存；旧名称先经 iconAlias 转成设计稿图标名。
 func svgIcon(name string) *ui.SVG {
+	if to, ok := iconAlias[name]; ok {
+		name = to
+	}
 	svgMu.Lock()
 	defer svgMu.Unlock()
 	if s, ok := svgCache[name]; ok {
@@ -460,12 +536,14 @@ func (a *app) input(c *ui.Context, v *string, ph string, o fieldOpts) ui.Element
 		wrap = wrap.Grow(1).Basis(0)
 	}
 	if !o.flat {
-		col := p.border
+		// 设计稿 .inp：1px 描边（bd2），聚焦时描边变强调色并带 3px 淡色光环 + 柔和光晕；侧栏搜索框用细边（bd）
+		col := p.btnBorder
 		if o.bd != nil {
 			col = *o.bd
 		}
 		if wrap.FocusWithin() {
 			col = p.accent
+			wrap = wrap.Shadow(0, 0, 0, 3, p.acSoft).Shadow(0, 4, 14, -6, p.glow)
 		}
 		wrap = wrap.Border(1, col)
 	}
@@ -510,18 +588,23 @@ func (a *app) checkbox(c *ui.Context, key any, on *bool, disabled bool) bool {
 	if key != nil {
 		c = c.Key(key)
 	}
-	b := ui.CheckboxBase(c, on).Size(12, 12).Radius(3).Shrink(0).AlignItems(ui.Center).Justify(ui.Center)
+	// 设计稿 .cb：15px、圆角 4.5、1.5px 描边；选中为强调色渐变 + 光晕 + 粗勾
+	b := ui.CheckboxBase(c, on).Size(15, 15).Radius(4.5).Shrink(0).AlignItems(ui.Center).Justify(ui.Center)
 	if *on {
-		b = b.Background(p.accent).Border(1, p.accent)
+		b = p.gradAccent(b, false).Border(1.5, p.accent).Shadow(0, 1, 3, 0, p.glow)
 	} else {
-		b = b.Background(p.surface).Border(1, p.btnBorder)
+		bc := p.btnBorder
+		if b.Hovered() {
+			bc = p.acLine
+		}
+		b = b.Background(p.surface).Border(1.5, bc)
 	}
 	if disabled {
 		b = b.Disabled(true).Opacity(0.3)
 	}
 	b.Children(func() {
 		if *on {
-			icon(c, "tick", 12, p.accentFg)
+			icon(c, "checkBold", 10, p.accentFg)
 		}
 	})
 	return b.Changed()
@@ -530,14 +613,16 @@ func (a *app) checkbox(c *ui.Context, key any, on *bool, disabled bool) bool {
 // countZero 传给 underlineTabs 表示「数量为 0 时也显示 0」（响应头 / Cookies 标签）。
 const countZero = -1
 
-// tabExtra 是标签名后的附加标记：badge 为等宽小标签（如 Body 的 JSON），lock 表示显示锁图标（Auth 已配置）。
+// tabExtra 是标签名后的附加标记：badge 为等宽小标签，lock 表示显示锁图标，dot 表示显示强调色小圆点（Body / Auth 已配置）。
 type tabExtra struct {
 	badge string
 	lock  bool
+	dot   bool
 }
 
-// underlineTabs 是设计稿的下划线标签（Params/Headers/Body/Auth、响应体/响应头等）：
-// 选中项加粗并带 2px 强调色下划线，数量显示为名称后的灰色小徽标；h 为标签高度（含 2px 下划线），extras 可为 nil。
+// underlineTabs 是设计稿的下划线标签（Params/Headers/Body/Auth、响应体/响应头等 .ut）：
+// 每个标签高 h、左右内边距 9，选中项加粗并带 2px 强调色下划线（带光晕，下沿压在下方分隔线上），
+// 数量显示为名称后的小徽标（.cnt：选中时为强调色淡底），extras 可为 nil。
 func (a *app) underlineTabs(c *ui.Context, key string, sel *int, labels []string, counts []int, extras []tabExtra, h float32) bool {
 	p := a.p
 	changed := false
@@ -555,36 +640,43 @@ func (a *app) underlineTabs(c *ui.Context, key string, sel *int, labels []string
 			ex = extras[i]
 		}
 		active := *sel == i
-		b := ui.ButtonBase(c.Key(key + l)).Height(h).PaddingX(10).AlignItems(ui.Center).Shrink(0)
-		col, w := p.muted, 500
+		b := ui.ButtonBase(c.Key(key + l)).Height(h).PaddingX(9).AlignItems(ui.Center).Shrink(0)
+		col, w := p.fg2, 550
 		hover := b.Hovered()
 		switch {
 		case active:
-			col, w = p.fg, 600
+			col, w = p.fg, 650
 		case hover:
-			col = p.fg2
+			col = p.fg
 		}
 		b.Children(func() {
-			ui.Column(c).FillHeight().Children(func() {
-				ui.Row(c).Grow(1).Gap(5).AlignItems(ui.Center).Children(func() {
-					txtFlat(c, l, fsBase, col, w)
-					if show {
-						ui.Row(c).Height(15).PaddingX(5).Radius(8).Background(p.surface2).AlignItems(ui.Center).Children(func() {
-							txtMono(c, itoa(n), fsTiny, p.muted, 500)
-						})
+			if active {
+				// 下划线压在行底的分隔线上（-1），左右各缩进 9
+				ui.Box(c).Absolute().Left(9).Right(9).Bottom(-1).Height(2).Radius(2, 2, 0, 0).Background(p.accent).Shadow(0, -1, 8, 0, p.glow)
+			} else if hover {
+				ui.Box(c).Absolute().Left(9).Right(9).Bottom(-1).Height(2).Radius(2, 2, 0, 0).Background(p.btnBorder)
+			}
+			ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
+				txtFlat(c, l, fsBase, col, w)
+				if show {
+					bg, fc := p.surface2, p.muted
+					cnt := ui.Row(c).Height(15).MinWidth(16).PaddingX(4).Radius(8).AlignItems(ui.Center).Justify(ui.Center)
+					if active {
+						bg, fc = p.acSoft, p.accent
+						cnt = cnt.Border(1, p.acSoft2)
 					}
-					if ex.badge != "" {
-						ui.Row(c).Height(15).PaddingX(5).Radius(4).Background(p.surface2).AlignItems(ui.Center).Children(func() {
-							txtMono(c, ex.badge, 9, p.muted, 500)
-						})
-					}
-					if ex.lock {
-						icon(c, "lock", 10, p.accent)
-					}
-				})
-				line := ui.Box(c).FillWidth().Height(2).Radius(1).Shrink(0)
-				if active {
-					line.Background(p.accent)
+					cnt.Background(bg).Children(func() { txtMono(c, itoa(n), fsTiny, fc, 600) })
+				}
+				if ex.badge != "" {
+					ui.Row(c).Height(15).PaddingX(5).Radius(4).Background(p.surface2).AlignItems(ui.Center).Children(func() {
+						txtMono(c, ex.badge, 9, p.muted, 500)
+					})
+				}
+				if ex.lock {
+					icon(c, "lock", 10, p.accent)
+				}
+				if ex.dot {
+					ui.Box(c).Size(6, 6).Radius(3).Background(p.accent).Shadow(0, 0, 0, 2, p.acSoft).Shrink(0)
 				}
 			})
 		})
@@ -672,8 +764,11 @@ func (a *app) dialogDim(c *ui.Context, open *bool, w, h, radius, dim float32, fn
 	p := a.p
 	cw, ch := c.Size()
 	ui.DialogBase(c, open, func(back, panel ui.Element) {
+		// 设计稿 .dlg：大圆角（--r-lg）、近乎不透明的玻璃底（无法做背景模糊，故用高不透明度）、细边框 + 顶部高光 + 大投影
 		back.Background(ui.RGBA(0, 0, 0, dim))
-		panel.Width(w).Radius(radius).Background(p.surface).Border(1, p.border).Clip().Shadow(0, 8, 24, 0, p.shadowLg())
+		radius = max(radius, radiusLg)
+		panel.Width(w).Radius(radius).Background(p.elevated().Alpha(0.97)).Border(1, p.border).Clip().
+			Shadow(0, 14, 40, -8, p.shadowLg()).Shadow(0, 2, 6, 0, p.shadowLg()).InsetShadow(0, 1, 0, 0, ui.RGBA(255, 255, 255, 0.18))
 		if h > 0 {
 			panel.Height(h)
 		}
@@ -701,29 +796,72 @@ func (a *app) toggle(c *ui.Context, key string, on *bool) bool {
 	return false
 }
 
-// segmented 是分段控件：高 28、圆角 8、细边框，选中段为 selected 背景。返回是否变化。
-func (a *app) segmented(c *ui.Context, key string, sel *int, labels []string) bool {
+// segOpts 描述分段控件的外观：full 为撑满宽度（各段等宽），h 为每段高度（默认 22，整体再加上下各 2 的轨道内边距）。
+type segOpts struct {
+	full bool
+	h    float32
+	padX float32
+	fs   float32
+}
+
+// pillSeg 是设计稿方案 C 的分段控件（.seg）：全圆角的浅灰轨道（前景 7%），选中段是浮起的内容色胶囊，
+// 文字加粗、图标用强调色。icons 可为 nil（无图标）。返回是否变化。
+func (a *app) pillSeg(c *ui.Context, key string, sel *int, labels, icons []string, o segOpts) bool {
 	p := a.p
+	if o.h == 0 {
+		o.h = 22
+	}
+	if o.padX == 0 {
+		o.padX = 10
+	}
+	if o.fs == 0 {
+		o.fs = fsBase
+	}
 	changed := false
-	ui.Row(c.Key(key)).Height(28).Radius(radiusInput).Border(1, p.btnBorder).Background(p.surface).Clip().Shrink(0).AlignItems(ui.Stretch).Children(func() {
+	track := ui.Row(c.Key(key)).Height(o.h + 4).Padding(2).Gap(2).Radius((o.h + 4) / 2).Background(p.fg.Alpha(0.07)).AlignItems(ui.Stretch).Shrink(0)
+	if o.full {
+		track = track.Grow(1).Basis(0)
+	}
+	track.Children(func() {
 		for i, l := range labels {
-			b := ui.ButtonBase(c.Key(l)).PaddingX(10).AlignItems(ui.Center).Justify(ui.Center)
-			col := p.fg2
-			switch {
-			case *sel == i:
-				b = b.Background(p.selected)
-				col = p.fg
-			case b.Hovered():
-				b = b.Background(p.btnBg)
+			active := *sel == i
+			b := ui.ButtonBase(c.Key(key + itoa(i) + l)).Radius(o.h / 2).PaddingX(o.padX).Gap(5).AlignItems(ui.Center).Justify(ui.Center)
+			if o.full {
+				b = b.Grow(1).Basis(0)
 			}
-			b.Children(func() { txt(c, l, fsSmall, col, 0) })
-			if b.Clicked() && *sel != i {
+			col, w := p.fg2, 500
+			switch {
+			case active:
+				b = p.shadowSm(b.Background(p.surface))
+				col, w = p.fg, 600
+			case b.Hovered():
+				b = b.Background(p.hover)
+				col = p.fg
+			}
+			b.Children(func() {
+				if i < len(icons) && icons[i] != "" {
+					ic := p.muted
+					if active {
+						ic = p.accent
+					}
+					icon(c, icons[i], 13, ic)
+				}
+				if l != "" {
+					txt(c, l, o.fs, col, w)
+				}
+			})
+			if b.Clicked() && !active {
 				*sel = i
 				changed = true
 			}
 		}
 	})
 	return changed
+}
+
+// segmented 是分段控件（设置页等）：等同 pillSeg 的默认样式。
+func (a *app) segmented(c *ui.Context, key string, sel *int, labels []string) bool {
+	return a.pillSeg(c, key, sel, labels, nil, segOpts{})
 }
 
 // 对话框按钮的种类。
@@ -733,85 +871,167 @@ const (
 	dlgDanger         // 危险色实心
 )
 
-// dlgButton 是对话框底部的 32px 高按钮（圆角 8，12px 文字）。返回是否被点击。
-func (a *app) dlgButton(c *ui.Context, key, label string, kind int, disabled bool) bool {
+// dbtn 描述设计稿 .btn 按钮：kind 取 dlgNormal/dlgPrimary/dlgDanger（见下），ghost 为无边框无底，sm 为 22 高小号。
+type dbtn struct {
+	key      any
+	label    string
+	icon     string // 文字前的图标名，空表示没有
+	kind     int
+	ghost    bool
+	sm       bool
+	danger   bool // 文字用危险色（kind 为 dlgNormal 时的 .btn.dng）
+	disabled bool
+	tip      string
+	suffix   string // 文字后的等宽小字（如快捷键提示）
+	w        float32
+	h        float32 // 0 为默认高度（26，小号 22）
+	grow     bool    // 在行内等分剩余宽度
+}
+
+// btn 绘制设计稿 .btn：普通按钮是浮起的浅渐变 + 1px 边 + 细投影；主按钮是强调色渐变 + 光晕；
+// 危险主按钮用危险色渐变；ghost 悬停才有底。返回是否被点击。
+func (a *app) btn(c *ui.Context, o dbtn) bool {
 	p := a.p
-	o := btnOpts{h: 32, radius: radiusInput, padX: 12, key: key, disabled: disabled}
-	col, wt := p.fg, 0
-	switch kind {
-	case dlgPrimary:
-		bg := p.accent
-		o.bg, o.hoverBg = &bg, &p.accentHover
-		col, wt = p.accentFg, 500
-	case dlgDanger:
-		bg := p.danger
-		o.bg, o.hoverBg = &bg, &bg
-		col, wt = ui.Hex("#ffffff"), 500
+	h, padX, fs := float32(26), float32(11), float32(fsBase)
+	if o.sm {
+		h, padX, fs = 22, 8, fsSmall
+	}
+	if o.h > 0 {
+		h = o.h
+	}
+	if o.key == nil {
+		o.key = "btn:" + o.label
+	}
+	b := ui.ButtonBase(c.Key(o.key)).Height(h).PaddingX(padX).Gap(6).Radius(10).AlignItems(ui.Center).Justify(ui.Center).Shrink(0)
+	if o.w > 0 {
+		b = b.Width(o.w)
+	}
+	if o.grow {
+		b = b.Grow(1).Basis(0)
+	}
+	hover := b.Hovered() && !o.disabled
+	col, wt := p.fg, 550
+	if o.danger {
+		col = p.danger
+	}
+	switch {
+	case o.kind == dlgPrimary:
+		b = p.gradAccent(b, hover).Border(1, p.accent.Mix(ui.RGB(0, 0, 0), 0.14))
+		if hover {
+			b = b.Shadow(0, 5, 16, -4, p.glow)
+		} else {
+			b = b.Shadow(0, 1, 3, 0, p.glow)
+		}
+		col = p.accentFg
+	case o.kind == dlgDanger:
+		top := p.danger.Mix(ui.RGB(255, 255, 255), 0.16)
+		b = b.Gradient(top, p.danger, 180).InsetShadow(0, 1, 0, 0, ui.RGBA(255, 255, 255, 0.24)).Border(1, p.danger.Mix(ui.RGB(0, 0, 0), 0.14))
+		col = ui.RGB(255, 255, 255)
+	case o.ghost:
+		if hover {
+			b = b.Background(p.hover)
+		}
 	default:
-		bd := p.btnBorder
-		o.border = &bd
+		bg := p.surface
+		switch {
+		case hover && o.danger:
+			bg = p.errSoft
+		case hover:
+			bg = p.surface2
+		}
+		b = b.Background(bg).Border(1, p.btnBorder)
+		if !hover {
+			b = b.Shadow(0, 1, 2, 0, ui.RGBA(20, 24, 40, 0.05))
+		}
 	}
-	if disabled {
-		col = col.Alpha(0.5)
+	if o.tip != "" {
+		b = b.Tooltip(o.tip).Label(o.tip)
 	}
-	return a.button(c, o, func(bool) { txt(c, label, fsBase, col, wt) })
-}
-
-// stdDialog 绘制标准对话框：head、body 与可选的 foot 自上而下排列，head 与 foot 与正文之间有细分隔线。
-func (a *app) stdDialog(c *ui.Context, open *bool, w float32, head, body, foot func()) {
-	p := a.p
-	a.dialog(c, open, w, 0, 12, func() {
-		ui.Column(c).FillWidth().Children(func() {
-			ui.Row(c).FillWidth().PaddingX(16).PaddingY(12).AlignItems(ui.Center).Justify(ui.SpaceBetween).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(head)
-			ui.Column(c).FillWidth().Children(body)
-			if foot != nil {
-				ui.Row(c).FillWidth().PaddingX(16).PaddingY(12).Gap(8).AlignItems(ui.Center).Justify(ui.End).BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(foot)
-			}
-		})
-	})
-}
-
-// compactDialog 是设计稿的紧凑提示框（确认删除、保存更改）：无分隔线，正文区 20px 内边距，按钮行在底部。
-func (a *app) compactDialog(c *ui.Context, open *bool, w float32, body, foot func()) {
-	a.dialog(c, open, w, 0, 12, func() {
-		ui.Column(c).FillWidth().Padding(20, 20, 16, 20).Children(func() {
-			ui.Column(c).FillWidth().Children(body)
-			ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Margin(18, 0, 0, 0).Children(foot)
-		})
-	})
-}
-
-// dlgTitle 是对话框标题行：16px 粗体标题，closable 时右侧带关闭按钮。
-func (a *app) dlgTitle(c *ui.Context, open *bool, title string, closable bool) {
-	p := a.p
-	txt(c, title, 16, p.fg, 600)
-	if closable && a.iconButton(c, "clear", a.t("关闭", "Close"), 12, p.muted) {
-		*open = false
+	if o.disabled {
+		b = b.Disabled(true).Opacity(0.45)
 	}
-}
-
-// segTabs 是设计稿的分段控件（流式视图的“事件 / 合并文本”）：灰色轨道内，选中项为带细边的白底块。
-func (a *app) segTabs(c *ui.Context, key string, sel *int, labels []string) bool {
-	p := a.p
-	changed := false
-	ui.Row(c.Key(key)).Height(28).Padding(2).Gap(2).Radius(8).Background(p.hover).AlignItems(ui.Stretch).Shrink(0).Children(func() {
-		for i, l := range labels {
-			active := *sel == i
-			b := ui.ButtonBase(c.Key(key + l)).Radius(6).PaddingX(12).AlignItems(ui.Center).Justify(ui.Center)
-			col, w := p.fg2, 0
-			switch {
-			case active:
-				b = b.Background(p.surface).Border(1, p.border)
-				col, w = p.fg, 600
-			case b.Hovered():
-				col = p.fg
-			}
-			b.Children(func() { txt(c, l, fsBase, col, w) })
-			if b.Clicked() && !active {
-				*sel = i
-				changed = true
-			}
+	b.Children(func() {
+		if o.icon != "" {
+			icon(c, o.icon, 13, col)
+		}
+		if o.label != "" {
+			txt(c, o.label, fs, col, wt)
+		}
+		if o.suffix != "" {
+			txtMono(c, o.suffix, fsTiny, col.Alpha(0.75), 0)
 		}
 	})
-	return changed
+	return b.Clicked()
+}
+
+// dlgButton 是对话框底部的按钮，外观取设计稿 .btn。返回是否被点击。
+func (a *app) dlgButton(c *ui.Context, key, label string, kind int, disabled bool) bool {
+	return a.btn(c, dbtn{key: key, label: label, kind: kind, disabled: disabled})
+}
+
+// stdDialog 绘制标准对话框（设计稿 .dlg）：head、body 与可选的 foot 自上而下排列；
+// 标题行（12/14/10 内边距、顶部淡渐变）和底栏（10/14 内边距、淡底）与正文之间有细分隔线。
+func (a *app) stdDialog(c *ui.Context, open *bool, w float32, head, body, foot func()) {
+	p := a.p
+	a.dialog(c, open, w, 0, radiusLg, func() {
+		ui.Column(c).FillWidth().Children(func() {
+			ui.Row(c).FillWidth().Padding(12, 14, 10, 14).Gap(10).AlignItems(ui.Center).Justify(ui.SpaceBetween).
+				Gradient(p.surface2.Alpha(0.38), p.surface2.Alpha(0), 180).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(head)
+			ui.Column(c).FillWidth().Children(body)
+			if foot != nil {
+				ui.Row(c).FillWidth().Padding(10, 14).Gap(8).AlignItems(ui.Center).Justify(ui.End).
+					Background(p.surface2.Alpha(0.55)).BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(foot)
+			}
+		})
+	})
+}
+
+// compactDialog 是设计稿的小号提示框（.dlg.dsm，确认删除、保存更改）：标题行 + 正文 + 底栏，宽 400。
+func (a *app) compactDialog(c *ui.Context, open *bool, title string, body, foot func()) {
+	a.stdDialog(c, open, 400, func() { a.dlgTitle(c, open, title, true) }, func() {
+		ui.Column(c).FillWidth().Padding(14).Gap(12).Children(body)
+	}, foot)
+}
+
+// dlgMsg 是小号提示框正文里的“图标 + 粗体一行 + 说明”（设计稿 .dsm .msg）：34px 圆形图标带 5px 淡色外环。
+func (a *app) dlgMsg(c *ui.Context, kind, title, desc string) {
+	p := a.p
+	ic, col, soft := a.toastIcon(kind)
+	switch kind {
+	case toastError:
+		ic = "trash"
+	case toastWarn:
+		ic = "warn"
+	}
+	ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Start).Children(func() {
+		ui.Row(c).Size(34, 34).Shrink(0).Radius(17).Background(soft).Shadow(0, 0, 0, 5, col.Alpha(0.09)).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+			icon(c, ic, 17, col)
+		})
+		ui.Column(c).Grow(1).Basis(0).Gap(2).Children(func() {
+			ui.Text(c, title).FontSize(fsLarge).FontWeight(650).TextColor(p.fg).FixedLineHeight(18)
+			if desc != "" {
+				ui.Text(c, desc).FontSize(fsBase).TextColor(p.fg2).FixedLineHeight(18)
+			}
+		})
+	})
+}
+
+// dlgTitle 是对话框标题行：13.5px 粗体标题，closable 时右侧带关闭按钮。
+func (a *app) dlgTitle(c *ui.Context, open *bool, title string, closable bool) {
+	txt(c, title, 13.5, a.p.fg, 650)
+	if closable {
+		a.ibSm(c, "dlg-close:"+title, "x", a.t("关闭", "Close"), false, func() { *open = false })
+	}
+}
+
+// segTabs 是流式视图等处的分段控件（“事件 / 合并文本”），样式同 pillSeg。
+func (a *app) segTabs(c *ui.Context, key string, sel *int, labels []string) bool {
+	return a.pillSeg(c, key, sel, labels, nil, segOpts{padX: 12})
+}
+
+// dlgIcon 绘制对话框标题行左侧的 28px 图标块（设计稿 .dlg-h .ico：淡强调色渐变底 + 细环 + 强调色图标）。
+func (a *app) dlgIcon(c *ui.Context, name string) {
+	p := a.p
+	ui.Row(c).Size(28, 28).Shrink(0).Radius(radiusSm).Gradient(p.acSoft, p.acSoft.Alpha(0.06), 180).Shadow(0, 0, 0, 1, p.acSoft2).Shadow(0, 2, 8, -2, p.glowS).
+		AlignItems(ui.Center).Justify(ui.Center).Children(func() { icon(c, name, 14, p.accent) })
 }

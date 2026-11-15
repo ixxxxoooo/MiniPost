@@ -106,10 +106,10 @@ func TestTimingCardMatchesReference(t *testing.T) {
 		},
 		SizeDetails: model.SizeBreakdown{ResponseHeaders: 300, ResponseBody: 141, ResponseTotal: 441},
 	})
-	if !tt.HasText("3.87s") {
-		t.Fatalf("标签行耗时应显示 3.87s: %q", tt.Texts())
+	if !tt.HasText("3.87 s") {
+		t.Fatalf("响应元信息里的耗时应显示 3.87 s: %q", tt.Texts())
 	}
-	r, _ := tt.Find("3.87s")
+	r, _ := tt.Find("3.87 s")
 	tt.Move(r.X+r.W/2, r.Y+r.H/2)
 	tt.Advance(time.Second)
 	tt.Frame()
@@ -119,15 +119,15 @@ func TestTimingCardMatchesReference(t *testing.T) {
 			t.Errorf("响应时间卡片缺少 %q: %q", want, tt.Texts())
 		}
 	}
-	// 卡片标题行的总耗时也是 3.87s（与标签行各一处）
+	// 卡片标题行的总耗时也是 3.87s（响应元信息里是带空格的 3.87 s）
 	n := 0
 	for _, s := range tt.Texts() {
 		if s == "3.87s" {
 			n++
 		}
 	}
-	if n < 2 {
-		t.Fatalf("卡片顶部应再显示一次总耗时 3.87s，实际出现 %d 次", n)
+	if n < 1 {
+		t.Fatalf("卡片顶部应显示总耗时 3.87s，实际出现 %d 次", n)
 	}
 	if tt.HasText("3458.00 ms") || tt.HasText("403.00 ms") {
 		t.Fatal("大于 100ms 的阶段不应带两位小数")

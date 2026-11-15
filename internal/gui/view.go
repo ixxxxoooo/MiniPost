@@ -17,13 +17,19 @@ func (a *app) view(c *ui.Context) {
 	if t := a.activeTab(); t != nil {
 		t.refreshDirty() // 标签栏先于编辑区绘制，需要先算出本帧的未保存状态
 	}
-	ui.Column(c).Fill().Background(a.p.surface).HandleInput(func(ev ui.InputEvent) bool {
+	winW, winH := c.Size()
+	// 根容器是窗口的 chrome 底色，上面先铺极光（绝对定位，不占布局），再放标题栏与工作区。
+	ui.Column(c).Fill().Background(a.p.toolbar).Clip().HandleInput(func(ev ui.InputEvent) bool {
 		if ev.Kind == ui.InputScroll {
 			a.noteScroll() // 滚动条自动隐藏：滚动后短暂显示
 		}
 		return false
 	}).Children(func() {
-		a.workspace(c)
+		a.aurora(c, winW, winH)
+		// 内容层也用绝对定位铺满，这样按构建顺序画在极光之上（绝对定位的元素总是晚于文档流内的元素绘制）。
+		ui.Column(c).Absolute().Top(0).Bottom(0).Left(0).Right(0).Children(func() {
+			a.workspace(c)
+		})
 	})
 	a.overlayViews(c)
 	a.runDeferred()
@@ -42,35 +48,47 @@ func (a *app) overlayViews(c *ui.Context) {
 	a.closeView(c)
 }
 
-// workspace 是项目工作区：标题栏在上，左侧侧栏，右侧标签栏 + 内容 + 底栏。
+// workspace 是项目工作区（设计稿方案 C「流光」）：透明标题栏在上；下面是半透明圆角侧栏，
+// 右边是浮起的圆角内容卡片（标签栏 + 内容 + 控制台 + 状态栏）。主页也在卡片里，侧栏始终显示。
 func (a *app) workspace(c *ui.Context) {
 	a.titleBar(c)
-	ui.Row(c).Grow(1).Basis(0).AlignItems(ui.Stretch).Children(func() {
-		if a.showHome || a.projectID == "" {
-			ui.Column(c).Grow(1).Basis(0).Children(func() {
+	card := func() {
+		// 内容卡片：圆角 16、1px 描边加柔和投影，与窗口边缘和侧栏各留 shellGap。
+		a.p.shadowMd(ui.Column(c).Grow(1).Basis(0).Margin(0, shellGap, shellGap, 0).Radius(radiusLg).Clip().Background(a.p.surface)).Children(func() {
+			if a.showHome || a.projectID == "" {
 				a.homeView(c)
-				a.bottomArea(c)
-			})
-			return
-		}
-		right := func() {
-			ui.Column(c).Grow(1).Basis(0).Children(func() {
+			} else {
 				a.mainPane(c)
-				a.bottomArea(c)
-			})
-		}
+			}
+			a.bottomArea(c)
+		})
+	}
+	ui.Row(c).Grow(1).Basis(0).AlignItems(ui.Stretch).Children(func() {
 		if a.set.SidebarCollapsed {
-			right()
+			ui.Row(c).Grow(1).Basis(0).PaddingStart(shellGap).AlignItems(ui.Stretch).Children(card)
 			return
 		}
-		// 旧版侧栏宽度（含 1px 右边框）为 SidebarWidth；这里的分隔线就是那条边框，所以窗格宽度减 1。
 		// 窗口较窄时侧栏不能把右侧请求区挤得太窄：显示宽度按窗口宽度夹紧，
 		// 用户设定的宽度原样保留，窗口变宽后自动恢复。
 		winW, _ := c.Size()
 		lo, hi := sidebarLimits(winW)
 		sw := min(max(a.set.SidebarWidth, lo), hi) - 1
 		a.side.shown = sw + 1
-		split := ui.Split(c, &sw, func() { a.sidebar(c) }, right).SplitReset(239).Fill()
+		// 分隔线只在悬停/拖动时才显示强调色：用边框透明的主题包住分栏，两个窗格里再换回正常主题。
+		// Themed 会按主题背景色铺底，这里两个主题都把背景设为透明，才能露出窗口的极光。
+		quiet, inner := *a.th, *a.th
+		quiet.Border, quiet.Background = ui.Transparent, ui.Transparent
+		inner.Background = ui.Transparent
+		var split ui.Element
+		ui.Themed(c, &quiet).Fill().Children(func() {
+			split = ui.Split(c, &sw, func() {
+				ui.Themed(c, &inner).Fill().Children(func() { a.sidebarFrame(c) })
+			}, func() {
+				ui.Themed(c, &inner).Fill().Children(func() {
+					ui.Row(c).Fill().PaddingStart(shellGap).AlignItems(ui.Stretch).Children(card)
+				})
+			}).SplitReset(231).Fill()
+		})
 		if split.Changed() {
 			a.set.SidebarWidth = min(max(sw+1, lo), hi)
 			a.saveSettings()

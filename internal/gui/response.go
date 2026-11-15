@@ -334,7 +334,7 @@ func (a *app) responseBody(c *ui.Context, t *tab) {
 	}
 	rs.sub = min(rs.sub, len(labels)-1)
 	ui.Column(c).Grow(1).Basis(0).Children(func() {
-		ui.Row(c).FillWidth().Height(32).Shrink(0).PaddingStart(8).PaddingEnd(8).Gap(2).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
+		ui.Row(c).FillWidth().Height(32).Shrink(0).PaddingStart(12).PaddingEnd(10).Gap(2).AlignItems(ui.Center).Gradient(ui.RGBA(0, 0, 0, 0), p.surface2.Alpha(0.35), 180).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
 			a.underlineTabs(c, "rs", &rs.sub, labels, counts, nil, 32)
 			ui.Spacer(c)
 			a.respMeta(c, rs)
@@ -365,39 +365,50 @@ func (a *app) respMeta(c *ui.Context, rs *respState) {
 		return
 	}
 	resp := rs.resp
-	sep := func() { txt(c, "·", fsSmall, p.muted, 0).MarginX(0) }
-	ui.Row(c).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
 		if len(resp.Warnings) > 0 {
-			ui.Row(c).Height(20).PaddingX(6).Radius(7).Background(ui.RGB(251, 242, 230)).AlignItems(ui.Center).Children(func() {
-				txtE(c, a.t("警告", "Warning")+": "+resp.Warnings[0], fsTiny, ui.RGB(165, 100, 18), 500).MaxWidth(260)
+			ui.Row(c).Height(20).PaddingX(8).Radius(10).Background(p.warning.Alpha(0.14)).AlignItems(ui.Center).Children(func() {
+				txtE(c, a.t("警告", "Warning")+": "+resp.Warnings[0], fsSmall, p.warning, 600).MaxWidth(260)
 			})
-			sep()
 		}
-		// 设计稿 4A：状态胶囊（圆点 + 状态）+ 灰色度量（图标 + 数值，中点分隔）
+		// 设计稿 C：状态胶囊（圆点 + 状态，1px 同色细环）+ 带图标的灰色度量（耗时、大小、TLS）
 		fg, bg := a.statusBadge(code)
-		badge := ui.Row(c.Key("badge")).Height(20).PaddingX(8).Gap(5).Radius(10).Background(bg).AlignItems(ui.Center).Shrink(0)
+		badge := ui.Row(c.Key("badge")).Height(20).PaddingX(8).Gap(5).Radius(10).Background(bg).Border(1, fg.Alpha(0.13)).AlignItems(ui.Center).Shrink(0)
 		badge.Children(func() {
 			ui.Box(c).Size(6, 6).Radius(3).Background(fg).Shrink(0)
-			txtMono(c, respStatusLabel(code, text), fsTiny, fg, 600)
+			txt(c, respStatusLabel(code, text), fsSmall, fg, 600)
 		})
 		a.hoverCard(c, "status", badge, 340, func() { a.statusCard(c, code, text) })
-		timeEl := ui.Row(c.Key("timeanchor")).Height(20).Gap(4).AlignItems(ui.Center).Shrink(0).Tooltip("")
-		timeEl.Children(func() {
-			icon(c, "clock", 11, p.muted)
-			txtMono(c, formatDuration(resp.Duration), fsSmall, p.muted, 0)
-		})
-		a.hoverCard(c, "time", timeEl, 460, func() { a.timingCard(c, resp) })
-		sep()
-		sizeEl := ui.Row(c.Key("sizeanchor")).Height(20).Gap(4).AlignItems(ui.Center).Shrink(0)
-		sizeEl.Children(func() {
-			icon(c, "database", 11, p.muted)
-			txtMono(c, formatSizeShort(resp.Size), fsSmall, p.muted, 0)
-		})
-		a.hoverCard(c, "size", sizeEl, 280, func() { a.sizeCard(c, resp) })
-		net := ui.Row(c.Key("netbtn")).Size(20, 20).Radius(6).AlignItems(ui.Center).Justify(ui.Center).Shrink(0)
-		net.Children(func() { icon(c, "globe", 13, p.muted) })
-		a.hoverCard(c, "net", net, 460, func() { a.networkCard(c, resp) })
+		mi := func(key, ic, label string, w float32, card func()) {
+			el := ui.Row(c.Key(key)).Height(22).PaddingX(6).Gap(4).Radius(6).AlignItems(ui.Center).Shrink(0)
+			if el.Hovered() {
+				el = el.Background(p.hover)
+			}
+			el.Children(func() {
+				icon(c, ic, 12, p.muted)
+				if label != "" {
+					txt(c, label, fsSmall+0.5, p.fg2, 0)
+				}
+			})
+			a.hoverCard(c, strings.TrimSuffix(key, "anchor"), el, w, card)
+		}
+		mi("timeanchor", "clock", spaceUnit(formatDuration(resp.Duration)), 460, func() { a.timingCard(c, resp) })
+		mi("sizeanchor", "database", formatSizeShort(resp.Size), 280, func() { a.sizeCard(c, resp) })
+		mi("netbtn", "lock", "", 460, func() { a.networkCard(c, resp) })
 	})
+}
+
+// spaceUnit 在数值与单位之间补一个空格（"128ms" → "128 ms"），对应设计稿的度量写法。
+func spaceUnit(s string) string {
+	for i, r := range s {
+		if r != '.' && (r < '0' || r > '9') {
+			if i == 0 || r == ' ' || s[i-1] == ' ' {
+				return s
+			}
+			return s[:i] + " " + s[i:]
+		}
+	}
+	return s
 }
 
 // hoverCard 在锚点被悬停时，于其下方（右对齐）弹出详情卡片；鼠标移入卡片时保持显示。

@@ -119,10 +119,16 @@ func (a *app) homeSelected() (model.Project, bool) {
 	return model.Project{}, false
 }
 
-// homeDetailW 是主页右侧详情面板的宽度。
-const homeDetailW = 300
+// homeGridCols 返回项目卡片网格的列数：repeat(auto-fill, minmax(236px, 1fr))，列间距 10，
+// 内容区左右各留 26 的内边距。参数 w 是主页卡片左侧部分（不含详情面板、侧栏与外边距）的宽度。
+func homeGridCols(w float32) int {
+	return max(1, int((w-52+10)/(236+10)))
+}
 
-// homeView 是项目主页（设计稿）：左侧标题、搜索排序与项目卡片网格，右侧是所选项目的详情面板。
+// homeDetailW 是主页右侧详情面板的宽度（设计稿 .home-side）。
+const homeDetailW = 270
+
+// homeView 是项目主页（设计稿）：左侧标题、搜索与卡片网格 / 列表，右侧是所选项目的详情面板。
 func (a *app) homeView(c *ui.Context) {
 	p := a.p
 	cw, _ := c.Size()
@@ -133,7 +139,7 @@ func (a *app) homeView(c *ui.Context) {
 	}
 	ui.Row(c).Grow(1).Basis(0).Background(p.surface).Children(func() {
 		ui.Scroll(c.Key("home-scroll")).Grow(1).Basis(0).FillHeight().Scrollbars(a.scrollbarsVisible()).Children(func() {
-			ui.Column(c).FillWidth().PaddingX(24).PaddingY(24).Children(func() {
+			ui.Column(c).FillWidth().Padding(22, 26, 16, 26).Gap(14).Children(func() {
 				a.homeHeader(c)
 				if len(a.projects) == 0 {
 					a.homeEmpty(c)
@@ -141,20 +147,23 @@ func (a *app) homeView(c *ui.Context) {
 				}
 				projects := a.homeProjects()
 				a.homeFilterRow(c, len(projects))
-				cols := 1
-				switch {
-				case left >= 1500:
-					cols = 3
-				case left >= 700:
-					cols = 2
-				}
 				if len(projects) == 0 {
 					a.sideHint(c, a.t("没有匹配的项目", "No matching projects"))
 					return
 				}
-				ui.Column(c).FillWidth().Gap(12).Children(func() {
+				if a.homeList {
+					a.homeListView(c, projects)
+					return
+				}
+				// 卡片网格：repeat(auto-fill, minmax(236px, 1fr))，间距 10
+				side := a.sidebarShown()
+				if a.set.SidebarCollapsed {
+					side = 0
+				}
+				cols := homeGridCols(left - side - shellGap - 8)
+				ui.Column(c).FillWidth().Gap(10).Children(func() {
 					for r := 0; r < len(projects); r += cols {
-						ui.Row(c.Key("hr" + itoa(r))).FillWidth().Gap(12).AlignItems(ui.Start).Children(func() {
+						ui.Row(c.Key("hr" + itoa(r))).FillWidth().Gap(10).AlignItems(ui.Start).Children(func() {
 							for k := 0; k < cols; k++ {
 								if r+k < len(projects) {
 									a.projectCard(c, projects[r+k])
@@ -173,40 +182,56 @@ func (a *app) homeView(c *ui.Context) {
 	})
 }
 
-// homeHeader 是主页顶部：标题与说明在左，新建项目输入框与按钮在右。
+// homeHeader 是主页顶部（设计稿 .home-h）：标题与说明在左，新建项目输入框与按钮在右，底对齐。
 func (a *app) homeHeader(c *ui.Context) {
 	p := a.p
-	ui.Row(c).FillWidth().Margin(0, 0, 16, 0).AlignItems(ui.Start).Justify(ui.SpaceBetween).Gap(16).Children(func() {
-		ui.Column(c).Grow(1).Basis(0).Gap(4).Children(func() {
-			txt(c, a.t("项目主页", "Project home"), 20, p.fg, 600)
-			ui.Text(c, a.t("选择项目继续工作。每个项目有自己的主题色，会应用到选中态、高亮和发送按钮。",
-				"Pick a project to continue. Each project has its own theme color, applied to selection, highlights and the send button.")).FontSize(fsBase).TextColor(p.fg2)
+	sub := a.t("选择项目继续工作。每个项目有自己的主题色，会应用到选中态、高亮和发送按钮。",
+		"Pick a project to continue. Each project has its own theme color, applied to selection, highlights and the send button.")
+	if len(a.projects) == 0 {
+		sub = a.t("还没有项目。新建一个项目，把相关请求与环境放在一起。", "No projects yet. Create one to keep related requests and environments together.")
+	}
+	ui.Row(c).FillWidth().Gap(14).AlignItems(ui.End).Children(func() {
+		ui.Column(c).Grow(1).Basis(0).Gap(3).Children(func() {
+			txt(c, a.t("项目", "Projects"), 20, p.fg, 700)
+			ui.Text(c, sub).FontSize(fsBase).TextColor(p.muted)
 		})
-		ui.Row(c).Width(320).Shrink(0).Gap(8).AlignItems(ui.Center).Children(func() {
-			in := a.input(c, &a.homeName, a.t("输入项目名，回车新建", "Project name, Enter to create"), fieldOpts{h: 28, radius: radiusInput, fs: fsBase, icon: "add", key: "home-new"})
-			bg := p.accent
-			create := a.button(c, btnOpts{h: 28, radius: radiusBtn, padX: 12, bg: &bg, hoverBg: &p.accentHover, key: "home-create"}, func(bool) {
-				txt(c, a.t("新建项目", "New project"), fsBase, p.accentFg, 600)
-			})
-			if create || in.Submitted() {
+		if len(a.projects) == 0 {
+			return
+		}
+		ui.Row(c).Width(210).Shrink(0).Children(func() {
+			in := a.input(c, &a.homeName, a.t("输入项目名，回车新建", "Project name, Enter to create"), fieldOpts{h: 30, radius: radiusR, fs: fsBase, icon: "plus", key: "home-new"})
+			if in.Submitted() {
 				a.later(a.createProjectFromHome)
 			}
 		})
+		if a.btn(c, dbtn{key: "home-create", label: a.t("新建项目", "New project"), kind: dlgPrimary, h: 30}) {
+			a.later(a.createProjectFromHome)
+		}
 	})
 }
 
-// homeFilterRow 是搜索框、项目总数与排序方式。
+// homeFilterRow 是搜索框、项目总数、卡片/列表切换与排序方式（设计稿 .home-bar）。
 func (a *app) homeFilterRow(c *ui.Context, n int) {
 	p := a.p
-	ui.Row(c).FillWidth().Margin(0, 0, 12, 0).Gap(12).AlignItems(ui.Center).Children(func() {
-		a.input(c, &a.homeQuery, a.t("搜索项目…", "Search projects…"), fieldOpts{w: 240, h: 26, radius: radiusInput, icon: "search", key: "home-search", bg: &p.surface2})
-		txt(c, a.t("共 "+itoa(n)+" 个项目", itoa(n)+" projects"), fsSmall, p.muted, 0)
+	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Width(200).Shrink(0).Children(func() {
+			a.input(c, &a.homeQuery, a.t("搜索项目…", "Search projects…"), fieldOpts{h: 26, radius: radiusR, icon: "search", key: "home-search"})
+		})
+		txt(c, a.t("共 "+itoa(n)+" 个项目", itoa(n)+" projects"), fsBase, p.muted, 0)
 		ui.Spacer(c)
+		mode := 0
+		if a.homeList {
+			mode = 1
+		}
+		if a.pillSeg(c, "home-mode", &mode, []string{"", ""}, []string{"grid", "list"}, segOpts{h: 22, padX: 10}) {
+			a.homeList = mode == 1
+		}
 		label := a.t("最近更新", "Recently updated")
 		if a.homeSort == "name" {
 			label = a.t("名称", "Name")
 		}
-		sortBtn := ui.ButtonBase(c.Key("home-sort")).Height(24).PaddingX(8).Gap(4).Radius(radiusBtn).AlignItems(ui.Center).
+		sortBtn := ui.ButtonBase(c.Key("home-sort")).Height(26).MinWidth(110).PaddingStart(10).PaddingEnd(7).Gap(8).Radius(radiusR).AlignItems(ui.Center).Justify(ui.SpaceBetween).
+			Background(p.surface).Border(1, p.btnBorder).
 			PopoverMenuButton(func(m *ui.Menu) {
 				if m.Item(a.t("最近更新", "Recently updated")).Checked(a.homeSort != "name").Chosen() {
 					a.later(func() { a.homeSort = "updated" })
@@ -215,77 +240,94 @@ func (a *app) homeFilterRow(c *ui.Context, n int) {
 					a.later(func() { a.homeSort = "name" })
 				}
 			})
-		if sortBtn.Hovered() {
-			sortBtn = sortBtn.Background(p.hover)
-		}
 		sortBtn.Children(func() {
-			txt(c, a.t("排序", "Sort"), fsSmall, p.muted, 0)
-			txt(c, label, fsSmall, p.fg, 500)
-			icon(c, "arrowDown", 10, p.muted)
+			txt(c, a.t("排序：", "Sort: ")+label, fsBase, p.fg, 500)
+			icon(c, "chevUD", 12, p.muted)
 		})
 	})
 }
 
+// homeEmpty 是零项目时的引导（设计稿 .home-empty）：大图标、标题、说明、新建输入与导入入口。
 func (a *app) homeEmpty(c *ui.Context) {
 	p := a.p
-	ui.Row(c).FillWidth().Height(300).Radius(12).Border(1, p.border).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-		ui.Column(c).AlignItems(ui.Center).Gap(8).Children(func() {
-			ui.Row(c).Size(40, 40).Radius(10).Background(p.surface2).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-				icon(c, "folderOpen", 18, p.muted)
-			})
-			txt(c, a.t("还没有项目，先创建一个开始吧", "No projects yet. Create one to get started."), 14, p.fg2, 0)
+	ui.Column(c).FillWidth().Padding(40, 20, 90, 20).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Size(84, 84).Radius(26).Background(p.acSoft).Shadow(0, 12, 32, -10, p.glow).Border(1, p.acSoft2).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+			if img := logoImage(p.dark); img != nil {
+				ui.Image(c, img).Size(44, 44).Fit(ui.Contain)
+			}
 		})
+		txt(c, a.t("创建你的第一个项目", "Create your first project"), 16, p.fg, 650).Margin(8, 0, 0, 0)
+		ui.Text(c, a.t("项目会保存请求、环境与历史记录，并拥有独立的主题色。", "A project keeps requests, environments and history, with its own theme color.")).
+			FontSize(fsBase).TextColor(p.fg2).MaxWidth(340)
+		ui.Row(c).Gap(8).Margin(10, 0, 2, 0).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Width(220).Shrink(0).Children(func() {
+				in := a.input(c, &a.homeName, a.t("输入项目名，回车新建", "Project name, Enter to create"), fieldOpts{h: 30, radius: radiusR, fs: fsBase, icon: "plus", key: "home-new-empty"})
+				if in.Submitted() {
+					a.later(a.createProjectFromHome)
+				}
+			})
+			if a.btn(c, dbtn{key: "home-create-empty", label: a.t("新建项目", "New project"), kind: dlgPrimary, h: 30}) {
+				a.later(a.createProjectFromHome)
+			}
+		})
+		if a.btn(c, dbtn{key: "home-import-empty", icon: "upload", label: a.t("或从 Postman / OpenAPI 导入", "Or import from Postman / OpenAPI"), ghost: true, sm: true}) {
+			a.later(func() { a.openImport(importFile) })
+		}
 	})
 }
 
-// projectAvatar 是项目的彩色首字方块。
+// projectAvatar 是项目的彩色首字方块（设计稿 .pav）：左上到右下的高光渐变与柔和投影。
 func (a *app) projectAvatar(c *ui.Context, pr model.Project, size, fs float32) {
-	ui.Row(c).Size(size, size).Radius(size / 4).Background(a.projectColor(pr)).AlignItems(ui.Center).Justify(ui.Center).Shrink(0).Children(func() {
-		txt(c, projectInitial(pr.Name), fs, ui.Hex("#ffffff"), 600)
+	col := a.projectColor(pr)
+	ui.Row(c).Size(size, size).Radius(size*0.3).Gradient(col.Mix(ui.RGB(255, 255, 255), 0.22), col, 155).Shadow(0, 2, 6, -1, ui.RGBA(0, 0, 0, 0.28)).
+		AlignItems(ui.Center).Justify(ui.Center).Shrink(0).Children(func() {
+		txt(c, projectInitial(pr.Name), fs, ui.Hex("#ffffff"), 700)
 	})
 }
 
-// projectCard 是一张项目卡片：首字头像、名称与请求/文件夹数、“当前”标记、更多菜单，底部是更新时间与环境数。
-// 单击选中（右侧显示详情），双击打开项目。
+// projectCard 是一张项目卡片（设计稿 .pcard）：首字头像、名称与请求/文件夹数、“当前”标记，底部是更新时间与环境数。
+// 单击选中（右侧显示详情），双击打开项目；选中时是强调色描边 + 3px 淡色光环，悬停时浮起。
 func (a *app) projectCard(c *ui.Context, pr model.Project) {
 	p := a.p
 	active := pr.ID == a.projectID
 	sel, _ := a.homeSelected()
 	selected := sel.ID == pr.ID
 	st := a.projectStats(pr)
-	card := ui.ButtonBase(c.Key("pc:"+pr.ID)).Grow(1).Basis(0).Radius(radiusCard).Padding(12, 14).
+	card := ui.ButtonBase(c.Key("pc:" + pr.ID)).Grow(1).Basis(0).Radius(radiusLg).Padding(12).Gap(10).
 		AlignItems(ui.Stretch).Justify(ui.Start).ContextMenu(func(m *ui.Menu) { a.projectCardMenu(m, pr) })
 	hover := card.Hovered()
 	switch {
 	case selected:
-		card = card.Background(p.surface).Border(1.5, p.accent)
+		card = card.Background(p.surface).Border(1, p.accent).Shadow(0, 0, 0, 3, p.acSoft)
 	case hover:
-		card = card.Background(p.surface2).Border(1, p.btnBorder)
+		card = p.shadowMd(card.Background(p.surface).Border(1, p.acLine.Mix(p.btnBorder, 0.4)))
 	default:
-		card = card.Background(p.surface).Border(1, p.border)
+		card = card.Background(p.surface.Alpha(0.92)).Border(1, p.border).Shadow(0, 1, 2, 0, ui.RGBA(20, 24, 40, 0.04))
 	}
 	card.Children(func() {
 		ui.Column(c).FillWidth().Gap(10).Children(func() {
 			ui.Row(c).FillWidth().Gap(10).AlignItems(ui.Center).Children(func() {
 				a.projectAvatar(c, pr, 30, 13)
-				ui.Column(c).Grow(1).Basis(0).Gap(1).Children(func() {
-					txtE(c, pr.Name, fsLarge, p.fg, 600)
+				ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
+					txtE(c, pr.Name, fsBase+1, p.fg, 650)
 					txtE(c, a.t(itoa(st.reqs)+" 个请求 · "+itoa(st.folders)+" 个文件夹", itoa(st.reqs)+" requests · "+itoa(st.folders)+" folders"), fsSmall, p.muted, 0)
 				})
 				if active {
-					ui.Row(c).Height(18).PaddingX(7).Radius(9).Background(p.hover).AlignItems(ui.Center).Shrink(0).Children(func() {
-						txt(c, a.t("当前", "Current"), fsTiny, p.fg2, 500)
+					ui.Row(c).Height(20).PaddingX(8).Radius(10).Background(p.acSoft).Border(1, p.acSoft2).AlignItems(ui.Center).Shrink(0).Children(func() {
+						txt(c, a.t("当前", "Current"), fsSmall, p.accent, 600)
 					})
 				}
-				ui.ButtonBase(c.Key("pcm:"+pr.ID)).Size(22, 22).Radius(6).AlignItems(ui.Center).Justify(ui.Center).Shrink(0).
-					Tooltip(a.t("更多操作", "More actions")).PopoverMenuButton(func(m *ui.Menu) { a.projectCardMenu(m, pr) }).
-					Children(func() { icon(c, "more", 13, p.muted) })
+				if hover {
+					ui.ButtonBase(c.Key("pcm:"+pr.ID)).Size(22, 22).Radius(radiusSm).AlignItems(ui.Center).Justify(ui.Center).Shrink(0).
+						Tooltip(a.t("更多操作", "More actions")).PopoverMenuButton(func(m *ui.Menu) { a.projectCardMenu(m, pr) }).
+						Children(func() { icon(c, "more", 13, p.muted) })
+				}
 			})
 			ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-				txt(c, a.t("更新于 ", "Updated ")+a.relTime(pr.UpdatedAt, time.Now()), fsSmall, p.muted, 0)
+				txt(c, a.relTime(pr.UpdatedAt, time.Now()), fsSmall, p.muted, 0)
 				ui.Spacer(c)
-				icon(c, "globe", 11, p.success)
-				txt(c, a.t(itoa(st.envs)+" 个环境", itoa(st.envs)+" environments"), fsSmall, p.fg2, 0)
+				icon(c, "globe", 12, p.muted)
+				txt(c, a.t(itoa(st.envs)+" 个环境", itoa(st.envs)+" environments"), fsSmall, p.muted, 0)
 			})
 		})
 	})
@@ -298,128 +340,175 @@ func (a *app) projectCard(c *ui.Context, pr model.Project) {
 	}
 }
 
-// homeDetail 是主页右侧详情面板：头像与名称、改名与描述、主题色、实时预览、打开/重命名/导出/删除。
+// homeListView 是列表模式（设计稿 .plist）：圆角外框内一行一个项目，列为头像、名称、描述、请求、环境、更新。
+func (a *app) homeListView(c *ui.Context, projects []model.Project) {
+	p := a.p
+	cell := func(grow float32, f func()) {
+		ui.Row(c).Grow(grow).Basis(0).MinWidth(0).AlignItems(ui.Center).Children(f)
+	}
+	ui.Column(c).FillWidth().Radius(radiusLg).Border(1, p.border).Clip().Children(func() {
+		ui.Row(c.Key("plist-hd")).FillWidth().Height(28).PaddingX(12).Gap(10).AlignItems(ui.Center).Background(p.surface2).Children(func() {
+			ui.Box(c).Width(24).Shrink(0)
+			cell(1.4, func() { txt(c, a.t("名称", "Name"), fsSmall, p.muted, 600) })
+			cell(1.4, func() { txt(c, a.t("描述", "Description"), fsSmall, p.muted, 600) })
+			ui.Row(c).Width(70).Shrink(0).Children(func() { txt(c, a.t("请求", "Requests"), fsSmall, p.muted, 600) })
+			ui.Row(c).Width(70).Shrink(0).Children(func() { txt(c, a.t("环境", "Envs"), fsSmall, p.muted, 600) })
+			ui.Row(c).Width(90).Shrink(0).Children(func() { txt(c, a.t("更新", "Updated"), fsSmall, p.muted, 600) })
+			ui.Box(c).Width(28).Shrink(0)
+		})
+		sel, _ := a.homeSelected()
+		for _, pr := range projects {
+			pr := pr
+			st := a.projectStats(pr)
+			row := ui.ButtonBase(c.Key("pr:"+pr.ID)).FillWidth().Height(38).PaddingX(12).Gap(10).AlignItems(ui.Center).Justify(ui.Start).
+				BorderWidth(1, 0, 0, 0).BorderColor(p.border).ContextMenu(func(m *ui.Menu) { a.projectCardMenu(m, pr) })
+			switch {
+			case sel.ID == pr.ID:
+				row = row.Background(p.acSoft)
+			case row.Hovered():
+				row = row.Background(p.hover)
+			}
+			row.Children(func() {
+				a.projectAvatar(c, pr, 22, 11)
+				cell(1.4, func() {
+					txtE(c, pr.Name, fsBase, p.fg, 600)
+					if pr.ID == a.projectID {
+						ui.Row(c).Height(16).PaddingX(6).Radius(8).Background(p.acSoft).Margin(0, 0, 0, 6).AlignItems(ui.Center).Shrink(0).Children(func() {
+							txt(c, a.t("当前", "Current"), fsTiny, p.accent, 600)
+						})
+					}
+				})
+				cell(1.4, func() { txtE(c, pr.Description, fsBase, p.fg2, 0) })
+				ui.Row(c).Width(70).Shrink(0).Children(func() { txtMono(c, itoa(st.reqs), fsSmall, p.fg2, 0) })
+				ui.Row(c).Width(70).Shrink(0).Children(func() { txtMono(c, itoa(st.envs), fsSmall, p.fg2, 0) })
+				ui.Row(c).Width(90).Shrink(0).Children(func() { txt(c, a.relTime(pr.UpdatedAt, time.Now()), fsSmall, p.muted, 0) })
+				ui.Row(c).Width(28).Shrink(0).Justify(ui.Center).Children(func() { icon(c, "chevR", 12, p.muted) })
+			})
+			switch {
+			case row.DoubleClicked():
+				id := pr.ID
+				a.later(func() { a.openProjectFromHome(id) })
+			case row.Clicked():
+				a.homeSel = pr.ID
+			}
+		}
+	})
+}
+
+// homeDetail 是主页右侧详情面板（设计稿 .home-side）：头像与名称、改名与描述、主题色、实时预览、打开/重命名/导出/删除。
 func (a *app) homeDetail(c *ui.Context, pr model.Project) {
 	p := a.p
 	st := a.projectStats(pr)
 	col := a.projectColor(pr)
 	label := func(s string) {
-		txt(c, s, fsTiny, p.muted, 600).Margin(12, 0, 0, 0)
+		txt(c, s, fsSmall, p.muted, 600).Margin(0, 0, 5, 0)
 	}
 	ui.Column(c.Key("home-detail")).Width(homeDetailW).FillHeight().Shrink(0).Background(p.sidebar).BorderWidth(0, 0, 0, 1).BorderColor(p.border).
-		Padding(16).Gap(6).Children(func() {
+		Padding(16).Gap(12).Children(func() {
 		ui.Row(c).FillWidth().Gap(10).AlignItems(ui.Center).Children(func() {
-			a.projectAvatar(c, pr, 40, 18)
-			ui.Column(c).Grow(1).Basis(0).Gap(2).Children(func() {
-				txtE(c, pr.Name, 16, p.fg, 600)
+			a.projectAvatar(c, pr, 38, 17)
+			ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
+				txtE(c, pr.Name, fsBase+2, p.fg, 700)
 				txt(c, a.t(itoa(st.reqs)+" 个请求 · "+itoa(st.folders)+" 个文件夹", itoa(st.reqs)+" requests · "+itoa(st.folders)+" folders"), fsSmall, p.muted, 0)
 			})
 		})
 
-		label(a.t("项目名称", "NAME"))
-		draftName, editing := a.nameDraft[pr.ID]
-		if !editing {
-			draftName = pr.Name
-		}
-		var nameIn ui.Element
-		ui.Row(c).FillWidth().Children(func() {
-			nameIn = a.input(c, &draftName, "", fieldOpts{h: 26, radius: radiusInput, fs: fsBase, key: "home-name:" + pr.ID})
-		})
-		if nameIn.Changed() {
-			if a.nameDraft == nil {
-				a.nameDraft = map[string]string{}
+		ui.Column(c).FillWidth().Children(func() {
+			label(a.t("项目名称", "Name"))
+			draftName, editing := a.nameDraft[pr.ID]
+			if !editing {
+				draftName = pr.Name
 			}
-			a.nameDraft[pr.ID] = draftName
-		}
-		if nameIn.Submitted() || (nameIn.FocusLeft() && editing) {
-			id, name := pr.ID, trimName(draftName)
-			a.later(func() { a.commitProjectName(id, name) })
-		}
-
-		label(a.t("描述", "DESCRIPTION"))
-		draft, editingDesc := a.descDraft[pr.ID]
-		if !editingDesc {
-			draft = pr.Description
-		}
-		var in ui.Element
-		ui.Row(c).FillWidth().Children(func() {
-			in = a.input(c, &draft, a.t("输入项目描述（回车或失焦保存）", "Description (save on Enter / blur)"), fieldOpts{h: 26, radius: radiusInput, fs: fsBase, key: "home-desc:" + pr.ID})
-		})
-		if in.Changed() {
-			a.descDraft[pr.ID] = draft
-		}
-		if in.Submitted() || (in.FocusLeft() && editingDesc) {
-			id, text := pr.ID, strings.TrimSpace(draft)
-			a.later(func() { a.saveProjectDescription(id, text) })
-		}
-
-		label(a.t("主题色", "THEME COLOR"))
-		ui.Row(c).FillWidth().Wrap().Gap(8).Children(func() {
-			for _, hex := range projectColors {
-				on := strings.EqualFold(pr.ThemeColor, hex)
-				b := ui.ButtonBase(c.Key("col"+hex)).Size(24, 24).Radius(12).Background(ui.Hex(hex)).AlignItems(ui.Center).Justify(ui.Center)
-				if on {
-					b = b.Border(2, p.fg)
+			var nameIn ui.Element
+			ui.Row(c).FillWidth().Children(func() {
+				nameIn = a.input(c, &draftName, "", fieldOpts{h: 28, radius: radiusR, fs: fsBase, key: "home-name:" + pr.ID})
+			})
+			if nameIn.Changed() {
+				if a.nameDraft == nil {
+					a.nameDraft = map[string]string{}
 				}
-				b.Children(func() {
+				a.nameDraft[pr.ID] = draftName
+			}
+			if nameIn.Submitted() || (nameIn.FocusLeft() && editing) {
+				id, name := pr.ID, trimName(draftName)
+				a.later(func() { a.commitProjectName(id, name) })
+			}
+		})
+
+		ui.Column(c).FillWidth().Children(func() {
+			label(a.t("描述", "Description"))
+			draft, editingDesc := a.descDraft[pr.ID]
+			if !editingDesc {
+				draft = pr.Description
+			}
+			var in ui.Element
+			ui.Row(c).FillWidth().Children(func() {
+				in = a.input(c, &draft, a.t("添加描述", "Add a description"), fieldOpts{h: 28, radius: radiusR, fs: fsBase, key: "home-desc:" + pr.ID})
+			})
+			if in.Changed() {
+				a.descDraft[pr.ID] = draft
+			}
+			if in.Submitted() || (in.FocusLeft() && editingDesc) {
+				id, text := pr.ID, strings.TrimSpace(draft)
+				a.later(func() { a.saveProjectDescription(id, text) })
+			}
+		})
+
+		ui.Column(c).FillWidth().Children(func() {
+			label(a.t("主题色", "Theme color"))
+			ui.Row(c).FillWidth().Wrap().Gap(7).Children(func() {
+				for _, hex := range projectColors {
+					on := strings.EqualFold(pr.ThemeColor, hex)
+					b := ui.ButtonBase(c.Key("col"+hex)).Size(20, 20).Radius(10).Background(ui.Hex(hex)).AlignItems(ui.Center).Justify(ui.Center)
 					if on {
-						icon(c, "tick", 12, ui.Hex("#ffffff"))
+						b = b.Border(2, p.fg).Shadow(0, 0, 0, 2, p.surface)
 					}
-				})
-				if b.Clicked() {
-					id, color := pr.ID, hex
-					a.later(func() { a.setProjectTheme(id, color) })
+					b.Children(func() {})
+					if b.Clicked() {
+						id, color := pr.ID, hex
+						a.later(func() { a.setProjectTheme(id, color) })
+					}
 				}
-			}
+			})
 		})
 
-		label(a.t("实时预览", "LIVE PREVIEW"))
-		ui.Column(c).FillWidth().Radius(radiusCard).Background(p.surface).Border(1, p.border).Padding(8, 10).Gap(8).Children(func() {
-			ui.Row(c).FillWidth().Gap(14).Children(func() {
-				ui.Column(c).Gap(2).Children(func() {
-					txt(c, "Params", fsSmall, col, 600)
-					ui.Box(c).Height(2).FillWidth().Background(col)
+		ui.Column(c).FillWidth().Children(func() {
+			label(a.t("实时预览", "Live preview"))
+			ui.Column(c).FillWidth().Radius(radiusR).Background(p.surface).Border(1, p.border).Padding(10).Gap(8).Children(func() {
+				ui.Row(c).FillWidth().Gap(12).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
+					ui.Column(c).Height(24).Justify(ui.End).Children(func() {
+						txt(c, "Params", fsBase, col, 650).Margin(0, 0, 4, 0)
+						ui.Box(c).Height(2).FillWidth().Radius(2, 2, 0, 0).Background(col)
+					})
+					ui.Row(c).Height(24).AlignItems(ui.Center).Children(func() { txt(c, "Headers", fsBase, p.fg2, 550) })
 				})
-				txt(c, "Headers", fsSmall, p.muted, 0)
-			})
-			ui.Row(c).FillWidth().Height(24).PaddingX(8).Gap(10).Radius(6).Background(col.Alpha(0.14)).AlignItems(ui.Center).Children(func() {
-				txtMono(c, "GET", 9, p.get, 700)
-				txt(c, a.t("示例请求", "Sample request"), fsBase, p.fg, 0)
-			})
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-				txt(c, a.t("发送按钮", "Send button"), fsSmall, p.muted, 0)
-				ui.Spacer(c)
-				ui.Row(c).Height(22).PaddingX(12).Radius(6).Background(col).AlignItems(ui.Center).Children(func() {
-					txt(c, a.t("发送", "Send"), fsSmall, ui.Hex("#ffffff"), 600)
+				ui.Row(c).FillWidth().Height(24).PaddingX(8).Gap(8).Radius(6).Background(col.Alpha(0.14)).AlignItems(ui.Center).Children(func() {
+					txtMono(c, "GET", fsTiny-0.5, p.get, 700)
+					txt(c, a.t("示例请求", "Sample request"), fsBase, col, 600)
+				})
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+					txt(c, a.t("发送按钮", "Send button"), fsBase, p.muted, 0)
+					ui.Spacer(c)
+					ui.Row(c).Height(22).PaddingX(8).Radius(10).Gradient(col.Mix(ui.RGB(255, 255, 255), 0.16), col, 180).AlignItems(ui.Center).Children(func() {
+						txt(c, a.t("发送", "Send"), fsSmall, ui.Hex("#ffffff"), 550)
+					})
 				})
 			})
 		})
 
 		ui.Spacer(c)
-		bg := p.accent
-		if a.button(c, btnOpts{h: 30, radius: radiusInput, bg: &bg, hoverBg: &p.accentHover, key: "home-open"}, func(bool) {
-			txt(c, a.t("打开项目", "Open project"), fsBase, p.accentFg, 600)
-		}) {
+		if a.btn(c, dbtn{key: "home-open", label: a.t("打开项目", "Open project"), kind: dlgPrimary, h: 30}) {
 			id := pr.ID
 			a.later(func() { a.openProjectFromHome(id) })
 		}
 		ui.Row(c).FillWidth().Gap(6).Children(func() {
-			border := p.btnBorder
-			if a.button(c, btnOpts{h: 26, radius: radiusBtn, padX: 10, gap: 5, border: &border, key: "home-rename"}, func(bool) {
-				icon(c, "pencil", 12, p.fg2)
-				txt(c, a.t("重命名", "Rename"), fsSmall, p.fg, 0)
-			}) {
+			if a.btn(c, dbtn{key: "home-rename", icon: "pencil", label: a.t("重命名", "Rename"), grow: true}) {
 				a.later(func() { a.renameProject(pr) })
 			}
-			if a.button(c, btnOpts{h: 26, radius: radiusBtn, padX: 10, gap: 5, border: &border, key: "home-export"}, func(bool) {
-				icon(c, "upload", 12, p.fg2)
-				txt(c, a.t("导出", "Export"), fsSmall, p.fg, 0)
-			}) {
+			if a.btn(c, dbtn{key: "home-export", icon: "upload", label: a.t("导出", "Export"), grow: true}) {
 				a.later(func() { a.exportProjectByID(pr.ID, pr.Name) })
 			}
-			if a.button(c, btnOpts{w: 26, h: 26, radius: radiusBtn, border: &border, tip: a.t("删除项目", "Delete project"), key: "home-delete"}, func(bool) {
-				icon(c, "delete", 12, p.danger)
-			}) {
+			if a.btn(c, dbtn{key: "home-delete", icon: "trash", danger: true, w: 36, tip: a.t("删除项目", "Delete project")}) {
 				a.later(func() { a.deleteProject(pr.ID, pr.Name) })
 			}
 		})

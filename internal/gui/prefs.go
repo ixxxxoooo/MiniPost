@@ -74,7 +74,7 @@ var prefsShortcuts = []struct{ zh, en, keys string }{
 	{"设置", "Settings", "⌘ ,"},
 }
 
-// prefsView 绘制设置对话框（880×600 双栏）；任何修改立即生效并保存。
+// prefsView 绘制设置对话框（780×520 双栏，设计稿 .set）；任何修改立即生效并保存。
 func (a *app) prefsView(c *ui.Context) {
 	s := &a.overlays.prefs
 	if !s.open {
@@ -82,27 +82,27 @@ func (a *app) prefsView(c *ui.Context) {
 	}
 	p := a.p
 	changed := false
-	a.dialog(c, &s.open, 880, 600, 14, func() {
+	a.dialog(c, &s.open, 780, 520, radiusLg, func() {
 		ui.Row(c).FillWidth().FillHeight().AlignItems(ui.Stretch).Children(func() {
-			// 左栏：210px，次级背景。
-			ui.Row(c).Width(210).Shrink(0).Background(p.surface2).AlignItems(ui.Stretch).Children(func() {
-				ui.Column(c).Grow(1).Basis(0).Padding(12).Gap(4).Children(func() {
-					txt(c, a.t("设置", "Settings"), fsSmall, p.muted, 600).PaddingX(8).Margin(0, 0, 4, 0)
+			// 左栏：168px，侧栏底色。
+			ui.Row(c).Width(168).Shrink(0).Background(p.sidebar).AlignItems(ui.Stretch).Children(func() {
+				ui.Column(c).Grow(1).Basis(0).Padding(12, 8).Gap(2).Children(func() {
+					txt(c, a.t("设置", "Settings"), fsSmall, p.muted, 600).PaddingX(8).Margin(2, 0, 8, 0)
 					for i, sec := range prefsSections {
 						active := s.section == i
-						b := ui.ButtonBase(c.Key("sec" + strconv.Itoa(i))).FillWidth().Height(36).Radius(9).PaddingX(10).Gap(8).AlignItems(ui.Center).Justify(ui.Start)
+						b := ui.ButtonBase(c.Key("sec" + strconv.Itoa(i))).FillWidth().Height(30).Radius(radiusR).PaddingX(10).Gap(9).AlignItems(ui.Center).Justify(ui.Start)
 						col := p.fg2
 						switch {
 						case active:
-							b = b.Background(p.selected)
-							col = p.fg
+							b = b.Background(p.acSoft)
+							col = p.accent
 						case b.Hovered():
 							b = b.Background(p.btnBg)
 						}
 						b.Children(func() {
 							ui.Row(c).Grow(1).Gap(8).AlignItems(ui.Center).Children(func() {
 								icon(c, sec.icon, 14, col)
-								txt(c, a.t(sec.zh, sec.en), fsLarge, col, 0)
+								txt(c, a.t(sec.zh, sec.en), fsBase, col, 550)
 							})
 						})
 						if b.Clicked() {
@@ -110,21 +110,19 @@ func (a *app) prefsView(c *ui.Context) {
 						}
 					}
 					ui.Spacer(c)
-					txtMono(c, "MiniPost "+a.appVersion(), fsSmall, p.muted, 0).PaddingX(8)
+					txtMono(c, "MiniPost "+a.appVersion(), fsSmall, p.muted, 0).Margin(0, 8, 2, 8)
 				})
 				vline(c, p.border)
 			})
 			// 右栏：44px 标题行 + 可滚动内容。
 			ui.Column(c).Grow(1).Basis(0).Children(func() {
-				ui.Row(c).Height(44).FillWidth().Shrink(0).PaddingX(16).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
-					txt(c, a.t(prefsSections[s.section].zh, prefsSections[s.section].en), 14, p.fg, 600)
-					if a.iconButton(c, "clear", a.t("关闭", "Close"), 12, p.muted) {
-						s.open = false
-					}
+				ui.Row(c).Height(44).FillWidth().Shrink(0).Padding(0, 12, 0, 20).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+					txt(c, a.t(prefsSections[s.section].zh, prefsSections[s.section].en), 14, p.fg, 650)
+					a.ibSm(c, "prefs-close", "x", a.t("关闭", "Close"), false, func() { s.open = false })
 				})
 				hline(c, p.border)
 				ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
-					ui.Column(c).FillWidth().PaddingX(16).PaddingY(10).Gap(14).Children(func() {
+					ui.Column(c).FillWidth().Padding(4, 20, 14, 20).Gap(14).Children(func() {
 						switch s.section {
 						case 0:
 							changed = a.prefsGeneral(c, s) || changed
@@ -139,14 +137,11 @@ func (a *app) prefsView(c *ui.Context) {
 						}
 					})
 				})
-				if s.section == 0 {
+				{
 					hline(c, p.border)
-					ui.Row(c).FillWidth().Height(44).Shrink(0).PaddingX(16).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+					ui.Row(c).FillWidth().Height(38).Shrink(0).Padding(0, 16, 0, 20).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
 						txt(c, a.t("修改会立即生效并自动保存", "Changes apply immediately and are saved automatically"), fsSmall, p.muted, 0)
-						bd := p.btnBorder
-						if a.button(c, btnOpts{h: 26, radius: 7, padX: 10, border: &bd, key: "prefs-reset"}, func(bool) {
-							txt(c, a.t("恢复默认", "Restore defaults"), fsSmall, p.fg2, 0)
-						}) {
+						if s.section == 0 && a.btn(c, dbtn{key: "prefs-reset", label: a.t("恢复默认", "Restore defaults"), sm: true}) {
 							a.resetGeneralSettings(s)
 							changed = true
 						}
@@ -163,14 +158,14 @@ func (a *app) prefsView(c *ui.Context) {
 // settingsRow 是一行设置：左侧标题与说明，右侧控件；last 为 true 时不画下边线。
 func (a *app) settingsRow(c *ui.Context, key string, title, desc string, last bool, control func()) {
 	p := a.p
-	row := ui.Row(c.Key(key)).FillWidth().PaddingY(12).Gap(20).AlignItems(ui.Center)
+	row := ui.Row(c.Key(key)).FillWidth().PaddingY(9).Gap(16).AlignItems(ui.Center)
 	if !last {
-		row = row.BorderWidth(0, 0, 1, 0).BorderColor(p.border)
+		row = row.BorderWidth(0, 0, 1, 0).BorderColor(p.border.Alpha(0.65))
 	}
 	row.Children(func() {
-		ui.Column(c).Grow(1).Basis(0).Gap(2).Children(func() {
-			ui.Text(c, title).FontSize(fsLarge).FontWeight(500).FixedLineHeight(fsLarge*1.5).TextColor(p.fg).Translate(0, textShiftY)
-			ui.Text(c, desc).FontSize(fsSmall).FixedLineHeight(20).TextColor(p.fg2).Translate(0, textShiftY)
+		ui.Column(c).Grow(1).Basis(0).Gap(1).Children(func() {
+			ui.Text(c, title).FontSize(fsBase+0.5).FontWeight(600).FixedLineHeight(18).TextColor(p.fg).Translate(0, textShiftY)
+			ui.Text(c, desc).FontSize(fsSmall).FixedLineHeight(16).TextColor(p.muted).Translate(0, textShiftY)
 		})
 		ui.Row(c).Shrink(0).AlignItems(ui.Center).Children(control)
 	})
@@ -320,52 +315,61 @@ func miniWindow(c *ui.Context, t schemeTokens, half int) {
 	})
 }
 
-// previewCard 是外观页的缩略图选项卡：上方迷你窗口，下方名称（可带右侧色点）。选中时 2px 强调色边框。
+// previewCard 是外观页的缩略图选项卡（设计稿 .thumb）：上方迷你窗口，下方名称（可带右侧色点）。
+// 选中时 1.5px 强调色边框 + 3px 淡色光环，并在右上角挂一个渐变小对勾。
 func (a *app) previewCard(c *ui.Context, key, label string, selected bool, preview func(), dots []ui.Color, labelLeft bool) bool {
 	p := a.p
-	b := ui.ButtonBase(c.Key(key)).Grow(1).Basis(0).Radius(10).Padding(2)
+	b := ui.ButtonBase(c.Key(key)).Grow(1).Basis(0).MinWidth(0).Radius(radiusLg).Padding(6).Background(p.surface)
 	bd := p.border
-	if selected {
+	switch {
+	case selected:
 		bd = p.accent
-	}
-	if b.Hovered() && !selected {
+		b = b.Shadow(0, 0, 0, 3, p.acSoft)
+	case b.Hovered():
 		bd = p.btnBorder
 	}
-	b = b.Background(p.surface).Border(2, bd)
+	b = b.Border(1.5, bd)
 	b.Children(func() {
-		ui.Column(c).FillWidth().Gap(0).Children(func() {
-			ui.Row(c).FillWidth().Height(78).Radius(8).Clip().Border(1, p.border).Children(preview)
-			ui.Row(c).FillWidth().Height(30).PaddingX(8).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
+		ui.Column(c).FillWidth().Gap(6).Children(func() {
+			ui.Row(c).FillWidth().Height(54).Radius(7).Clip().Border(1, p.border).Children(preview)
+			ui.Row(c).FillWidth().Height(20).Padding(0, 4, 2, 4).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
 				if !labelLeft {
 					ui.Spacer(c)
 				}
-				txt(c, label, fsSmall, p.fg, 500)
+				txt(c, label, fsSmall+0.5, p.fg, 600)
 				if !labelLeft {
 					ui.Spacer(c)
 				}
 				if len(dots) > 0 {
-					ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+					ui.Row(c).Gap(3).AlignItems(ui.Center).Children(func() {
 						for _, d := range dots {
-							ui.Box(c).Size(9, 9).Radius(5).Background(d).Border(1, p.border)
+							ui.Box(c).Size(9, 9).Radius(4.5).Background(d).Border(1, ui.RGBA(0, 0, 0, 0.12))
 						}
 					})
 				}
 			})
 		})
+		if selected {
+			ui.Row(c).Absolute().Top(-7).Right(-7).Size(17, 17).Radius(8.5).AlignItems(ui.Center).Justify(ui.Center).
+				Gradient(p.accent.Mix(ui.RGB(255, 255, 255), 0.16), p.accent, 180).Shadow(0, 0, 0, 2, p.glass.Alpha(1)).Shadow(0, 2, 8, 0, p.glow).Children(func() {
+				icon(c, "checkBold", 9, p.accentFg)
+			})
+		}
 	})
 	return b.Clicked()
 }
 
-// prefsSectionLabel 是外观页分组的小标题（11px 次要色），可带右侧“新增”小徽标。
+// prefsSectionLabel 是设置页分组的小标题（设计稿 .sgrp）：11px 弱色 650 + 可选小徽标 + 向右延伸的细线。
 func (a *app) prefsSectionLabel(c *ui.Context, s, badge string) {
 	p := a.p
-	ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(4, 0, 0, 0).Children(func() {
-		txt(c, s, fsSmall, p.fg2, 500)
+	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Margin(14, 0, 2, 0).Children(func() {
+		txt(c, s, fsSmall, p.muted, 650)
 		if badge != "" {
-			ui.Row(c).Height(16).PaddingX(7).Radius(8).Background(p.selected).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Height(16).PaddingX(6).Radius(4).Background(p.acSoft).AlignItems(ui.Center).Children(func() {
 				txt(c, badge, 10, p.accent, 600)
 			})
 		}
+		ui.Box(c).Grow(1).Height(1).Background(p.border)
 	})
 }
 
@@ -381,7 +385,7 @@ func (a *app) prefsAppearance(c *ui.Context, s *prefsState) bool {
 
 	// 外观主题：浅色 / 深色 / 跟随系统（左浅右深）
 	a.prefsSectionLabel(c, a.t("外观主题", "Theme"), "")
-	ui.Row(c.Key("theme")).FillWidth().Gap(12).Children(func() {
+	ui.Row(c.Key("theme")).FillWidth().Gap(10).Margin(8, 0).Children(func() {
 		names := []string{a.t("浅色", "Light"), a.t("深色", "Dark"), a.t("跟随系统", "System")}
 		for i, v := range themeValues {
 			i, v := i, v
@@ -402,10 +406,10 @@ func (a *app) prefsAppearance(c *ui.Context, s *prefsState) bool {
 			}
 		}
 	})
-	// 配色：雾蓝 / 墨白 / 松石
-	a.prefsSectionLabel(c, a.t("配色", "Color scheme"), a.t("新增", "New"))
-	ui.Row(c.Key("scheme")).FillWidth().Gap(12).Children(func() {
-		names := map[string]string{"mist": a.t("雾蓝", "Mist"), "ink": a.t("墨白", "Ink"), "jade": a.t("松石", "Jade")}
+	// 配色：雾蓝 / 墨白 / 松石 / 琥珀 / 玫瑰
+	a.prefsSectionLabel(c, a.t("配色", "Color scheme"), a.t("新增 2 套", "2 new"))
+	ui.Row(c.Key("scheme")).FillWidth().Gap(8).Margin(8, 0).Children(func() {
+		names := map[string]string{"mist": a.t("雾蓝", "Mist"), "ink": a.t("墨白", "Ink"), "jade": a.t("松石", "Jade"), "amber": a.t("琥珀", "Amber"), "rose": a.t("玫瑰", "Rose")}
 		for _, name := range colorSchemeNames {
 			name := name
 			tk := colorSchemes[name][0]
@@ -421,7 +425,6 @@ func (a *app) prefsAppearance(c *ui.Context, s *prefsState) bool {
 		}
 	})
 	txt(c, a.t("项目主题色仍然可用：它会覆盖这里的强调色，只影响选中态、高亮和发送按钮。", "Project theme colors still work: they override the accent here, affecting only selection, highlights and the send button."), fsSmall, p.muted, 0)
-	hline(c, p.border)
 
 	cur := indexOf(localeValues, set.Locale)
 	if set.Locale == "" {
@@ -441,19 +444,16 @@ func (a *app) prefsAppearance(c *ui.Context, s *prefsState) bool {
 			for _, f := range fontSizes {
 				f := f
 				active := set.FontSize == f
-				b := ui.ButtonBase(c.Key("fs"+strconv.Itoa(f))).Size(30, 28).Radius(7).AlignItems(ui.Center).Justify(ui.Center)
-				col, bd, w := p.fg2, p.btnBorder, 500
+				b := ui.ButtonBase(c.Key("fs"+strconv.Itoa(f))).Size(28, 26).Radius(radiusSm).AlignItems(ui.Center).Justify(ui.Center)
+				col, bd, w := p.fg, p.btnBorder, 550
 				switch {
 				case active:
-					col, bd, w = p.fg, p.accent, 600
+					col, bd, w = p.accent, p.accent, 700
+					b = b.Background(p.acSoft).Shadow(0, 0, 0, 3, p.acSoft)
 				case b.Hovered():
-					col = p.fg
+					b = b.Background(p.hover)
 				}
-				bw := float32(1)
-				if active {
-					bw = 2
-				}
-				b = b.Background(p.surface).Border(bw, bd)
+				b = b.Border(1, bd)
 				b.Children(func() { txt(c, strconv.Itoa(f), fsSmall, col, w) })
 				if b.Clicked() {
 					set.FontSize = f

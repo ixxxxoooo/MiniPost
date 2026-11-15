@@ -20,8 +20,8 @@ func TestConsoleLimits(t *testing.T) {
 	}
 }
 
-// consoleTop 是 1200x760 测试窗口里控制台面板上边缘的 y 坐标。
-func consoleTop(a *app) float32 { return 760 - sizeBottom - a.set.ConsoleHeight }
+// consoleTop 是 1200x760 测试窗口里控制台面板上边缘的 y 坐标（内容卡片与窗口底边留有 shellGap）。
+func consoleTop(a *app) float32 { return 760 - shellGap - sizeBottom - a.set.ConsoleHeight }
 
 // 向上拖动上边缘：面板变高，跟手；松手后保存。
 func TestConsoleResizeDragUp(t *testing.T) {

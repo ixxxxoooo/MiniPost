@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"image"
 	"strings"
 	"testing"
 
@@ -205,17 +206,28 @@ func TestSidebarHighlightsSingleRow(t *testing.T) {
 	}
 	y := int(r.Y + r.H/2)
 	img := tt.Image()
-	hi := rgb(a.p.sidebar) // 未高亮行的底色
-	if px(img, 12, y-28) == px(img, 12, y) {
+	// 流光方案的侧栏是半透明的、上面还有极光渐变，没有固定底色：
+	// 取行左侧 6px 外边距里同一高度的像素当作“未高亮”的参照（这里没有行底色）。
+	blank := func(img *image.RGBA, yy int) [3]uint8 { return px(img, 3, yy) }
+	near := func(a, b [3]uint8) bool {
+		for k := range a {
+			d := int(a[k]) - int(b[k])
+			if d < -8 || d > 8 {
+				return false
+			}
+		}
+		return true
+	}
+	if px(img, 150, y-27) == px(img, 150, y) {
 		t.Fatal("初始只有当前标签 alpha 一行高亮，alpha 与 beta 的底色应不同")
 	}
 	a.selectNode(beta)
 	tt.Frame()
 	img = tt.Image()
-	if px(img, 12, y-28) != hi {
-		t.Fatalf("选中 beta 后 alpha 不应再高亮: %v", px(img, 12, y-28))
+	if !near(px(img, 150, y-27), blank(img, y-27)) {
+		t.Fatalf("选中 beta 后 alpha 不应再高亮: %v（空白参照 %v）", px(img, 150, y-27), blank(img, y-27))
 	}
-	if px(img, 12, y) == hi {
+	if near(px(img, 150, y), blank(img, y)) {
 		t.Fatal("选中 beta 后 beta 应高亮")
 	}
 }

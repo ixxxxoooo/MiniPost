@@ -15,19 +15,19 @@ func showToast(a *app, tt interface {
 	tt.Advance(300 * time.Millisecond)
 }
 
-// 提示是深色提示条，显示在窗口右下角、底栏上方，且不超出窗口。
-func TestToastShowsBottomRight(t *testing.T) {
+// 提示是玻璃底的提示卡，显示在窗口右上角、标题栏下方，且不超出窗口。
+func TestToastShowsTopRight(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	showToast(a, tt, func() { a.toastOK("已复制响应体") })
 	r, ok := tt.Find("已复制响应体")
 	if !ok {
 		t.Fatalf("应显示提示，实际 %q", tt.Texts())
 	}
-	if r.Y+r.H > 760-sizeBottom {
-		t.Fatalf("提示不应盖住底栏，下边缘 %.0f", r.Y+r.H)
+	if r.Y < sizeToolbar {
+		t.Fatalf("提示不应盖住标题栏，y=%.0f", r.Y)
 	}
-	if r.Y < 760-sizeBottom-120 {
-		t.Fatalf("提示应在窗口下部，y=%.0f", r.Y)
+	if r.Y > sizeToolbar+80 {
+		t.Fatalf("提示应在窗口上部（标题栏下方），y=%.0f", r.Y)
 	}
 	if right := r.X + r.W; right > 1200 || right < 1200-toastMaxW {
 		t.Fatalf("提示应靠右，右边缘 %.0f", right)
@@ -38,7 +38,7 @@ func TestToastShowsBottomRight(t *testing.T) {
 	snapshot(t, tt, "toast-success")
 }
 
-// 多条提示竖向排列，最新的在最下面（贴近右下角）。
+// 多条提示竖向排列，最新的在最下面。
 func TestToastNewestAtBottom(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	showToast(a, tt, func() {

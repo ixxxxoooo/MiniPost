@@ -1,13 +1,27 @@
 package gui
 
 import (
+	"image/color"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
 
 	"minipost/internal/model"
 )
 
-// 取标题栏正中偏左一点的空白处像素，应为 chrome 底色（设计稿：标题栏背景 --chrome）。
+// 取标题栏正中偏左一点的空白处像素，应接近 chrome 底色（流光方案：标题栏透明，露出极光）。
 func titleBarBlank() (x, y int) { return 600, 6 }
+
+// nearToolbar 报告标题栏像素是否接近 chrome 底色：标题栏透明，上面铺着极光，所以允许一定色差。
+func nearToolbar(got color.RGBA, want ui.Color) bool {
+	d := func(a, b uint8) int {
+		if a > b {
+			return int(a - b)
+		}
+		return int(b - a)
+	}
+	return d(got.R, want.R) <= 48 && d(got.G, want.G) <= 48 && d(got.B, want.B) <= 48
+}
 
 // 设计稿令牌：雾蓝亮色/暗色的关键色值与设计稿一致。
 func TestSchemePaletteMatchesDesignTokens(t *testing.T) {
@@ -57,12 +71,12 @@ func TestSchemePalettesDistinct(t *testing.T) {
 	}
 }
 
-// 标题栏按设计稿绘制：背景为 chrome 色，高度为 sizeToolbar，侧栏开关/后退/前进/主页/导入/主题/设置齐全。
+// 标题栏按设计稿（流光）绘制：透明背景透出极光，高度为 sizeToolbar，侧栏开关/后退/前进/主页/项目/环境/主题/设置齐全。
 func TestTitleBarControls(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	for _, label := range []string{
 		"收起侧边栏 (⌘B)", "后退", "前进", "打开主页", "切换项目", "切换环境",
-		"导入 cURL (⌘I)", "切换为深色主题", "设置 (⌘,)",
+		"切换为深色主题", "设置 (⌘,)",
 	} {
 		r, ok := tt.Find(label)
 		if !ok {
@@ -73,8 +87,8 @@ func TestTitleBarControls(t *testing.T) {
 		}
 	}
 	x, y := titleBarBlank()
-	if got := tt.Image().RGBAAt(x, y); got.R != a.p.toolbar.R || got.G != a.p.toolbar.G || got.B != a.p.toolbar.B {
-		t.Fatalf("标题栏背景应为 chrome 色 %v，实际 %v", a.p.toolbar, got)
+	if got := tt.Image().RGBAAt(x, y); !nearToolbar(got, a.p.toolbar) {
+		t.Fatalf("标题栏背景应是透出极光的 chrome 色 %v，实际 %v", a.p.toolbar, got)
 	}
 }
 
@@ -138,22 +152,22 @@ func TestTitleBarEnvPill(t *testing.T) {
 	}
 }
 
-// 环境胶囊的圆点：有环境为成功色（绿），无环境为弱色（灰）。
+// 环境胶囊的圆点（在名称右侧）：有环境为成功色（绿），无环境为粗边框灰（--bd2）。
 func TestTitleBarEnvPillDotColor(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	a.envs = []model.Environment{{ID: "e1", Name: "预发环境"}}
 	for _, tc := range []struct {
 		id   string
 		want [3]uint8
-	}{{"", rgb(a.p.muted)}, {"e1", rgb(a.p.success)}} {
+	}{{"", rgb(a.p.btnBorder)}, {"e1", rgb(a.p.success)}} {
 		a.envID = tc.id
 		tt.Frame()
 		name, ok := tt.Find(a.envLabel())
 		if !ok || name.Y >= sizeToolbar {
 			t.Fatalf("找不到标题栏里的环境名 %q", a.envLabel())
 		}
-		// 圆点在名称左侧：间距 6 + 半径 4
-		px := tt.Image().RGBAAt(int(name.X)-6-4, int(name.Y+name.H/2))
+		// 圆点在名称右侧：间距 6 + 半径 4
+		px := tt.Image().RGBAAt(int(name.X+name.W)+6+4, int(name.Y+name.H/2))
 		if got := [3]uint8{px.R, px.G, px.B}; got != tc.want {
 			t.Fatalf("环境 %q 的圆点色应为 %v，实际 %v", tc.id, tc.want, got)
 		}
@@ -257,8 +271,8 @@ func TestColorSchemeAppliesToTitleBar(t *testing.T) {
 			}
 			x, y := titleBarBlank()
 			got := tt.Image().RGBAAt(x, y)
-			if got.R != want.R || got.G != want.G || got.B != want.B {
-				t.Fatalf("%s/%s 标题栏像素应为 %v，实际 %v", scheme, theme, want, got)
+			if !nearToolbar(got, want) {
+				t.Fatalf("%s/%s 标题栏像素应接近 %v（极光会在其上轻微着色），实际 %v", scheme, theme, want, got)
 			}
 		}
 	}

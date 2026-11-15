@@ -25,36 +25,36 @@ func (a *app) bottomArea(c *ui.Context) {
 // bottomBar 绘制底栏：左侧 Console 与 Cookies，右侧布局切换与侧栏开关。
 func (a *app) bottomBar(c *ui.Context) {
 	p := a.p
-	hline(c, p.border)
-	ui.Row(c).FillWidth().Height(sizeBottom - 1).Shrink(0).Background(p.bottom).PaddingX(12).AlignItems(ui.Center).Children(func() {
+	// 方案 C：状态栏透明、无上边线，直接坐在内容卡片的底部。
+	ui.Row(c).FillWidth().Height(sizeBottom).Shrink(0).PaddingX(8).AlignItems(ui.Center).Children(func() {
 		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-			if a.footLink(c, "commandLine", a.t("控制台", "Console"), a.errorCount()) {
+			if a.footLink(c, "terminal", a.t("控制台", "Console"), len(a.con.entries), a.set.ConsoleOpen) {
 				a.later(func() { a.setConsoleOpen(!a.set.ConsoleOpen) })
 			}
 			label := "Cookies"
 			if n := len(a.jar.All()); n > 0 {
 				label = fmt.Sprintf("Cookies (%d)", n)
 			}
-			if a.footLink(c, "cookie", label, 0) {
+			if a.footLink(c, "cookie", label, 0, false) {
 				a.later(a.openCookies)
 			}
 			a.statusInfo(c)
 		})
 		ui.Spacer(c)
-		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
 			vertical := a.set.LayoutDirection != "horizontal"
 			tip := a.t("切换到左右布局", "Switch to horizontal layout")
+			glyph := "dockBottom"
 			if !vertical {
 				tip = a.t("切换到上下布局", "Switch to vertical layout")
+				glyph = "dockRight"
 			}
-			if a.button(c, btnOpts{w: 20, h: 20, radius: 6, active: true, tip: tip, key: "layout"}, func(bool) {
-				a.layoutGlyph(c, p.fg, func() {
-					if vertical {
-						ui.Box(c).Width(1).Height(7).Background(p.fg)
-					} else {
-						ui.Box(c).Width(9).Height(1).Background(p.fg)
-					}
-				}, ui.Center)
+			if a.button(c, btnOpts{h: 20, radius: 5, padX: 7, tip: tip, key: "layout"}, func(hover bool) {
+				col := p.fg2
+				if hover {
+					col = p.fg
+				}
+				icon(c, glyph, 13, col)
 			}) {
 				a.later(func() {
 					if vertical {
@@ -69,14 +69,12 @@ func (a *app) bottomBar(c *ui.Context) {
 			if a.set.SidebarCollapsed {
 				sideTip = a.t("展开侧边栏", "Expand sidebar")
 			}
-			if a.button(c, btnOpts{w: 20, h: 20, radius: 6, tip: sideTip, hoverBg: &p.btnBg, key: "sidebar-glyph"}, func(bool) {
-				pos := ui.Start
-				if a.set.SidebarCollapsed {
-					pos = ui.End
+			if a.button(c, btnOpts{h: 20, radius: 5, padX: 7, tip: sideTip, key: "sidebar-glyph"}, func(hover bool) {
+				col := p.fg2
+				if hover {
+					col = p.fg
 				}
-				a.layoutGlyph(c, p.fg2, func() {
-					ui.Box(c).Width(3).Height(7).Radius(1).Background(p.fg2.Alpha(0.8))
-				}, pos)
+				icon(c, "sidebar", 13, col)
 			}) {
 				a.later(a.toggleSidebar)
 			}
@@ -127,36 +125,24 @@ func (a *app) statusInfo(c *ui.Context) {
 	})
 }
 
-// layoutGlyph 绘制底栏里 13×11 的小窗口示意图：圆角边框，内部放一条线或一个色块。
-func (a *app) layoutGlyph(c *ui.Context, col ui.Color, inner func(), pos ui.Align) {
-	ui.Row(c).Size(13, 11).Radius(2).Border(1, col).AlignItems(ui.Center).Justify(pos).Padding(0, 1).Children(inner)
-}
-
-// footLink 是底栏左侧的文字按钮；badge>0 时在右侧显示小圆角计数。
-func (a *app) footLink(c *ui.Context, iconName, label string, badge int) bool {
+// footLink 是底栏左侧的文字按钮（设计稿 .sbtn）：20 高、圆角 5、内边距 7，悬停浅底；
+// badge>0 时在右侧显示小圆角计数（.cnt），on 表示面板已打开（强调色淡底）。
+func (a *app) footLink(c *ui.Context, iconName, label string, badge int, on bool) bool {
 	p := a.p
-	return a.button(c, btnOpts{gap: 4, noHover: true, key: "foot:" + label}, func(hover bool) {
+	return a.button(c, btnOpts{h: 20, radius: 5, padX: 7, gap: 5, key: "foot:" + label, active: on, noHover: false}, func(hover bool) {
 		col := p.fg2
-		if hover {
+		switch {
+		case on:
+			col = p.accent
+		case hover:
 			col = p.fg
 		}
-		icon(c, iconName, 11, col)
+		icon(c, iconName, 12, col)
 		txt(c, label, fsSmall, col, 0)
 		if badge > 0 {
-			ui.Row(c).Height(14).PaddingX(4).Radius(7).Background(p.surface).Border(1, p.border).AlignItems(ui.Center).Children(func() {
-				txt(c, fmt.Sprint(badge), 9, p.muted, 500)
+			ui.Row(c).Height(14).MinWidth(16).PaddingX(4).Radius(7).Background(p.surface2).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+				txtMono(c, fmt.Sprint(badge), fsTiny, p.muted, 600)
 			})
 		}
 	})
-}
-
-// errorCount 返回控制台里失败请求的数量。
-func (a *app) errorCount() int {
-	n := 0
-	for _, e := range a.con.entries {
-		if e.err != "" {
-			n++
-		}
-	}
-	return n
 }

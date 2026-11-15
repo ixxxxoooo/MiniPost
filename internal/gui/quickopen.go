@@ -147,13 +147,13 @@ func (a *app) quickView(c *ui.Context) {
 	qs.sel = max(0, min(qs.sel, len(items)-1))
 
 	run := -1
-	a.dialog(c, &qs.open, 560, 0, 12, func() {
+	a.dialog(c, &qs.open, 580, 0, radiusLg, func() {
 		ui.Column(c).FillWidth().Children(func() {
 			// 搜索行
-			ui.Row(c).FillWidth().Height(46).PaddingX(14).Gap(8).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
-				icon(c, "search", 14, p.muted)
+			ui.Row(c).FillWidth().Height(44).PaddingX(14).Gap(10).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
+				icon(c, "search", 14, p.accent)
 				in := ui.TextInputBase(c.Key("quick-in"), &qs.query).Placeholder(a.t("搜索请求、环境、命令…", "Search requests, environments, commands…")).PlaceholderColor(p.muted).
-					FontSize(13).TextColor(p.fg).Grow(1).Basis(0).FillHeight().AutoFocus()
+					FontSize(14).TextColor(p.fg).CaretColor(p.accent).Grow(1).Basis(0).FillHeight().AutoFocus()
 				switch {
 				case in.Changed():
 					qs.sel = 0
@@ -182,8 +182,8 @@ func (a *app) quickView(c *ui.Context) {
 				for i, it := range items {
 					if it.kind != last {
 						last = it.kind
-						ui.Row(c.Key("qg" + itoa(int(it.kind)))).FillWidth().Height(22).PaddingX(8).AlignItems(ui.End).Children(func() {
-							txt(c, a.quickGroupTitle(it.kind), 10, p.muted, 600)
+						ui.Row(c.Key("qg"+itoa(int(it.kind)))).FillWidth().Height(26).Padding(0, 8, 3, 8).AlignItems(ui.End).Children(func() {
+							txt(c, a.quickGroupTitle(it.kind), 10.5, p.muted, 650)
 						})
 					}
 					if a.quickRow(c, i, it, i == qs.sel) {
@@ -192,7 +192,7 @@ func (a *app) quickView(c *ui.Context) {
 				}
 			})
 			// 键位提示
-			ui.Row(c).FillWidth().Height(30).PaddingX(14).Gap(14).AlignItems(ui.Center).BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(func() {
+			ui.Row(c).FillWidth().Height(30).PaddingX(14).Gap(14).AlignItems(ui.Center).Background(p.surface2.Alpha(0.4)).BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(func() {
 				for _, h := range [][2]string{{"↑↓", a.t("选择", "Select")}, {"↩", a.t("打开", "Open")}, {"esc", a.t("关闭", "Close")}} {
 					ui.Row(c.Key("qh" + h[0])).Gap(5).AlignItems(ui.Center).Children(func() {
 						a.kbdChip(c, h[0])
@@ -213,25 +213,35 @@ func (a *app) quickView(c *ui.Context) {
 // quickRow 绘制一条结果，返回是否被点击。
 func (a *app) quickRow(c *ui.Context, i int, it quickItem, selected bool) bool {
 	p := a.p
-	row := ui.ButtonBase(c.Key("qr" + itoa(i))).FillWidth().Height(30).PaddingX(8).Gap(8).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start)
+	row := ui.ButtonBase(c.Key("qr" + itoa(i))).FillWidth().Height(32).PaddingX(10).Gap(10).Radius(radiusR).AlignItems(ui.Center).Justify(ui.Start)
 	switch {
 	case selected:
-		row = row.Background(p.sideActive)
+		row = row.Background(p.acSoft).InsetShadow(2, 0, 0, 0, p.accent)
 	case row.Hovered():
 		row = row.Background(p.hover)
 	}
 	row.Children(func() {
+		// 左侧 20px 图标块（设计稿 .qk-r .ico）：选中时为淡强调色底
+		tile := func(draw func(col ui.Color)) {
+			bg, col := p.surface2, p.fg2
+			if selected {
+				bg, col = p.acSoft2, p.accent
+			}
+			ui.Row(c).Size(20, 20).Radius(6).Background(bg).AlignItems(ui.Center).Justify(ui.Center).Shrink(0).Children(func() { draw(col) })
+		}
 		switch it.kind {
 		case quickRequest:
-			ui.Row(c).Width(sizeMethodCol).Shrink(0).Children(func() {
-				txtMono(c, methodAbbr(it.method), 9, p.method(it.method), 700)
-			})
+			ui.Row(c).Width(34).Shrink(0).Children(func() { a.methodBadge(c, it.method, 0) })
 		case quickEnv:
-			ui.Box(c).Size(7, 7).Radius(3.5).Background(p.success).Margin(0, 6, 0, 3).Shrink(0)
+			tile(func(col ui.Color) { icon(c, "globe", 12, col) })
 		default:
-			icon(c, "commandLine", 13, p.muted)
+			tile(func(col ui.Color) { icon(c, "commandLine", 12, col) })
 		}
-		txtE(c, it.label, fsLarge, p.fg, 0).Shrink(0).MaxWidth(300)
+		nameCol, nameW := p.fg, 0
+		if selected {
+			nameCol, nameW = p.accent, 600
+		}
+		txtE(c, it.label, fsLarge, nameCol, nameW).Shrink(0).MaxWidth(300)
 		if it.hint != "" {
 			txtE(c, it.hint, fsSmall, p.muted, 0).Grow(1)
 		} else {

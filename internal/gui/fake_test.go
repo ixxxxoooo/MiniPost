@@ -118,6 +118,9 @@ func (f *fakeBackend) DeleteProject(id string) error {
 	return errors.New("not found")
 }
 func (f *fakeBackend) GetCollectionData(pid string) (*model.CollectionData, error) {
+	if f.colls[pid] == nil {
+		return &model.CollectionData{}, nil // 没有集合数据的项目（如主页里的其他项目）按空集合处理
+	}
 	cd := *f.colls[pid]
 	return &cd, nil
 }

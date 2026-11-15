@@ -13,7 +13,7 @@ import (
 type Settings struct {
 	Locale            string  `json:"locale"`      // zh-CN | en-US，空表示跟随系统
 	Theme             string  `json:"theme"`       // light | dark | system
-	ColorScheme       string  `json:"colorScheme"` // mist（雾蓝）| ink（墨白）| jade（松石）
+	ColorScheme       string  `json:"colorScheme"` // mist（雾蓝）| ink（墨白）| jade（松石）| amber（琥珀）| rose（玫瑰）
 	FontSize          int     `json:"fontSize"`
 	SidebarWidth      float32 `json:"sidebarWidth"`
 	SidebarCollapsed  bool    `json:"sidebarCollapsed"`
@@ -50,12 +50,12 @@ type Settings struct {
 const (
 	ConsoleMinHeight     = 80
 	ConsoleMaxHeight     = 1200
-	ConsoleDefaultHeight = 220
+	ConsoleDefaultHeight = 190
 )
 
 func DefaultSettings() Settings {
 	return Settings{
-		Theme: "system", ColorScheme: "mist", FontSize: 12, SidebarWidth: 240, LayoutDirection: "vertical", ConsoleHeight: ConsoleDefaultHeight,
+		Theme: "system", ColorScheme: "mist", FontSize: 12, SidebarWidth: 232, LayoutDirection: "vertical", ConsoleHeight: ConsoleDefaultHeight,
 		FollowRedirects: true, HTTPVersion: "auto", MaxResponseSizeMB: 50, SSLVerify: true, ScrollbarAutoHide: true,
 		ResponseFormatDetection: "auto", AutoBackupIntervalMinutes: 30, EnvByProject: map[string]string{},
 	}
@@ -71,7 +71,7 @@ func (s *Settings) Normalize() {
 		s.Theme = "system"
 	}
 	switch s.ColorScheme {
-	case "mist", "ink", "jade":
+	case "mist", "ink", "jade", "amber", "rose":
 	default:
 		s.ColorScheme = "mist"
 	}

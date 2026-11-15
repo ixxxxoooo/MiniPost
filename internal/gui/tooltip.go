@@ -25,7 +25,7 @@ const (
 	sideRowHoverIcons = 36 // 悬停时右侧出现的“新建”和“···”按钮
 	sideFolderChrome  = 60 // 文件夹行：外边距 8 + 内边距 16 + 箭头/图标/间距 36
 	sideRequestChrome = 68 // 请求行：外边距 8 + 内边距 28 + 方法标签 28 + 间距 4
-	sideDepthIndent   = 12 // 每一层嵌套的缩进
+	sideDepthIndent   = 21 // 每一层嵌套的缩进（引导线容器左缩进 16 + 线 1 + 行外边距 4）
 	sideHistoryChrome = 170
 )
 

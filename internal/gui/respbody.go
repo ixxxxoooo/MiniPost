@@ -140,7 +140,7 @@ func (a *app) bodyView(c *ui.Context, t *tab, rs *respState) {
 	a.syncBody(rs, t)
 	v := &rs.view
 	canPreview := client.CanPreview(v.effMode, rs.resp.ContentType, v.raw)
-	ui.Column(c).Grow(1).Basis(0).Padding(8).Children(func() {
+	ui.Column(c).Grow(1).Basis(0).Children(func() {
 		a.bodyToolbar(c, rs, canPreview)
 		if v.filterOpen && !v.download && !v.isImage {
 			a.filterBar(c, rs)
@@ -194,44 +194,94 @@ func (a *app) modeLabel(mode string) string {
 	return strings.ToUpper(mode)
 }
 
-// bodyToolbar 是响应体上方 24px 的工具栏：左侧格式与预览，右侧换行、过滤、搜索、折叠、复制、下载。
+// fmtChip 是工具栏左侧的小胶囊（设计稿 .fmt）：24 高、圆角 8、次级底色；ac 为强调色淡底（预览开启）。
+// 返回按钮元素供调用方附加下拉菜单或读取点击；子内容由 body 绘制。
+func (a *app) fmtChip(c *ui.Context, key string, ac, disabled bool) ui.Element {
+	p := a.p
+	b := ui.ButtonBase(c.Key(key)).Height(24).Radius(radiusSm).PaddingX(8).Gap(5).AlignItems(ui.Center).Shrink(0)
+	switch {
+	case ac:
+		b = b.Background(p.acSoft).Border(1, p.acSoft2)
+	case b.Hovered() && !disabled:
+		b = b.Background(p.press)
+	default:
+		b = b.Background(p.surface2)
+	}
+	if disabled {
+		b = b.Disabled(true).Opacity(0.5)
+	}
+	return b
+}
+
+// bodyToolbar 是响应体上方的工具栏（设计稿 .rtool）：左侧格式与预览胶囊，右侧 22px 小图标按钮
+// （换行、过滤、展开/折叠全部、搜索，分隔线后是复制与保存）。
 func (a *app) bodyToolbar(c *ui.Context, rs *respState, canPreview bool) {
 	p := a.p
 	resp, v := rs.resp, &rs.view
 	preferDownload := client.PreferDownload(resp.Headers, resp.ContentType, resp.BodyIsBinary)
-	sep := func() { ui.Box(c).Width(1).Height(14).Background(p.border).Shrink(0) }
-	ui.Row(c).FillWidth().Shrink(0).Padding(6, 12).Gap(6).AlignItems(ui.Center).Children(func() {
+	sep := func() { ui.Box(c).Width(1).Height(14).Background(p.border).Margin(0, 2).Shrink(0) }
+	ui.Row(c).FillWidth().Shrink(0).Padding(6, 10).Gap(4).AlignItems(ui.Center).Children(func() {
 		switch {
 		case v.isImage:
-			ui.Row(c).Height(24).Radius(8).PaddingX(6).Gap(4).AlignItems(ui.Center).Background(p.selected).Shrink(0).Children(func() {
-				txt(c, "Image", fsTiny, p.fg, 0)
+			a.fmtChip(c, "fmt-img", false, false).Children(func() {
+				icon(c, "image", 12, p.muted)
+				txt(c, "Image", fsSmall+0.5, p.fg, 600)
 			})
 		case v.download:
-			ui.Row(c).Height(24).Radius(8).PaddingX(8).Gap(4).AlignItems(ui.Center).Background(p.selected).Shrink(1).Children(func() {
-				icon(c, "download", 10, p.fg2)
-				txtE(c, v.filename, fsTiny, p.fg2, 0)
+			a.fmtChip(c, "fmt-file", false, false).Shrink(1).Children(func() {
+				icon(c, "download", 12, p.muted)
+				txtE(c, v.filename, fsSmall+0.5, p.fg2, 600)
 			})
 		default:
 			a.formatDropdown(c, rs)
 			prevOn := v.preview && canPreview
-			prevCol, eyeCol := p.fg2, p.success
+			prevCol := p.fg
 			if prevOn {
-				prevCol, eyeCol = p.accent, p.accent
+				prevCol = p.accent
 			}
-			if a.button(c, btnOpts{h: 26, radius: 8, padX: 8, gap: 5, active: prevOn, disabled: !canPreview, tip: a.t("预览", "Preview"), key: "preview"}, func(bool) {
-				icon(c, "eye", 13, eyeCol)
-				txt(c, a.t("预览", "Preview"), fsBase, prevCol, 0)
-			}) {
+			pb := a.fmtChip(c, "preview", prevOn, !canPreview).Tooltip(a.t("预览", "Preview"))
+			pb.Children(func() {
+				icon(c, "eye", 12, prevCol)
+				txt(c, a.t("预览", "Preview"), fsSmall+0.5, prevCol, 600)
+			})
+			if pb.Clicked() {
 				v.preview = true
 			}
 		}
 		ui.Spacer(c)
-		tb := func(name, tip string, active bool, key string) bool {
-			col := p.fg2
-			if active {
-				col = p.accent
+		tb := func(name, tip string, active bool, key string) {
+			act := func() {}
+			switch key {
+			case "tb-wrap":
+				act = func() { rs.bodyEd.SoftWrap = !rs.bodyEd.SoftWrap }
+			case "tb-filter":
+				act = func() {
+					v.filterOpen = !v.filterOpen
+					if !v.filterOpen {
+						v.filterExpr = ""
+					}
+				}
+			case "tb-find":
+				act = func() {
+					if !v.preview {
+						rs.bodyEd.Find("")
+					}
+				}
+			case "tb-fold":
+				act = func() {
+					n := rs.bodyEd.Buffer.LineCount()
+					for i := 0; i < min(n, 2000); i++ {
+						rs.bodyEd.Fold(i)
+					}
+				}
+			case "tb-unfold":
+				act = func() {
+					for _, l := range rs.bodyEd.Folded() {
+						rs.bodyEd.Unfold(l)
+					}
+				}
 			}
-			return a.button(c, btnOpts{w: 26, h: 26, radius: 8, active: active, tip: tip, key: key}, func(bool) { icon(c, name, 14, col) })
+			a.ibSmOn(c, key, name, tip, active, false, act)
 		}
 		switch {
 		case v.isImage:
@@ -250,55 +300,27 @@ func (a *app) bodyToolbar(c *ui.Context, rs *respState, canPreview bool) {
 			}
 			return
 		default:
-			if tb("wrapText", a.t("自动换行", "Line wrap"), rs.bodyEd.SoftWrap, "tb-wrap") {
-				rs.bodyEd.SoftWrap = !rs.bodyEd.SoftWrap
-			}
-			if tb("formatList", a.t("过滤", "Filter"), v.filterOpen, "tb-filter") {
-				v.filterOpen = !v.filterOpen
-				if !v.filterOpen {
-					v.filterExpr = ""
-				}
-			}
-			if tb("search", a.t("查找 (⌘F)", "Search (⌘F)"), false, "tb-find") && !v.preview {
-				rs.bodyEd.Find("")
-			}
+			tb("wrap", a.t("自动换行", "Line wrap"), rs.bodyEd.SoftWrap, "tb-wrap")
+			tb("filter", a.t("过滤", "Filter"), v.filterOpen, "tb-filter")
 			if v.effMode == client.ModeJSON && !v.preview {
-				if tb("arrowRight", a.t("一键折叠所有 JSON 节点", "Collapse all JSON nodes"), false, "tb-fold") {
-					n := rs.bodyEd.Buffer.LineCount()
-					for i := 0; i < min(n, 2000); i++ {
-						rs.bodyEd.Fold(i)
-					}
-				}
-				if tb("arrowDown", a.t("一键展开所有 JSON 节点", "Expand all JSON nodes"), false, "tb-unfold") {
-					for _, l := range rs.bodyEd.Folded() {
-						rs.bodyEd.Unfold(l)
-					}
-				}
+				tb("expandAll", a.t("一键展开所有 JSON 节点", "Expand all JSON nodes"), false, "tb-unfold")
+				tb("collapseAll", a.t("一键折叠所有 JSON 节点", "Collapse all JSON nodes"), false, "tb-fold")
 			}
+			tb("search", a.t("查找 (⌘F)", "Search (⌘F)"), false, "tb-find")
 			sep()
 			copied := time.Since(v.copiedAt) < copiedLinger
 			tip := a.t("复制响应体", "Copy response body")
 			if copied {
 				tip = a.t("已复制", "Copied")
 			}
-			if tb2 := a.button(c, btnOpts{w: 26, h: 26, radius: 8, tip: tip, key: "tb-copy"}, func(bool) {
-				col := p.fg2
-				if copied {
-					col = p.accent
-				}
-				icon(c, "copy", 14, col)
-			}); tb2 {
-				a.later(func() { a.copyBody(rs) })
-			}
+			a.ibSmOn(c, "tb-copy", "copy", tip, copied, false, func() { a.copyBody(rs) })
 		}
 		// 任何文本响应都可以保存为文件（二进制响应在上面的下载卡片里处理）
 		tip := a.t("保存到文件", "Save to file")
 		if preferDownload {
 			tip = a.t("下载文件", "Download file")
 		}
-		if tb("download", tip, false, "tb-download") {
-			a.later(func() { a.saveResponse(resp, v.filename) })
-		}
+		a.ibSm(c, "tb-download", "download", tip, false, func() { a.saveResponse(resp, v.filename) })
 	})
 }
 
@@ -324,17 +346,11 @@ func (a *app) formatDropdown(c *ui.Context, rs *respState) {
 	p := a.p
 	v := &rs.view
 	body := func() {
-		txtMono(c, modeGlyph(v.effMode), fsSmall, p.accent, 600)
-		txt(c, a.modeLabel(v.effMode), fsBase, p.fg, 500)
-		icon(c, "arrowDown", 9, p.muted)
+		icon(c, "code", 12, p.muted)
+		txt(c, a.modeLabel(v.effMode), fsSmall+0.5, p.fg, 600)
+		icon(c, "chevD", 10, p.muted)
 	}
-	b := ui.ButtonBase(c.Key("fmt")).Height(26).Radius(8).PaddingX(8).Gap(5).AlignItems(ui.Center).Shrink(0)
-	switch {
-	case !v.preview:
-		b = b.Background(p.accent.Alpha(0.13))
-	case b.Hovered():
-		b = b.Background(p.hover)
-	}
+	b := a.fmtChip(c, "fmt", false, false)
 	if v.preview {
 		b.Children(body)
 		if b.Clicked() {

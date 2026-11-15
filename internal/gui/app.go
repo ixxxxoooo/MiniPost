@@ -47,6 +47,7 @@ type app struct {
 	homeSel      string // 项目主页右侧详情面板选中的项目 ID
 	homeSort     string // 项目主页排序：updated（默认）或 name
 	homeQuery    string // 项目主页搜索词
+	homeList     bool   // 项目主页用列表模式（默认卡片网格）
 	authReveal   bool   // Auth 页是否明文显示密钥
 	homeStats    map[string]projStats
 	homeStatsKey map[string]string // 统计缓存对应的项目更新时间，变化后重新读取
@@ -87,7 +88,7 @@ func newApp(be Backend) *app {
 		side:      sideState{outRow: -1, histRow: -1},
 		bulk:      map[string]string{},
 		descDraft: map[string]string{},
-		splitPct:  55,
+		splitPct:  51,
 		updater:   mygoUpdater{},
 		relaunch:  func() { mygo.App.Relaunch() },
 	}

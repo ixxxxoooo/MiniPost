@@ -64,7 +64,7 @@ func (a *app) finishSend(t *tab, method, url string, resp *model.HttpResponse, e
 	rs.streaming = false
 	if err != nil {
 		rs.err = err.Error()
-		a.logResponse(method, url, 0, 0, err.Error())
+		a.logResponse(method, url, 0, 0, 0, err.Error())
 		logger.Warn("请求失败", "error", err.Error())
 		return
 	}
@@ -76,7 +76,7 @@ func (a *app) finishSend(t *tab, method, url string, resp *model.HttpResponse, e
 	if !rs.streamed {
 		rs.sub = 0
 	}
-	a.logResponse(method, url, resp.StatusCode, resp.Duration, "")
+	a.logResponse(method, url, resp.StatusCode, resp.Duration, resp.Size, "")
 	a.reloadHistory()
 	if t.downloadAfter {
 		t.downloadAfter = false

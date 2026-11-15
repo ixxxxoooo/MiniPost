@@ -168,19 +168,18 @@ func TestScrollbarAutoHideVisibility(t *testing.T) {
 // 而不只是名称文字本身；按钮之外（后面的空白标题栏）则不响应。
 func TestProjectButtonWholeAreaToggles(t *testing.T) {
 	a, tt, _ := zhApp(t)
-	name, ok := tt.Find("Demo")
+	// 项目按钮自带“切换项目”标签，其区域就是整颗按钮（头像、名称、箭头与内边距）。
+	btn, ok := tt.Find("切换项目")
 	if !ok {
-		t.Fatal("找不到项目名")
+		t.Fatal("找不到项目按钮")
 	}
-	// 按钮左边缘 = 名称左边 - 圆点(8) - 间距(7) - 左内边距(8)；宽度见 projectButton（短名称取 92~98）。
-	left := name.X - 23
-	w := min(float32(180), max(float32(92), float32(54+11*4)))
-	cy := name.Y + name.H/2
+	left, w := btn.X, btn.W
+	cy := btn.Y + btn.H/2
 	for label, x := range map[string]float32{
 		"左内边距": left + 3,
-		"圆点":   left + 8 + 4,
-		"名称":   name.X + 4,
-		"箭头":   left + w - 8 - 5,
+		"头像":   left + 9 + 9,
+		"名称":   left + w/2,
+		"箭头":   left + w - 9 - 5,
 		"右内边距": left + w - 3,
 	} {
 		tt.ClickAt(x, cy)
@@ -194,8 +193,8 @@ func TestProjectButtonWholeAreaToggles(t *testing.T) {
 			t.Fatalf("再次点击%s应收起下拉面板", label)
 		}
 	}
-	// 按钮右侧空白处不应触发
-	tt.ClickAt(left+w+40, cy)
+	// 按钮左侧（悬浮胶囊之外）的标题栏空白不应触发
+	tt.ClickAt(left-60, cy)
 	tt.Frame()
 	if a.projMenu.open {
 		t.Fatal("点按钮之外的标题栏空白不应展开面板")
