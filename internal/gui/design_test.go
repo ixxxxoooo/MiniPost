@@ -889,8 +889,8 @@ func TestEnvTableInitialCurrentDescription(t *testing.T) {
 	}
 }
 
-// 侧栏（设计稿 25）：文件夹行右侧显示其中的请求数；底部右端的键盘图标打开“设置 · 快捷键”。
-func TestSidebarFolderCountAndShortcutEntry(t *testing.T) {
+// 侧栏（设计稿 25）：文件夹行右侧显示其中的请求数；没有“根目录”行，底部是统计。
+func TestSidebarFolderCountAndFooter(t *testing.T) {
 	a, tt, _ := visualApp(t, false)
 	tt.Frame()
 	total := 0
@@ -908,12 +908,14 @@ func TestSidebarFolderCountAndShortcutEntry(t *testing.T) {
 		t.Fatal("夹具里应有文件夹包含请求")
 	}
 	snapshot(t, tt, "d_sidebar")
-	if err := tt.Click("side-kbd"); err != nil {
-		// 键盘图标按 key 查找失败时退回按提示文字查找
-		t.Skipf("无法按 key 点击键盘图标：%v", err)
+	// 原型里没有“根目录”行，底部也不再放键盘按钮
+	if tt.HasText("根目录") {
+		t.Fatal("侧栏不应再显示“根目录”行")
 	}
-	tt.Frame()
-	if !a.overlays.prefs.open || a.overlays.prefs.section != 3 {
-		t.Fatalf("应打开设置的快捷键页，实际 open=%v section=%d", a.overlays.prefs.open, a.overlays.prefs.section)
+	if !tt.HasText("个请求") {
+		t.Fatalf("侧栏底部应显示统计: %q", tt.Texts())
+	}
+	if err := tt.Click("side-kbd"); err == nil {
+		t.Fatal("侧栏底部不应再有键盘按钮")
 	}
 }

@@ -124,24 +124,23 @@ func (a *app) projectButton(c *ui.Context) {
 	}
 }
 
-// envPill 是标题栏右侧的环境胶囊（设计稿 .envp）：有环境时绿点 + 环境名，无环境时灰点 + “无环境”，
-// 点击弹出环境列表，末尾可进入环境管理。
+// envPill 是标题栏右侧的环境选择按钮：与左侧项目选择器同一风格（无边框、悬停浅底），
+// 有环境时绿点 + 环境名，无环境时灰点 + “无环境”，点击弹出环境列表，末尾可进入环境管理。
 func (a *app) envPill(c *ui.Context) {
 	p := a.p
 	dot := p.muted
 	if a.env() != nil {
 		dot = p.success
 	}
-	btn := ui.ButtonBase(c.Key("envsel")).Height(22).Radius(11).PaddingStart(7).PaddingEnd(8).Gap(6).AlignItems(ui.Center).Shrink(0).
-		Background(p.surface).Border(1, p.btnBorder).
+	btn := ui.ButtonBase(c.Key("envsel")).Height(sizeBtn).Radius(radiusBtn - 1).PaddingStart(8).PaddingEnd(6).Gap(7).AlignItems(ui.Center).Shrink(0).
 		Tooltip(a.t("切换环境", "Switch environment")).Label(a.t("切换环境", "Switch environment")).
 		PopoverMenuButton(func(m *ui.Menu) { a.envMenu(m) })
 	if btn.Hovered() {
-		btn = btn.Background(p.surface2)
+		btn = btn.Background(p.hover)
 	}
 	btn.Children(func() {
-		ui.Box(c).Size(8, 8).Radius(4).Background(dot).Shrink(0)
-		txtE(c, a.envLabel(), fsBase, p.fg2, 500).MaxWidth(140)
+		ui.Box(c).Size(7, 7).Radius(3.5).Background(dot).Shrink(0)
+		txtE(c, a.envLabel(), fsBase, p.fg, 500).MaxWidth(140)
 		icon(c, "tbChevDown", 12, p.muted)
 	})
 }

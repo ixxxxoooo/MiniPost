@@ -22,6 +22,12 @@ const (
 	colAct   = 85.4
 )
 
+// 键值表的行高与表头高度（设计稿：行 30、表头 28）。
+const (
+	kvRowH  = 30
+	kvHeadH = 28
+)
+
 // kvOpts 描述键值表的列与自动请求头行。
 type kvOpts struct {
 	id     string // 表格唯一标识，用于批量编辑状态与控件 key
@@ -76,24 +82,30 @@ func (a *app) kvSubhead(c *ui.Context, rows *[]*client.Row, o kvOpts, auto []cli
 	})
 }
 
-// tableCell 画一个带下分隔线的表格单元。
+// tableCell 画一个带下分隔线和右分隔线（列间竖线）的表格单元。
 func (a *app) tableCell(c *ui.Context, grow, h float32, children func()) {
+	ui.Row(c).Grow(grow).Basis(0).Height(h).Shrink(1).AlignItems(ui.Center).
+		BorderWidth(0, 1, 1, 0).BorderColor(a.p.border).Children(children)
+}
+
+// tableCellEnd 是表格最后一个单元（行末操作列）：只有下分隔线，没有右竖线。
+func (a *app) tableCellEnd(c *ui.Context, grow, h float32, children func()) {
 	ui.Row(c).Grow(grow).Basis(0).Height(h).Shrink(1).AlignItems(ui.Center).
 		BorderWidth(0, 0, 1, 0).BorderColor(a.p.border).Children(children)
 }
 
-// tableFrame 是扁平表格的滚动容器：只有行间 1px 分隔线，没有外框和竖线。
+// tableFrame 是表格的滚动容器：铺满面板宽度，行与行、列与列之间是 1px 细线。
 func (a *app) tableFrame(c *ui.Context, rows func()) {
 	ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
-		ui.Column(c).FillWidth().Padding(0, 8).Children(rows)
+		ui.Column(c).FillWidth().Children(rows)
 	})
 }
 
 // kvCellInput 是表格单元里的无边框输入框（11px，等宽，占位符灰色）。
 func (a *app) kvCellInput(c *ui.Context, key string, v *string, ph string, mono bool, col ui.Color, dim bool, disabled bool) ui.Element {
 	p := a.p
-	in := ui.TextInputBase(c.Key(key), v).Placeholder(ph).PlaceholderColor(p.muted).FontSize(fsSmall).TextColor(col).
-		Grow(1).Basis(0).Height(24).Padding(0, 8, 2, 8) // 底部多留 2px，使文字与旧版基线一致
+	in := ui.TextInputBase(c.Key(key), v).Placeholder(ph).PlaceholderColor(p.muted).FontSize(fsBase).TextColor(col).
+		Grow(1).Basis(0).Height(kvRowH-2).Padding(0, 8, 1, 8)
 	if mono {
 		in = in.Font(monoFont)
 	}
@@ -111,12 +123,21 @@ func (a *app) kvCellInput(c *ui.Context, key string, v *string, ph string, mono 
 
 // kvHeaderCell 绘制表头单元：11px 半粗，次要色。
 func (a *app) kvHeaderCell(c *ui.Context, grow float32, label string, extra func()) {
-	a.tableCell(c, grow, 25.5, func() {
+	a.tableCell(c, grow, kvHeadH, func() {
 		ui.Row(c).FillWidth().PaddingX(8).AlignItems(ui.Center).Children(func() {
 			txtE(c, label, fsSmall, a.p.muted, 500).Grow(1)
 			if extra != nil {
 				extra()
 			}
+		})
+	})
+}
+
+// kvHeaderCellEnd 是最后一列的表头单元：没有右竖线。
+func (a *app) kvHeaderCellEnd(c *ui.Context, grow float32, label string) {
+	a.tableCellEnd(c, grow, kvHeadH, func() {
+		ui.Row(c).FillWidth().PaddingX(8).AlignItems(ui.Center).Children(func() {
+			txtE(c, label, fsSmall, a.p.muted, 500).Grow(1)
 		})
 	})
 }
@@ -138,21 +159,21 @@ func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {
 	a.kvSubhead(c, rows, o, auto)
 	a.tableFrame(c, func() {
 		// 表头
-		ui.Row(c).FillWidth().Children(func() {
+		ui.Row(c).FillWidth().Background(p.surface2.Alpha(0.5)).Children(func() {
 			a.kvHeaderCell(c, colCheck, "", nil)
 			a.kvHeaderCell(c, colKey, o.keyPH, nil)
 			a.kvHeaderCell(c, colValue, o.valPH, nil)
 			if !o.noDesc {
-				a.kvHeaderCell(c, colDesc, a.t("说明", "Description"), nil)
+				a.kvHeaderCellEnd(c, colDesc, a.t("说明", "Description"))
 			}
-			a.tableCell(c, colAct, 25.5, func() {})
+			a.tableCellEnd(c, colAct, kvHeadH, func() {})
 		})
 		// 自动请求头（只读，可单独关闭）
 		if o.t != nil && o.t.autoOpen {
 			for _, it := range auto {
 				it := it
 				ui.Row(c.Key("auto:" + it.Key)).FillWidth().Background(p.surface2.Alpha(0.4)).Children(func() {
-					a.tableCell(c, colCheck, 25, func() {
+					a.tableCell(c, colCheck, kvRowH, func() {
 						ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
 							on := it.Enabled
 							if a.checkbox(c, "autochk:"+it.Key, &on, false) {
@@ -160,14 +181,14 @@ func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {
 							}
 						})
 					})
-					a.tableCell(c, colKey, 25, func() {
+					a.tableCell(c, colKey, kvRowH, func() {
 						txtEMono(c, it.Key, fsSmall, p.fg2, 0).PaddingX(8).Grow(1)
 					})
-					a.tableCell(c, colValue, 25, func() {
+					a.tableCell(c, colValue, kvRowH, func() {
 						txtEMono(c, it.Value, fsSmall, p.muted, 0).PaddingX(8).Grow(1)
 					})
 					if !o.noDesc {
-						a.tableCell(c, colDesc, 25, func() {
+						a.tableCellEnd(c, colDesc, kvRowH, func() {
 							d := it.Description
 							if d == "" {
 								d = a.t("发送时自动生成", "Auto-generated when sending")
@@ -175,7 +196,7 @@ func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {
 							txtE(c, d, fsSmall, p.muted, 0).PaddingX(8).Grow(1)
 						})
 					}
-					a.tableCell(c, colAct, 25, func() {})
+					a.tableCellEnd(c, colAct, kvRowH, func() {})
 				})
 			}
 		}
@@ -184,26 +205,32 @@ func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {
 			last := r.IsPlaceholder()
 			rowEl := ui.Row(c.Key(r.ID)).FillWidth()
 			hover := rowEl.Hovered()
+			if hover && !last {
+				rowEl = rowEl.Background(p.surface2)
+			}
 			rowEl.Children(func() {
-				a.tableCell(c, colCheck, 25, func() {
-					// 旧版原生复选框距单元格顶部约 4px，而不是垂直居中
-					ui.Row(c).FillWidth().Height(24).Padding(3, 0, 0, 0).Justify(ui.Center).AlignItems(ui.Start).Children(func() {
+				a.tableCell(c, colCheck, kvRowH, func() {
+					ui.Row(c).FillWidth().Height(kvRowH - 2).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
 						changed = a.kvCheck(c, r.ID, &r.Enabled, last) || changed
 					})
 				})
 				dim := !r.Enabled && !last
-				a.tableCell(c, colKey, 25, func() {
-					changed = a.kvCellInput(c, "k:"+r.ID, &r.Key, o.keyPH, true, p.fg, dim, false).Changed() || changed
+				a.tableCell(c, colKey, kvRowH, func() {
+					in := a.kvCellInput(c, "k:"+r.ID, &r.Key, o.keyPH, true, p.fg, dim, false)
+					if dim {
+						in = in.Strikethrough() // 已停用的行：键名加删除线
+					}
+					changed = in.Changed() || changed
 				})
-				a.tableCell(c, colValue, 25, func() {
+				a.tableCell(c, colValue, kvRowH, func() {
 					changed = a.kvCellInput(c, "v:"+r.ID, &r.Value, o.valPH, true, p.fg, dim, last).Changed() || changed
 				})
 				if !o.noDesc {
-					a.tableCell(c, colDesc, 25, func() {
+					a.tableCellEnd(c, colDesc, kvRowH, func() {
 						changed = a.kvCellInput(c, "d:"+r.ID, &r.Description, a.t("说明", "Description"), false, p.fg2, dim, last).Changed() || changed
 					})
 				}
-				a.tableCell(c, colAct, 25, func() {
+				a.tableCellEnd(c, colAct, kvRowH, func() {
 					ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
 						if !last {
 							if hover && a.miniDelete(c, "del:"+r.ID, nil) {
@@ -312,14 +339,14 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 		ui.Row(c).FillWidth().Children(func() {
 			a.kvHeaderCell(c, 28, "", nil)
 			a.kvHeaderCell(c, colKey, a.t("键", "Key"), nil)
-			a.tableCell(c, 72, 25.5, func() {
+			a.tableCell(c, 72, kvHeadH, func() {
 				ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
 					txt(c, a.t("类型", "Type"), fsSmall, p.fg2, 600)
 				})
 			})
 			a.kvHeaderCell(c, colValue, a.t("值", "Value"), nil)
-			a.kvHeaderCell(c, colDesc, a.t("说明", "Description"), nil)
-			a.tableCell(c, 32, 25.5, func() {})
+			a.kvHeaderCellEnd(c, colDesc, a.t("说明", "Description"))
+			a.tableCellEnd(c, 32, kvHeadH, func() {})
 		})
 		for i, r := range *rows {
 			i, r := i, r
@@ -327,17 +354,20 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 			rowEl := ui.Row(c.Key(r.ID)).FillWidth()
 			hover := rowEl.Hovered()
 			rowEl.Children(func() {
-				a.tableCell(c, 28, 25, func() {
-					// 旧版原生复选框距单元格顶部约 4px，而不是垂直居中
-					ui.Row(c).FillWidth().Height(24).Padding(3, 0, 0, 0).Justify(ui.Center).AlignItems(ui.Start).Children(func() {
+				a.tableCell(c, 28, kvRowH, func() {
+					ui.Row(c).FillWidth().Height(kvRowH - 2).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
 						changed = a.kvCheck(c, r.ID, &r.Enabled, last) || changed
 					})
 				})
 				dim := !r.Enabled && !last
-				a.tableCell(c, colKey, 25, func() {
-					changed = a.kvCellInput(c, "k:"+r.ID, &r.Key, a.t("键", "Key"), true, p.fg, dim, false).Changed() || changed
+				a.tableCell(c, colKey, kvRowH, func() {
+					in := a.kvCellInput(c, "k:"+r.ID, &r.Key, a.t("键", "Key"), true, p.fg, dim, false)
+					if dim {
+						in = in.Strikethrough()
+					}
+					changed = in.Changed() || changed
 				})
-				a.tableCell(c, 72, 25, func() {
+				a.tableCell(c, 72, kvRowH, func() {
 					ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
 						label := a.t("文本", "Text")
 						if r.Type == "file" {
@@ -357,7 +387,7 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 						})
 					})
 				})
-				a.tableCell(c, colValue, 25, func() {
+				a.tableCell(c, colValue, kvRowH, func() {
 					if r.Type == "file" {
 						label, col := r.FileName, p.fg
 						if label == "" {
@@ -372,10 +402,10 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 					}
 					changed = a.kvCellInput(c, "v:"+r.ID, &r.Value, a.t("值", "Value"), true, p.fg, dim, last).Changed() || changed
 				})
-				a.tableCell(c, colDesc, 25, func() {
+				a.tableCellEnd(c, colDesc, kvRowH, func() {
 					changed = a.kvCellInput(c, "d:"+r.ID, &r.Description, a.t("说明", "Description"), false, p.fg2, dim, last).Changed() || changed
 				})
-				a.tableCell(c, 32, 25, func() {
+				a.tableCellEnd(c, 32, kvRowH, func() {
 					ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
 						if !last && hover && a.miniDelete(c, "del:"+r.ID, nil) {
 							remove = i

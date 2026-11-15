@@ -18,7 +18,7 @@ func (a *app) tabBar(c *ui.Context) {
 			})
 			vline(c, p.tabDivider)
 		}
-		ui.ScrollHorizontal(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
+		ui.ScrollHorizontal(c).Grow(1).Basis(0).Scrollbars(false).Children(func() {
 			ui.Row(c).FillHeight().AlignItems(ui.End).Children(func() {
 				for i, t := range a.tabs {
 					a.tabItem(c, i, t)

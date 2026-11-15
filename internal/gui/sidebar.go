@@ -54,18 +54,10 @@ func (a *app) treeCounts() (reqs, folders int) {
 func (a *app) sideFooter(c *ui.Context) {
 	p := a.p
 	reqs, folders := a.treeCounts()
-	ui.Row(c.Key("sidefooter")).FillWidth().Height(26).Shrink(0).PaddingX(12).Gap(6).AlignItems(ui.Center).Children(func() {
-		icon(c, "cube", 11, p.accent)
+	ui.Row(c.Key("sidefooter")).FillWidth().Height(28).Shrink(0).PaddingX(12).Gap(6).AlignItems(ui.Center).
+		BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(func() {
+		icon(c, "layers", 12, p.muted)
 		txt(c, a.t(fmt.Sprintf("%d 个请求 · %d 个文件夹", reqs, folders), fmt.Sprintf("%d requests · %d folders", reqs, folders)), fsSmall, p.muted, 0).Grow(1)
-		// 右端的键盘图标：点击打开“设置 · 快捷键”
-		if a.button(c, btnOpts{w: 20, h: 20, radius: 5, key: "side-kbd", tip: a.t("快捷键", "Keyboard shortcuts")}, func(bool) {
-			icon(c, "keyboard", 12, p.accent)
-		}) {
-			a.later(func() {
-				a.openPrefs()
-				a.overlays.prefs.section = 3
-			})
-		}
 	})
 }
 
@@ -74,7 +66,7 @@ func (a *app) sideFooter(c *ui.Context) {
 func (a *app) sideTabs(c *ui.Context) {
 	p := a.p
 	items := []struct{ icon, zh, en string }{
-		{"cube", "请求", "Requests"},
+		{"layers", "请求", "Requests"},
 		{"clock", "历史", "History"},
 		{"globe", "环境", "Environments"},
 	}
@@ -116,14 +108,14 @@ func (a *app) searchRow(c *ui.Context) {
 					a.kbdHint(c, "⌘K")
 				}
 			}})
-		if a.iconButton(c, "fileImport", a.t("导入", "Import"), 14, p.fg2) {
-			a.later(func() { a.openImport(importFile) })
+		if a.iconButton(c, "fileAdd", a.t("新建请求", "New request")+" (⌘N)", 15, p.fg) {
+			a.later(func() { a.newRequest("") })
 		}
-		if a.iconButton(c, "folderAdd", a.t("新建文件夹", "New folder"), 14, p.fg2) {
+		if a.iconButton(c, "folderAdd", a.t("新建文件夹", "New folder"), 15, p.fg) {
 			a.later(func() { a.newFolder("") })
 		}
-		if a.iconButton(c, "add", a.t("新建请求", "New request")+" (⌘N)", 14, p.fg2) {
-			a.later(func() { a.newRequest("") })
+		if a.iconButton(c, "upload", a.t("导入", "Import"), 15, p.fg) {
+			a.later(func() { a.openImport(importFile) })
 		}
 	})
 }
@@ -145,9 +137,6 @@ func (a *app) collectionView(c *ui.Context) {
 	q := strings.ToLower(strings.TrimSpace(a.side.query))
 	ui.Scroll(c).Grow(1).Basis(0).ContextMenu(a.rootMenu).Scrollbars(a.scrollbarsVisible()).Children(func() {
 		ui.Column(c).FillWidth().Children(func() {
-			if q == "" {
-				a.treeRootRow(c)
-			}
 			switch {
 			case len(a.tree.roots()) == 0:
 				a.sideHint(c, a.t("暂无请求", "No requests"))
@@ -168,6 +157,7 @@ func (a *app) collectionView(c *ui.Context) {
 				for _, id := range a.tree.roots() {
 					a.treeNode(c, id, 0)
 				}
+				a.treeRootDrop(c)
 			}
 		})
 	})
@@ -186,32 +176,24 @@ func (a *app) sideHint(c *ui.Context, s string) {
 	})
 }
 
-// treeRootRow 是“根目录”行：打开状态的文件夹图标，悬停时出现新建请求/文件夹按钮。
-func (a *app) treeRootRow(c *ui.Context) {
+// treeRootDrop 是列表末尾的空白拖放区（原型里没有“根目录”行）：把节点拖到这里就移到项目根目录末尾；
+// 拖动经过时在顶部画一条强调线，右键同样弹出“新建”菜单。
+func (a *app) treeRootDrop(c *ui.Context) {
 	p := a.p
-	row := ui.Row(c.Key("tree-root")).Height(28).MarginX(4).PaddingX(8).Radius(radiusBtn).Gap(6).AlignItems(ui.Center).
-		ContextMenu(a.rootMenu)
-	if d, ok := ui.Drop[nodeDrag](row); ok {
+	zone := ui.Row(c.Key("tree-root-drop")).FillWidth().Height(treeDropH).Shrink(0).ContextMenu(a.rootMenu)
+	if d, ok := ui.Drop[nodeDrag](zone); ok {
 		a.later(func() { a.dropOnRoot(d.id) })
 	}
-	_, over := ui.DragOver[nodeDrag](row)
-	hover := row.Hovered()
-	if hover || over {
-		row = row.Background(p.sideHover)
-	}
-	row.Children(func() {
-		icon(c, "folderOpen", 14, p.muted)
-		txt(c, a.t("根目录", "Root"), fsBase, p.fg, 500).Grow(1)
-		if hover {
-			if a.miniIcon(c, "add", a.t("在根目录新建请求", "New request in root")) {
-				a.later(func() { a.newRequest("") })
-			}
-			if a.miniIcon(c, "folderAdd", a.t("在根目录新建文件夹", "New folder in root")) {
-				a.later(func() { a.newFolder("") })
-			}
+	_, over := ui.DragOver[nodeDrag](zone)
+	zone.Children(func() {
+		if over {
+			ui.Box(c).Absolute().Top(0).Left(8).Right(8).Height(2).Background(p.accent)
 		}
 	})
 }
+
+// treeDropH 是列表末尾“移到根目录”拖放区的高度。
+const treeDropH = 80
 
 // miniIcon 是树行右侧 12px 的小图标按钮，返回是否被点击。
 func (a *app) miniIcon(c *ui.Context, name, tip string) bool {
@@ -287,10 +269,14 @@ func (a *app) treeNode(c *ui.Context, id string, depth int) {
 			a.toggleFolder(id)
 		})
 	}
-	if open {
-		for _, k := range a.tree.kids[id] {
-			a.treeNode(c, k, depth+1)
-		}
+	if kids := a.tree.kids[id]; open && len(kids) > 0 {
+		// 展开的文件夹：子节点左侧画一条细的缩进引导线，位置对着箭头图标的中心
+		ui.Column(c.Key("kids:" + id)).FillWidth().Children(func() {
+			ui.Box(c).Absolute().Top(2).Bottom(2).Left(4 + 8 + 6 + float32(depth)*12).Width(1).Background(p.border)
+			for _, k := range kids {
+				a.treeNode(c, k, depth+1)
+			}
+		})
 	}
 }
 
