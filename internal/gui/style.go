@@ -596,22 +596,23 @@ func (a *app) underlineTabs(c *ui.Context, key string, sel *int, labels []string
 	return changed
 }
 
-// kindPills 是 Body/Auth 的类型小标签：12px，圆角 4，选中时为浅强调色底与强调色文字。
+// kindPills 是 Body/Auth 的类型小标签：24px 高的胶囊，选中时为浅强调色底与加粗深色文字，未选中为次要色。
 func (a *app) kindPills(c *ui.Context, key string, sel *int, labels []string, padX float32) bool {
 	p := a.p
 	changed := false
 	for i, l := range labels {
 		active := *sel == i
-		b := ui.ButtonBase(c.Key(key + l)).Height(22).Radius(11).PaddingX(padX).AlignItems(ui.Center).Shrink(0)
-		col, w := p.muted, 0
+		b := ui.ButtonBase(c.Key(key + l)).Height(24).Radius(12).PaddingX(padX + 2).AlignItems(ui.Center).Shrink(0)
+		col, w := p.fg2, 0
 		switch {
 		case active:
-			b = b.Background(p.selected)
+			b = b.Background(p.accent.Alpha(0.13))
 			col, w = p.fg, 600
 		case b.Hovered():
-			col = p.fg2
+			b = b.Background(p.hover)
+			col = p.fg
 		}
-		b.Children(func() { txt(c, l, fsV2xs, col, w) })
+		b.Children(func() { txt(c, l, fsBase, col, w) })
 		if b.Clicked() && !active {
 			*sel = i
 			changed = true

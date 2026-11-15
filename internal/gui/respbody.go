@@ -200,7 +200,7 @@ func (a *app) bodyToolbar(c *ui.Context, rs *respState, canPreview bool) {
 	resp, v := rs.resp, &rs.view
 	preferDownload := client.PreferDownload(resp.Headers, resp.ContentType, resp.BodyIsBinary)
 	sep := func() { ui.Box(c).Width(1).Height(14).Background(p.border).Shrink(0) }
-	ui.Row(c).FillWidth().Shrink(0).Padding(5, 12).Gap(8).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).FillWidth().Shrink(0).Padding(6, 12).Gap(6).AlignItems(ui.Center).Children(func() {
 		switch {
 		case v.isImage:
 			ui.Row(c).Height(24).Radius(8).PaddingX(6).Gap(4).AlignItems(ui.Center).Background(p.selected).Shrink(0).Children(func() {
@@ -214,13 +214,13 @@ func (a *app) bodyToolbar(c *ui.Context, rs *respState, canPreview bool) {
 		default:
 			a.formatDropdown(c, rs)
 			prevOn := v.preview && canPreview
-			prevCol := p.fg2
+			prevCol, eyeCol := p.fg2, p.success
 			if prevOn {
-				prevCol = p.accent
+				prevCol, eyeCol = p.accent, p.accent
 			}
-			if a.button(c, btnOpts{h: 24, radius: 8, padX: 6, gap: 4, active: prevOn, disabled: !canPreview, tip: a.t("预览", "Preview"), key: "preview"}, func(bool) {
-				icon(c, "arrowRight", 10, prevCol)
-				txt(c, a.t("预览", "Preview"), fsTiny, prevCol, 0)
+			if a.button(c, btnOpts{h: 26, radius: 8, padX: 8, gap: 5, active: prevOn, disabled: !canPreview, tip: a.t("预览", "Preview"), key: "preview"}, func(bool) {
+				icon(c, "eye", 13, eyeCol)
+				txt(c, a.t("预览", "Preview"), fsBase, prevCol, 0)
 			}) {
 				v.preview = true
 			}
@@ -231,7 +231,7 @@ func (a *app) bodyToolbar(c *ui.Context, rs *respState, canPreview bool) {
 			if active {
 				col = p.accent
 			}
-			return a.button(c, btnOpts{w: 24, h: 24, radius: 8, active: active, tip: tip, key: key}, func(bool) { icon(c, name, 12, col) })
+			return a.button(c, btnOpts{w: 26, h: 26, radius: 8, active: active, tip: tip, key: key}, func(bool) { icon(c, name, 14, col) })
 		}
 		switch {
 		case v.isImage:
@@ -253,7 +253,6 @@ func (a *app) bodyToolbar(c *ui.Context, rs *respState, canPreview bool) {
 			if tb("wrapText", a.t("自动换行", "Line wrap"), rs.bodyEd.SoftWrap, "tb-wrap") {
 				rs.bodyEd.SoftWrap = !rs.bodyEd.SoftWrap
 			}
-			sep()
 			if tb("formatList", a.t("过滤", "Filter"), v.filterOpen, "tb-filter") {
 				v.filterOpen = !v.filterOpen
 				if !v.filterOpen {
@@ -264,7 +263,6 @@ func (a *app) bodyToolbar(c *ui.Context, rs *respState, canPreview bool) {
 				rs.bodyEd.Find("")
 			}
 			if v.effMode == client.ModeJSON && !v.preview {
-				sep()
 				if tb("arrowRight", a.t("一键折叠所有 JSON 节点", "Collapse all JSON nodes"), false, "tb-fold") {
 					n := rs.bodyEd.Buffer.LineCount()
 					for i := 0; i < min(n, 2000); i++ {
@@ -283,18 +281,17 @@ func (a *app) bodyToolbar(c *ui.Context, rs *respState, canPreview bool) {
 			if copied {
 				tip = a.t("已复制", "Copied")
 			}
-			if tb2 := a.button(c, btnOpts{w: 24, h: 24, radius: 8, tip: tip, key: "tb-copy"}, func(bool) {
+			if tb2 := a.button(c, btnOpts{w: 26, h: 26, radius: 8, tip: tip, key: "tb-copy"}, func(bool) {
 				col := p.fg2
 				if copied {
 					col = p.accent
 				}
-				icon(c, "copy", 12, col)
+				icon(c, "copy", 14, col)
 			}); tb2 {
 				a.later(func() { a.copyBody(rs) })
 			}
 		}
 		// 任何文本响应都可以保存为文件（二进制响应在上面的下载卡片里处理）
-		sep()
 		tip := a.t("保存到文件", "Save to file")
 		if preferDownload {
 			tip = a.t("下载文件", "Download file")
@@ -327,14 +324,14 @@ func (a *app) formatDropdown(c *ui.Context, rs *respState) {
 	p := a.p
 	v := &rs.view
 	body := func() {
-		txtMono(c, modeGlyph(v.effMode), fsTiny, p.fg2, 0)
-		txt(c, a.modeLabel(v.effMode), fsTiny, p.fg, 0)
-		icon(c, "arrowDown", 8, p.muted)
+		txtMono(c, modeGlyph(v.effMode), fsSmall, p.accent, 600)
+		txt(c, a.modeLabel(v.effMode), fsBase, p.fg, 500)
+		icon(c, "arrowDown", 9, p.muted)
 	}
-	b := ui.ButtonBase(c.Key("fmt")).Height(24).Radius(8).PaddingX(6).Gap(4).AlignItems(ui.Center).Shrink(0)
+	b := ui.ButtonBase(c.Key("fmt")).Height(26).Radius(8).PaddingX(8).Gap(5).AlignItems(ui.Center).Shrink(0)
 	switch {
 	case !v.preview:
-		b = b.Background(p.selected)
+		b = b.Background(p.accent.Alpha(0.13))
 	case b.Hovered():
 		b = b.Background(p.hover)
 	}

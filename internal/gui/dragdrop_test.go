@@ -86,7 +86,7 @@ func parentOf(a *app, name string) string {
 	return "?"
 }
 
-// 把请求拖到文件夹上：移进该文件夹；再拖到列表末尾的空白处：回到根目录。
+// 把请求拖到文件夹上：移进该文件夹；再拖到“根目录”上：回到根目录。
 func TestDragRequestIntoFolderAndBackToRoot(t *testing.T) {
 	a, tt, _ := sideDragApp(t)
 	ax, ay := center(t, tt, "alpha")
@@ -103,9 +103,7 @@ func TestDragRequestIntoFolderAndBackToRoot(t *testing.T) {
 	}
 	tt.Frame()
 	ax, ay = center(t, tt, "alpha")
-	// 根目录是列表末尾的空白拖放区：拖到最后一行下方的空白处
-	rx, ry := center(t, tt, "dir")
-	ry += 90
+	rx, ry := center(t, tt, "根目录")
 	drag(tt, ax, ay, rx, ry)
 	if got := parentOf(a, "alpha"); got != "" {
 		t.Fatalf("alpha 应回到根目录, 实际父级 %q", got)

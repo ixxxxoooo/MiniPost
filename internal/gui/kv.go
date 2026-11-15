@@ -22,10 +22,11 @@ const (
 	colAct   = 85.4
 )
 
-// 键值表的行高与表头高度（设计稿：行 30、表头 28）。
+// 键值表的行高、表头高度与单元格字号（对照原型：行更高、字更大，读起来更松）。
 const (
-	kvRowH  = 30
-	kvHeadH = 28
+	kvRowH  = 32
+	kvHeadH = 30
+	kvFont  = 13
 )
 
 // kvOpts 描述键值表的列与自动请求头行。
@@ -41,7 +42,7 @@ type kvOpts struct {
 // kvSubhead 绘制表格上方的一行：左侧是自动请求头折叠开关（或说明文字），右侧是“批量编辑”。
 func (a *app) kvSubhead(c *ui.Context, rows *[]*client.Row, o kvOpts, auto []client.AutoHeader) {
 	p := a.p
-	ui.Row(c).FillWidth().Height(28).Shrink(0).PaddingX(12).AlignItems(ui.Center).Gap(6).Children(func() {
+	ui.Row(c).FillWidth().Height(32).Shrink(0).PaddingX(12).AlignItems(ui.Center).Gap(6).Children(func() {
 		if len(auto) > 0 && o.t != nil {
 			name := "arrowRight"
 			if o.t.autoOpen {
@@ -61,12 +62,12 @@ func (a *app) kvSubhead(c *ui.Context, rows *[]*client.Row, o kvOpts, auto []cli
 					col = p.fg2
 				}
 				icon(c, name, 10, col)
-				txt(c, label, fsSmall, col, 0)
+				txt(c, label, fsBase, col, 0)
 			}) {
 				o.t.autoOpen = !o.t.autoOpen
 			}
 		} else if o.hint != "" {
-			txt(c, o.hint, fsSmall, p.muted, 0)
+			txt(c, o.hint, fsBase, p.muted, 0)
 		}
 		ui.Spacer(c)
 		if a.button(c, btnOpts{h: 22, padX: 4, gap: 4, noHover: true, key: "bulk-" + o.id}, func(hover bool) {
@@ -74,8 +75,8 @@ func (a *app) kvSubhead(c *ui.Context, rows *[]*client.Row, o kvOpts, auto []cli
 			if hover {
 				col = p.accentHover
 			}
-			icon(c, "formatList", 11, col)
-			txt(c, a.t("批量编辑", "Bulk Edit"), fsSmall, col, 500)
+			icon(c, "formatList", 12, col)
+			txt(c, a.t("批量编辑", "Bulk Edit"), fsBase, col, 600)
 		}) {
 			a.bulk[o.id] = serializeBulk(*rows)
 		}
@@ -101,16 +102,13 @@ func (a *app) tableFrame(c *ui.Context, rows func()) {
 	})
 }
 
-// kvCellInput 是表格单元里的无边框输入框（11px，等宽，占位符灰色）。
+// kvCellInput 是表格单元里的无边框输入框（13px，键与值用等宽字体，占位符灰色）。
 func (a *app) kvCellInput(c *ui.Context, key string, v *string, ph string, mono bool, col ui.Color, dim bool, disabled bool) ui.Element {
 	p := a.p
-	in := ui.TextInputBase(c.Key(key), v).Placeholder(ph).PlaceholderColor(p.muted).FontSize(fsBase).TextColor(col).
+	in := ui.TextInputBase(c.Key(key), v).Placeholder(ph).PlaceholderColor(p.muted).FontSize(kvFont).TextColor(col).
 		Grow(1).Basis(0).Height(kvRowH-2).Padding(0, 8, 1, 8)
 	if mono {
 		in = in.Font(monoFont)
-	}
-	if !mono && *v == "" {
-		in = in.Italic() // 旧版说明列的占位符为斜体
 	}
 	if dim {
 		in = in.Opacity(0.4)
@@ -121,11 +119,11 @@ func (a *app) kvCellInput(c *ui.Context, key string, v *string, ph string, mono 
 	return in
 }
 
-// kvHeaderCell 绘制表头单元：11px 半粗，次要色。
+// kvHeaderCell 绘制表头单元：12px 半粗，次要色。
 func (a *app) kvHeaderCell(c *ui.Context, grow float32, label string, extra func()) {
 	a.tableCell(c, grow, kvHeadH, func() {
 		ui.Row(c).FillWidth().PaddingX(8).AlignItems(ui.Center).Children(func() {
-			txtE(c, label, fsSmall, a.p.muted, 500).Grow(1)
+			txtE(c, label, fsBase, a.p.muted, 500).Grow(1)
 			if extra != nil {
 				extra()
 			}
@@ -137,7 +135,7 @@ func (a *app) kvHeaderCell(c *ui.Context, grow float32, label string, extra func
 func (a *app) kvHeaderCellEnd(c *ui.Context, grow float32, label string) {
 	a.tableCellEnd(c, grow, kvHeadH, func() {
 		ui.Row(c).FillWidth().PaddingX(8).AlignItems(ui.Center).Children(func() {
-			txtE(c, label, fsSmall, a.p.muted, 500).Grow(1)
+			txtE(c, label, fsBase, a.p.muted, 500).Grow(1)
 		})
 	})
 }
@@ -159,7 +157,7 @@ func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {
 	a.kvSubhead(c, rows, o, auto)
 	a.tableFrame(c, func() {
 		// 表头
-		ui.Row(c).FillWidth().Background(p.surface2.Alpha(0.5)).Children(func() {
+		ui.Row(c).FillWidth().Children(func() {
 			a.kvHeaderCell(c, colCheck, "", nil)
 			a.kvHeaderCell(c, colKey, o.keyPH, nil)
 			a.kvHeaderCell(c, colValue, o.valPH, nil)
@@ -471,14 +469,11 @@ func (a *app) async(work func() func()) {
 
 func itoa(n int) string { return strconv.Itoa(n) }
 
-// kvCheck 绘制键值表每行的“启用”复选框。末尾的空占位行还不是一条真实数据，
-// 画成空心、半透明且不可点的框（而不是一个发灰的“已勾选”框，看起来像被禁用的勾选项）；
+// kvCheck 绘制键值表每行的“启用”复选框。末尾的空占位行还不是一条真实数据，复选框列留空；
 // 一旦在占位行里输入内容，它就变成真实行，复选框以勾选态正常显示。
 func (a *app) kvCheck(c *ui.Context, id string, on *bool, placeholder bool) bool {
 	if placeholder {
-		off := false
-		a.checkbox(c, "chk:"+id, &off, true)
-		return false
+		return false // 原型里占位行的复选框列是空的
 	}
 	return a.checkbox(c, "chk:"+id, on, false)
 }

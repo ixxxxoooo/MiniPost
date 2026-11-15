@@ -889,7 +889,7 @@ func TestEnvTableInitialCurrentDescription(t *testing.T) {
 	}
 }
 
-// 侧栏（设计稿 25）：文件夹行右侧显示其中的请求数；没有“根目录”行，底部是统计。
+// 侧栏（设计稿 25）：文件夹行右侧显示其中的请求数；保留“根目录”行，底部是统计。
 func TestSidebarFolderCountAndFooter(t *testing.T) {
 	a, tt, _ := visualApp(t, false)
 	tt.Frame()
@@ -908,14 +908,45 @@ func TestSidebarFolderCountAndFooter(t *testing.T) {
 		t.Fatal("夹具里应有文件夹包含请求")
 	}
 	snapshot(t, tt, "d_sidebar")
-	// 原型里没有“根目录”行，底部也不再放键盘按钮
-	if tt.HasText("根目录") {
-		t.Fatal("侧栏不应再显示“根目录”行")
+	// 保留“根目录”行（也是拖回根目录的目标），底部不再放键盘按钮
+	if !tt.HasText("根目录") {
+		t.Fatal("侧栏应显示“根目录”行")
 	}
 	if !tt.HasText("个请求") {
 		t.Fatalf("侧栏底部应显示统计: %q", tt.Texts())
 	}
 	if err := tt.Click("side-kbd"); err == nil {
 		t.Fatal("侧栏底部不应再有键盘按钮")
+	}
+}
+
+// Body 类型胶囊：选中项是浅强调色底（偏蓝）加粗文字，未选中项没有底色；点击后选中态跟着切换。
+func TestBodyKindPillsSelectedTint(t *testing.T) {
+	_, tt, _ := visualApp(t, false)
+	_ = tt.Click("用户服务")
+	_ = tt.Click("获取用户列表")
+	_ = tt.Click("Body")
+	tt.Frame()
+	none, ok1 := tt.Find("none")
+	form, ok2 := tt.Find("form-data")
+	if !ok1 || !ok2 {
+		t.Fatal("找不到 Body 类型胶囊")
+	}
+	// 胶囊左缘内侧（文字之外）取样
+	tint := func(r ui.Rect) int {
+		px := tt.Image().RGBAAt(int(r.X)-6, int(r.Y+r.H/2))
+		return int(px.B) - int(px.R)
+	}
+	if tint(none) <= tint(form) {
+		t.Fatalf("选中的 none 应有偏蓝的底色：none=%d form-data=%d", tint(none), tint(form))
+	}
+	if err := tt.Click("form-data"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	none, _ = tt.Find("none")
+	form, _ = tt.Find("form-data")
+	if tint(form) <= tint(none) {
+		t.Fatalf("切换后 form-data 应有底色：none=%d form-data=%d", tint(none), tint(form))
 	}
 }

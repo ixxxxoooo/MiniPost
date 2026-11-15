@@ -23,7 +23,7 @@ func (a *app) bodyTab(c *ui.Context, t *tab) {
 		}
 	}
 	ui.Column(c).Grow(1).Basis(0).Children(func() {
-		ui.Row(c).FillWidth().Shrink(0).PaddingX(8).Padding(6, 8).Gap(4).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).FillWidth().Shrink(0).Padding(8, 12).Gap(4).AlignItems(ui.Center).Children(func() {
 			if a.kindPills(c, "body", &kind, []string{"none", "form-data", "raw", "JSON", "urlencoded"}, 10) {
 				d.Body.Type = bodyKinds[kind]
 			}
@@ -34,8 +34,8 @@ func (a *app) bodyTab(c *ui.Context, t *tab) {
 					if hover {
 						col = p.accentHover
 					}
-					icon(c, "formatList", 11, col)
-					txt(c, a.t("格式化", "Beautify"), fsSmall, col, 500)
+					icon(c, "formatList", 12, col)
+					txt(c, a.t("格式化", "Beautify"), fsBase, col, 600)
 				}) {
 					a.formatBody(t)
 				}
@@ -53,8 +53,13 @@ func (a *app) bodyTab(c *ui.Context, t *tab) {
 		case client.BodyURLEncoded:
 			a.kvTableOpts(c, &d.Body.URLEncoded, kvOpts{id: d.ID + ":urlenc", keyPH: "Key", valPH: "Value", noDesc: true})
 		default:
-			ui.Row(c).FillWidth().Padding(32, 0).Justify(ui.Center).Children(func() {
-				txt(c, a.t("此请求没有请求体", "This request has no body"), 10.4, p.muted, 0)
+			// 没有请求体：居中的图标与两行提示
+			ui.Column(c).FillWidth().Grow(1).Basis(0).Gap(6).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+				ui.Row(c).Size(36, 36).Radius(18).Background(p.surface2).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+					icon(c, "cube", 16, p.muted)
+				})
+				txt(c, a.t("此请求没有请求体", "This request has no body"), fsBase, p.fg2, 500)
+				txt(c, a.t("在上方选择 JSON、form-data 等类型即可添加", "Pick JSON, form-data, etc. above to add one"), fsSmall, p.muted, 0)
 			})
 		}
 	})

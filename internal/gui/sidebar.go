@@ -137,6 +137,9 @@ func (a *app) collectionView(c *ui.Context) {
 	q := strings.ToLower(strings.TrimSpace(a.side.query))
 	ui.Scroll(c).Grow(1).Basis(0).ContextMenu(a.rootMenu).Scrollbars(a.scrollbarsVisible()).Children(func() {
 		ui.Column(c).FillWidth().Children(func() {
+			if q == "" {
+				a.treeRootRow(c)
+			}
 			switch {
 			case len(a.tree.roots()) == 0:
 				a.sideHint(c, a.t("暂无请求", "No requests"))
@@ -157,7 +160,6 @@ func (a *app) collectionView(c *ui.Context) {
 				for _, id := range a.tree.roots() {
 					a.treeNode(c, id, 0)
 				}
-				a.treeRootDrop(c)
 			}
 		})
 	})
@@ -176,24 +178,32 @@ func (a *app) sideHint(c *ui.Context, s string) {
 	})
 }
 
-// treeRootDrop 是列表末尾的空白拖放区（原型里没有“根目录”行）：把节点拖到这里就移到项目根目录末尾；
-// 拖动经过时在顶部画一条强调线，右键同样弹出“新建”菜单。
-func (a *app) treeRootDrop(c *ui.Context) {
+// treeRootRow 是“根目录”行：打开状态的文件夹图标，悬停时出现新建请求/文件夹按钮。
+func (a *app) treeRootRow(c *ui.Context) {
 	p := a.p
-	zone := ui.Row(c.Key("tree-root-drop")).FillWidth().Height(treeDropH).Shrink(0).ContextMenu(a.rootMenu)
-	if d, ok := ui.Drop[nodeDrag](zone); ok {
+	row := ui.Row(c.Key("tree-root")).Height(28).MarginX(4).PaddingX(8).Radius(radiusBtn).Gap(6).AlignItems(ui.Center).
+		ContextMenu(a.rootMenu)
+	if d, ok := ui.Drop[nodeDrag](row); ok {
 		a.later(func() { a.dropOnRoot(d.id) })
 	}
-	_, over := ui.DragOver[nodeDrag](zone)
-	zone.Children(func() {
-		if over {
-			ui.Box(c).Absolute().Top(0).Left(8).Right(8).Height(2).Background(p.accent)
+	_, over := ui.DragOver[nodeDrag](row)
+	hover := row.Hovered()
+	if hover || over {
+		row = row.Background(p.sideHover)
+	}
+	row.Children(func() {
+		icon(c, "folderOpen", 14, p.muted)
+		txt(c, a.t("根目录", "Root"), fsBase, p.fg, 500).Grow(1)
+		if hover {
+			if a.miniIcon(c, "add", a.t("在根目录新建请求", "New request in root")) {
+				a.later(func() { a.newRequest("") })
+			}
+			if a.miniIcon(c, "folderAdd", a.t("在根目录新建文件夹", "New folder in root")) {
+				a.later(func() { a.newFolder("") })
+			}
 		}
 	})
 }
-
-// treeDropH 是列表末尾“移到根目录”拖放区的高度。
-const treeDropH = 80
 
 // miniIcon 是树行右侧 12px 的小图标按钮，返回是否被点击。
 func (a *app) miniIcon(c *ui.Context, name, tip string) bool {
