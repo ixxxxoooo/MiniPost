@@ -76,9 +76,9 @@
 .sw { width: 32px; height: 19px; flex: none; border-radius: 10px; background: var(--bd2); position: relative; cursor: pointer; transition: background var(--dur-base); }
 .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform var(--dur-base) var(--ease-spring); }
 .sw.on { background: var(--ac); } .sw.on::after { transform: translateX(13px); }
-.sel { height: 26px; min-width: 110px; display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 7px 0 10px; border-radius: var(--r); border: 1px solid var(--bd2); background: var(--bg); cursor: pointer; font-weight: 500; transition: border-color var(--dur-fast); }
-.sel:hover { border-color: var(--mu); }
-.sel svg { color: var(--mu); }
+.sel:not(.row):not(.pcard):not(.pr) { height: 26px; min-width: 110px; display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 7px 0 10px; border-radius: var(--r); border: 1px solid var(--bd2); background: var(--bg); cursor: pointer; font-weight: 500; transition: border-color var(--dur-fast); }
+.sel:not(.row):not(.pcard):not(.pr):hover { border-color: var(--mu); }
+.sel:not(.row):not(.pcard):not(.pr) svg { color: var(--mu); }
 .inp { height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; border-radius: var(--r); border: 1px solid var(--bd2); background: var(--bg); transition: border-color var(--dur-fast), box-shadow var(--dur-fast); }
 .inp:focus-within { border-color: var(--ac); box-shadow: 0 0 0 3px var(--ac-soft); }
 .inp input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; }
@@ -722,9 +722,9 @@
 .sw:hover::after { box-shadow: 0 1px 3px rgba(0, 0, 0, .32), 0 4px 8px -1px rgba(0, 0, 0, .22); }
 .sw:active::after { width: 19px; } .sw.on:active::after { transform: translateX(9px); }
 .sw.on { background: var(--grad-ac); box-shadow: 0 1px 5px var(--ac-glow-s), inset 0 1px 1px rgba(0, 0, 0, .12); }
-.sel { background: var(--grad-raise); box-shadow: var(--shadow-xs), var(--hl); transition: border-color var(--dur-fast), box-shadow var(--dur-base), background var(--dur-fast); }
-.sel:hover { border-color: color-mix(in oklab, var(--bd2) 50%, var(--fg)); background: var(--grad-raise-h); }
-.sel svg { transition: transform var(--dur-base) var(--ease-spring); } .sel:hover svg { transform: translateY(1px); }
+.sel:not(.row):not(.pcard):not(.pr) { background: var(--grad-raise); box-shadow: var(--shadow-xs), var(--hl); transition: border-color var(--dur-fast), box-shadow var(--dur-base), background var(--dur-fast); }
+.sel:not(.row):not(.pcard):not(.pr):hover { border-color: color-mix(in oklab, var(--bd2) 50%, var(--fg)); background: var(--grad-raise-h); }
+.sel:not(.row):not(.pcard):not(.pr) svg { transition: transform var(--dur-base) var(--ease-spring); } .sel:not(.row):not(.pcard):not(.pr):hover svg { transform: translateY(1px); }
 .inp { box-shadow: var(--inset); transition: border-color var(--dur-fast), box-shadow var(--dur-base); }
 .inp:hover { border-color: color-mix(in oklab, var(--bd2) 55%, var(--fg)); }
 .inp:focus-within { border-color: var(--ac); box-shadow: var(--ring), 0 4px 14px -6px var(--ac-glow); }
@@ -1013,3 +1013,31 @@
   .win::before, .win::after, .welcome::before, .welcome::after { animation: none !important; }
   .win *::before, .win *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* ==========================================================================
+   v2.1 补充设计：form-data 文件字段、超大响应卡片、JSON 过滤栏、零项目空状态、标题栏更新胶囊
+   ========================================================================== */
+.fchip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--ac-soft); color: var(--ac); font-weight: 550; max-width: 100%; box-shadow: inset 0 0 0 1px var(--ac-soft2); }
+.fchip em { font-style: normal; color: var(--mu); font-weight: 450; font-size: 10.5px; }
+
+.bigcard { margin: auto; display: grid; justify-items: center; gap: 6px; padding: 26px 30px; text-align: center; max-width: 420px; border-radius: var(--r-lg); border: 1px solid var(--bd); background: var(--grad-raise); box-shadow: var(--shadow-sm), var(--hl); animation: popIn var(--dur-slow) var(--ease-soft); }
+.bigcard .ico { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; color: var(--warn); background: color-mix(in oklab, var(--warn) 13%, transparent); }
+.bigcard b { font-size: 14px; margin-top: 4px; }
+.bigcard > span:not(.ico) { color: var(--fg2); font-size: 11.5px; line-height: 1.55; }
+.bigcard .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+
+.rfilter { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-bottom: 1px solid var(--bd); background: color-mix(in oklab, var(--ac) 5%, var(--bg)); color: var(--ac); flex: none; }
+.rfilter input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--fg); font-size: 12px; }
+.rfilter .res { color: var(--mu); font-size: 11px; white-space: nowrap; }
+
+.home-empty { margin: auto; display: grid; justify-items: center; gap: 8px; padding: 40px 20px 90px; text-align: center; }
+.home-empty .ico { width: 84px; height: 84px; display: grid; place-items: center; border-radius: 26px; background: var(--ac-soft); box-shadow: inset 0 0 0 1px var(--ac-soft2), 0 12px 32px -10px var(--ac-glow); animation: floaty 5s ease-in-out infinite; }
+.home-empty b { font-size: 16px; margin-top: 8px; }
+.home-empty > span:not(.ico) { color: var(--fg2); max-width: 340px; line-height: 1.55; }
+.home-empty .new { display: flex; gap: 8px; margin: 10px 0 2px; }
+
+.updchip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: var(--ac); background: var(--ac-soft); box-shadow: inset 0 0 0 1px var(--ac-soft2); cursor: pointer; white-space: nowrap; transition: background var(--dur-fast), transform var(--dur-base) var(--ease-spring); position: relative; }
+.updchip:hover { background: var(--ac-soft2); transform: translateY(-1px); }
+.updchip.ready { color: var(--acf); background: var(--grad-ac); box-shadow: 0 2px 4px var(--ac-glow), 0 6px 14px -4px var(--ac-glow), var(--hl-ac); }
+.updchip .dotm { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: blinkDot 1.6s ease-in-out infinite; }
+@keyframes blinkDot { 50% { opacity: .35 } }

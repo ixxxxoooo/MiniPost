@@ -55,6 +55,33 @@ window.MP = window.MP || {};
       auth: { type: 'bearer', token: 'sk-demo-••••••' },
     },
   };
+  // 补充：更多请求体 / 认证类型，用于覆盖 form-data、urlencoded、raw 与 Basic、API Key
+  Object.assign(reqs, {
+    r3: {
+      params: [], headers: [['Content-Type', 'multipart/form-data', '', 1]],
+      body: { type: 'form', rows: [['name', 'Alice', '', 1, 'text'], ['avatar', 'avatar.png', '头像，最大 2 MB', 1, 'file'], ['note', '', '', 0, 'text']] },
+      auth: { type: 'bearer', token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.demo' },
+    },
+    r11: {
+      params: [], headers: [['Content-Type', 'application/x-www-form-urlencoded', '', 1]],
+      body: { type: 'urlenc', rows: [['username', 'alice@example.com', '登录名', 1], ['password', '{{password}}', '', 1], ['grant_type', 'password', '', 1]] },
+      auth: { type: 'none' },
+    },
+    r12: {
+      params: [], headers: [['Content-Type', 'text/plain', '', 1]],
+      body: { type: 'raw', text: 'refresh_token=rt_2f8a91c0b7d4\nclient_id=minipost-desktop' },
+      auth: { type: 'none' },
+    },
+    r4: {
+      params: [], headers: [['Accept', '*/*', '', 1]], body: { type: 'none' },
+      auth: { type: 'basic', user: 'alice', pass: 'hunter2-demo' },
+    },
+    r9: {
+      params: [], headers: [['Content-Type', 'application/json', '', 1]],
+      body: { type: 'json', text: '{\n  "receiver": "Alice",\n  "phone": "13800000000",\n  "address": "上海市浦东新区世纪大道 100 号"\n}' },
+      auth: { type: 'apikey', key: 'X-API-Key', value: 'ak_live_9f3c2d71b8e4', where: 'header' },
+    },
+  });
   const defReq = { params: [['', '', '', 1]], headers: [['Accept', '*/*', '', 1]], body: { type: 'none' }, auth: { type: 'none' } };
 
   // 示例响应

@@ -71,6 +71,7 @@
     201: { text: '201 Created', body: jsonCreated, ms: 246, size: '312 B', cls: 'ok' },
     204: { text: '204 No Content', body: '', ms: 64, size: '0 B', cls: 'ok' },
     422: { text: '422 Unprocessable', body: M.jsonErr, ms: 91, size: '208 B', cls: 'err' },
+    9200: { text: '200 OK', body: M.jsonOk, ms: 842, size: '8.2 MB', cls: 'ok', large: true },
   };
   MPA.RESP = RESP;
   const outcomeOf = (id) => ({ r8: 'error', r7: 'stream', r10: 'stream', r6: 422, r2: 201, r4: 204 }[id] || 200);
@@ -120,7 +121,8 @@
     if (d !== 'c' && tabsInTb) h += ib('search', 'quick', { tip: '快速打开 ⌘K' });
     if (d !== 'c' && o.env === 'titlebar') h += envChip();
     if (d === 'b' && S.view === 'work') h += ib('home', 'home', { tip: '项目主页' });
-    if (S.update) h += ib('download', 'updateInfo', { badge: true, tip: '新版本 2.1.0 已就绪' });
+    if (S.update === 'downloading') h += '<span class="updchip" data-a="settings" data-tip="正在下载 2.1.0"><svg class="ic spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9"/></svg>下载中 62%</span>';
+    else if (S.update) h += '<span class="updchip ready" data-a="restart" data-tip="新版本 2.1.0 已就绪">' + I('download', 12) + '重启更新<i class="dotm"></i></span>';
     h += ib(S.mode === 'dark' ? 'sun' : 'moon', 'theme', { tip: S.mode === 'dark' ? '切换为浅色' : '切换为深色' });
     if (!rail) h += ib('sliders', 'settings', { on: S.view === 'settings', tip: '设置 ⌘,' });
     return '<div class="tb">' + h + '</div>';
@@ -151,6 +153,7 @@
   MPA.renderTree = () => { const el = $('#win .tree'); if (el) el.innerHTML = treeBody(); };
   function treeBody() {
     const q = S.q.trim().toLowerCase();
+    if (S.emptyTree) return '<div class="empty-s">' + I('layers', 22) + '<b>还没有请求</b><span>新建一个请求，或导入已有集合</span><div style="display:flex;gap:6px;margin-top:6px"><button class="btn sm pri" data-a="newReq">' + I('plus', 12) + '新建请求</button><button class="btn sm" data-a="importOv" data-tab="file">' + I('upload', 12) + '导入</button></div></div>';
     const rows = treeRows(M.tree, q, 0);
     return rows || '<div class="empty-s">' + I('search', 20) + '<span>无匹配结果</span></div>';
   }
@@ -214,7 +217,7 @@
      请求区
      ========================================================================== */
   function kvTable(rows, kind) {
-    const cols = kind === 'params' ? ['参数名', '参数值', '说明'] : ['请求头', '值', '说明'];
+    const cols = kind === 'params' ? ['参数名', '参数值', '说明'] : kind === 'urlenc' ? ['字段名', '字段值', '说明'] : ['请求头', '值', '说明'];
     let h = '<div class="kv scroll"><div class="hd"><span></span><span>' + cols[0] + '</span><span>' + cols[1] + '</span><span>' + cols[2] + '</span><span></span></div>';
     rows.forEach((r, i) => {
       const empty = !r[0] && !r[1];
@@ -223,15 +226,38 @@
     if (rows.length && (rows[rows.length - 1][0] || rows[rows.length - 1][1])) h += '<div class="kr ghost"><span></span><span class="c"><input placeholder="' + cols[0] + '"></span><span class="c"><input placeholder="' + cols[1] + '"></span><span class="c"><input class="d" placeholder="说明"></span><span></span></div>';
     return h + '</div>';
   }
+  // form-data 表格：字段名 / 类型（Text、File）/ 字段值；文件字段显示文件名与大小
+  function formTable(rows) {
+    const cols = '34px 1fr 84px 1.7fr 34px';
+    let h = '<div class="kv scroll"><div class="hd" style="grid-template-columns:' + cols + '"><span></span><span>字段名</span><span>类型</span><span>字段值</span><span></span></div>';
+    rows.forEach((r, i) => {
+      const file = r[4] === 'file';
+      h += '<div class="kr ' + (r[3] === 0 ? 'off' : '') + '" style="grid-template-columns:' + cols + ';animation:rowIn var(--dur-slow) var(--ease-out) ' + i * 24 + 'ms both"><span>' + cb(r[3] !== 0, 'kvToggle') + '</span><span class="c"><input value="' + esc(r[0]) + '" placeholder="字段名"></span><span class="c" style="padding:0 6px">' + sel(file ? 'File' : 'Text', 'noop', 'style="min-width:0;height:22px;width:100%"') + '</span><span class="c">' + (file ? '<span class="fchip">' + I('image', 12) + '<span class="ell">' + esc(r[1]) + '</span><em>86 KB</em></span>' : '<input value="' + esc(r[1]) + '" placeholder="字段值">') + '</span><span><button class="ib sm del" data-a="noop" data-tip="删除">' + I('x', 12) + '</button></span></div>';
+    });
+    h += '<div class="kr ghost" style="grid-template-columns:' + cols + '"><span></span><span class="c"><input placeholder="字段名"></span><span class="c"></span><span class="c"><input placeholder="字段值"></span><span></span></div>';
+    return h + '</div>';
+  }
   function bodyEditor(rq, t) {
     const b = rq.body, types = [['none', 'none'], ['form', 'form-data'], ['raw', 'raw'], ['json', 'JSON'], ['urlenc', 'x-www-form-urlencoded']];
     let h = '<div class="chips">' + types.map((x) => '<span class="cchip ' + (b.type === x[0] ? 'on' : '') + '" data-a="noop">' + x[1] + '</span>').join('') + '<span class="sp"></span>' + (b.type === 'json' ? '<button class="btn sm ghost" data-a="beautify">' + I('sparkle', 12) + '格式化</button>' : '') + '</div>';
     if (b.type === 'none') return h + '<div class="empty-r">' + I('window', 26) + '<div class="big">此请求没有请求体</div><span>选择上方类型来添加 JSON、表单或原始文本</span></div>';
+    if (b.type === 'form') return h + formTable(b.rows);
+    if (b.type === 'urlenc') return h + kvTable(b.rows, 'urlenc');
+    if (b.type === 'raw') return h.replace('<span class="sp"></span>', '<span class="sp"></span><span class="sel" data-a="noop" style="min-width:96px"><span>Text</span>' + I('chevUD', 12) + '</span>') + codeBlock(b.text, { plain: true, hot: -1 });
     return h + codeBlock(b.text, { hot: t.view === 'body' && !S.static ? 1 : -1, caret: false });
   }
   function authView(rq) {
     const a = rq.auth;
     if (a.type === 'none') return '<div class="auth"><div class="fr"><label>认证类型</label><span>' + sel('None', 'noop', 'style="width:180px"') + '</span></div><div class="empty-r" style="padding:30px 0">' + I('lock', 24) + '<span>此请求不需要认证</span></div></div>';
+    if (a.type === 'basic') return '<div class="auth"><div class="fr"><label>认证类型</label><span style="display:flex;gap:10px;align-items:center">' + sel('Basic Auth', 'noop', 'style="width:180px"') + '<span class="mu" style="font-size:11px">None / Basic / Bearer / API Key</span></span></div>' +
+      '<div class="fr"><label>用户名</label><label class="inp" style="height:30px"><input value="' + esc(a.user) + '"></label></div>' +
+      '<div class="fr"><label>密码</label><label class="inp" style="height:30px"><input class="mono" type="' + (S.authShow ? 'text' : 'password') + '" value="' + esc(a.pass) + '"><button class="ib sm" data-a="authEye" data-tip="显示 / 隐藏">' + I(S.authShow ? 'eyeOff' : 'eye', 14) + '</button></label></div>' +
+      '<div class="fr"><label>预览</label><div class="prev">' + I('lock', 12) + '<span class="grow ell">Authorization: Basic <span class="mu">YWxpY2U6aHVudGVyMi1kZW1v</span></span><span class="tag mute">请求头</span></div></div></div>';
+    if (a.type === 'apikey') return '<div class="auth"><div class="fr"><label>认证类型</label><span style="display:flex;gap:10px;align-items:center">' + sel('API Key', 'noop', 'style="width:180px"') + '<span class="mu" style="font-size:11px">None / Basic / Bearer / API Key</span></span></div>' +
+      '<div class="fr"><label>键名</label><label class="inp" style="height:30px"><input class="mono" value="' + esc(a.key) + '"></label></div>' +
+      '<div class="fr"><label>键值</label><label class="inp" style="height:30px"><input class="mono" type="' + (S.authShow ? 'text' : 'password') + '" value="' + esc(a.value) + '"><button class="ib sm" data-a="authEye" data-tip="显示 / 隐藏">' + I(S.authShow ? 'eyeOff' : 'eye', 14) + '</button></label></div>' +
+      '<div class="fr"><label>添加位置</label><div class="seg"><b class="on">请求头</b><b>查询参数</b></div></div>' +
+      '<div class="fr"><label>预览</label><div class="prev">' + I('lock', 12) + '<span class="grow ell">' + esc(a.key) + ': <span class="mu">' + (S.authShow ? esc(a.value) : '••••••••••••••••') + '</span></span><span class="tag mute">请求头</span></div></div></div>';
     return '<div class="auth"><div class="fr"><label>认证类型</label><span style="display:flex;gap:10px;align-items:center">' + sel('Bearer Token', 'noop', 'style="width:180px"') + '<span class="mu" style="font-size:11px">None / Basic / Bearer / API Key</span></span></div>' +
       '<div class="fr"><label>Token</label><label class="inp" style="height:30px"><input class="mono" type="' + (S.authShow ? 'text' : 'password') + '" value="' + esc(a.token) + '">' + '<button class="ib sm" data-a="authEye" data-tip="显示 / 隐藏">' + I(S.authShow ? 'eyeOff' : 'eye', 14) + '</button></label></div>' +
       '<div class="fr"><label>预览</label><div class="prev">' + I('lock', 12) + '<span class="grow ell">Authorization: Bearer <span class="mu">' + (S.authShow ? esc(a.token) : '••••••••••••••••') + '</span></span><span class="tag mute">请求头</span></div></div>' +
@@ -284,6 +310,8 @@
     if (t.rtab === 'cookies') return '<div class="rb"><div class="kv scroll"><div class="hd" style="grid-template-columns:14px 1fr 1.6fr 80px 110px 60px"><span></span><span>名称</span><span>值</span><span>路径</span><span>过期</span><span>属性</span></div>' + M.cookies.map((c) => '<div class="kr" style="grid-template-columns:14px 1fr 1.6fr 80px 110px 60px"><span></span><span class="c mono" style="border:0">' + c[0] + '</span><span class="c mono ell">' + c[1] + '</span><span class="c mono">' + c[2] + '</span><span class="c mu">' + c[3] + '</span><span class="c" style="gap:4px">' + (c[4] ? '<span class="tag mute">S</span>' : '') + (c[5] ? '<span class="tag mute">H</span>' : '') + '</span></div>').join('') + '</div></div>';
     const r = RESP[t.code] || RESP[200];
     const tool = '<div class="rtool"><span class="fmt" data-a="noop">' + I('code', 12) + 'JSON' + I('chevD', 10) + '</span><span class="fmt ac" data-a="noop">' + I('eye', 12) + '预览</span><span class="sp"></span>' + ib('wrap', 'noop', { cls: 'sm', tip: '自动换行', on: t.wrap }) + ib('expandAll', 'noop', { cls: 'sm', tip: '展开全部' }) + ib('collapseAll', 'noop', { cls: 'sm', tip: '折叠全部' }) + ib('search', 'noop', { cls: 'sm', tip: '查找 ⌘F' }) + '<span class="sep"></span>' + ib('copy', 'copyResp', { cls: 'sm', tip: '复制响应体' }) + ib('download', 'noop', { cls: 'sm', tip: '保存到文件' }) + '</div>';
+    if (r.large) return '<div class="rb">' + tool + '<div class="bigcard"><span class="ico">' + I('database', 22) + '</span><b>响应较大（8.2 MB）</b><span>为保持界面流畅，仅显示前 2 MB。复制或保存可获取完整内容。</span><div class="acts"><button class="btn pri sm" data-a="noop">' + I('download', 12) + '保存到文件</button><button class="btn sm" data-a="noop">' + I('copy', 12) + '复制完整内容</button><button class="btn sm ghost" data-a="noop">' + I('eye', 12) + '仍然预览前 2 MB</button></div></div></div>';
+    if (t.filter) return '<div class="rb">' + tool + '<div class="rfilter">' + I('filter', 13) + '<input class="mono" value="data.users[*].name"><span class="res">命中 2 项</span><button class="btn sm ghost" data-a="noop">' + I('x', 12) + '清除</button></div>' + codeBlock('[\n  "Alice",\n  "Bob"\n]') + '</div>';
     if (!r.body) return '<div class="rb">' + tool + '<div class="empty-r">' + I('okC', 26) + '<div class="big">空响应</div><span>服务器返回了 204，没有响应体</span></div></div>';
     return '<div class="rb">' + tool + codeBlock(r.body) + '</div>';
   }
@@ -306,7 +334,11 @@
   function projRow(p, i) {
     return '<div class="pr ' + (S.homeSel === p.id ? 'sel' : '') + '" style="animation-delay:' + i * 35 + 'ms" data-a="homeSel" data-id="' + p.id + '"><span class="pav" style="background:' + p.color + '">' + esc(p.name[0]) + '</span><b class="ell">' + esc(p.name) + (p.id === S.projId ? ' <span class="pill ac" style="height:16px;margin-left:4px">当前</span>' : '') + '</b><span class="mu ell">' + esc(p.desc || '—') + '</span><span class="mono">' + p.reqs + '</span><span class="mono">' + p.envs + '</span><span class="mu">' + p.updated + '</span>' + ib('more', 'noop', { cls: 'sm', sz: 14 }) + '</div>';
   }
+  function homeEmpty() {
+    return '<div class="home"><div class="home-main"><div class="home-h"><div class="grow"><h1>项目</h1><p>还没有项目。新建一个项目，把相关请求与环境放在一起。</p></div></div><div class="home-empty"><span class="ico">' + logo(44, 'glyph') + '</span><b>创建你的第一个项目</b><span>项目会保存请求、环境与历史记录，并拥有独立的主题色。</span><div class="new"><label class="inp" style="width:220px;height:30px">' + I('plus', 13) + '<input placeholder="输入项目名，回车新建"></label><button class="btn pri" style="height:30px">新建项目</button></div><button class="btn ghost sm" data-a="importOv" data-tab="file">' + I('upload', 12) + '或从 Postman / OpenAPI 导入</button></div></div></div>';
+  }
   function homeView() {
+    if (S.noProj) return homeEmpty();
     const p = M.projects.find((x) => x.id === S.homeSel) || M.projects[0];
     const list = M.projects.filter((x) => !S.homeQ || x.name.toLowerCase().includes(S.homeQ.toLowerCase()));
     const main = '<div class="home-main scroll"><div class="home-h"><div class="grow"><h1>项目</h1><p>选择项目继续工作。每个项目有自己的主题色，会应用到选中态、高亮和发送按钮。</p></div><label class="inp" style="width:210px;height:30px">' + I('plus', 13) + '<input data-in="newproj" placeholder="输入项目名，回车新建"></label><button class="btn pri" style="height:30px" data-a="newProj">新建项目</button></div>' +
