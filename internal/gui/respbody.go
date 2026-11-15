@@ -239,7 +239,7 @@ func (a *app) bodyToolbar(c *ui.Context, rs *respState, canPreview bool) {
 			if prevOn {
 				prevCol = p.accent
 			}
-			pb := a.fmtChip(c, "preview", prevOn, !canPreview).Tooltip(a.t("预览", "Preview"))
+			pb := a.tip(c, a.fmtChip(c, "preview", prevOn, !canPreview), a.t("预览", "Preview"))
 			pb.Children(func() {
 				icon(c, "eye", 12, prevCol)
 				txt(c, a.t("预览", "Preview"), fsSmall+0.5, prevCol, 600)

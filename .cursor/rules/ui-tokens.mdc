@@ -15,5 +15,6 @@ alwaysApply: false
 4. **表格**统一 28 高表头 + 发丝竖线 + 28 高行 + 34 宽首列；**分段控件**用滑动胶囊；**标签栏**用文件夹式融合标签。
 5. **浮层**：`PopoverMenuButton` 必须传 `a.menuOpts()`（不透明渐变面板）；对话框面板使用同色 Gradient。
 6. **动效**：指示器（分段、下划线、标签顶线、开关旋钮）必须滑动；颜色变化用 `transColors`；入场用 `motion*`。
-7. 用户可见文案走 `t(zh, en)`，搜索占位符保持简短。
-8. 改动后运行 `go test ./internal/gui -run TestTokens` 与 `TestCompareScenes` 截图对比。
+7. **悬浮提示**一律用 `a.tip(c, e, 文字)`（正下方、450ms、深色胶囊），不要直接调 `Element.Tooltip`。
+8. 用户可见文案走 `t(zh, en)`，搜索占位符保持简短。
+9. 改动后运行 `go test ./internal/gui -run TestTokens` 与 `TestCompareScenes` 截图对比。

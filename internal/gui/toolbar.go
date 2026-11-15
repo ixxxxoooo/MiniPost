@@ -80,7 +80,7 @@ func (a *app) projectButton(c *ui.Context) {
 		pr = *cur
 		name = cur.Name
 	}
-	btn := islandChip(c, "project-btn", a.projMenu.open, p).Tooltip(a.t("切换项目", "Switch project")).Label(a.t("切换项目", "Switch project"))
+	btn := a.tip(c, islandChip(c, "project-btn", a.projMenu.open, p), a.t("切换项目", "Switch project")).Label(a.t("切换项目", "Switch project"))
 	btn.Children(func() {
 		a.projectAvatar(c, pr, 18, 10)
 		txtE(c, name, fsBase, p.fg, 600).MaxWidth(160)
@@ -107,8 +107,7 @@ func (a *app) envPill(c *ui.Context) {
 	if a.env() != nil {
 		dot = p.success
 	}
-	btn := islandChip(c, "envsel", a.envOpen, p).
-		Tooltip(a.t("切换环境", "Switch environment")).Label(a.t("切换环境", "Switch environment"))
+	btn := a.tip(c, islandChip(c, "envsel", a.envOpen, p), a.t("切换环境", "Switch environment")).Label(a.t("切换环境", "Switch environment"))
 	btn.Children(func() {
 		icon(c, "globe", 13, p.fg)
 		txtE(c, a.envLabel(), fsBase, p.fg, 500).MaxWidth(140)

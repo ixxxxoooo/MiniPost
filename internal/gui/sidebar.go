@@ -291,8 +291,7 @@ func (a *app) treeNode(c *ui.Context, id string, depth int) {
 // nodeMoreButton 是行右侧的“···”按钮，点击弹出节点菜单。
 func (a *app) nodeMoreButton(c *ui.Context, id string) {
 	p := a.p
-	ui.ButtonBase(c.Key("more:"+id)).Width(16).Height(20).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
-		Tooltip(a.t("更多操作", "More actions")).
+	a.tip(c, ui.ButtonBase(c.Key("more:"+id)).Width(16).Height(20).Shrink(0).AlignItems(ui.Center).Justify(ui.Center), a.t("更多操作", "More actions")).
 		PopoverMenuButton(func(m *ui.Menu) { a.nodeMenu(m, id) }, a.menuOpts()).
 		Children(func() { icon(c, "more", 12, p.muted) })
 }
@@ -656,7 +655,7 @@ func (a *app) envList(c *ui.Context) {
 			}
 			add := ui.ButtonBase(c.Key("env-add")).PaddingStart(8).PaddingEnd(6).Gap(6).AlignItems(ui.Center).Justify(ui.Start)
 			add = a.treeRowBox(add, 0, false, false, add.Hovered()).Margin(4, 6, 0, 6)
-			add.Tooltip(a.t("新建环境", "New environment")).Children(func() {
+			a.tip(c, add, a.t("新建环境", "New environment")).Children(func() {
 				ui.Box(c).Width(17).Shrink(0)
 				icon(c, "plus", 14, p.muted)
 				txt(c, a.t("新建环境", "New environment"), fsV2xs, p.muted, 0)

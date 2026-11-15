@@ -181,9 +181,9 @@ func (a *app) respCookiesView(c *ui.Context, rs *respState) {
 	}
 	p := a.p
 	flag := func(s string, tip string) {
-		ui.Row(c).Height(16).PaddingX(5).Radius(4).Background(p.surface2).Border(0.5, p.border).AlignItems(ui.Center).Children(func() {
+		a.tip(c, ui.Row(c).Height(16).PaddingX(5).Radius(4).Background(p.surface2).Border(0.5, p.border).AlignItems(ui.Center), tip).Children(func() {
 			txtMono(c, s, 9.5, p.fg2, 600)
-		}).Tooltip(tip)
+		})
 	}
 	a.respTable(c, cols, rows, -1, func(i int) {
 		if cookies[i].secure {

@@ -109,7 +109,7 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab, w float32) {
 	}
 	hover := cell.Hovered()
 	// 标题可用宽度 = 标签宽 - 标题之外固定占用的部分
-	cell = a.tipIfLong(c, cell, t.title(), fsV2xs, 500, w-tabChrome)
+	cell = a.tipIfLong(c, cell, t.title(), fsV2xs, tabTitleWeight(active), w-tabChrome)
 	switch {
 	case active:
 		// 与内容区同色，压住标签栏的分隔线（-1）；整圈亮轮廓由 tabOutline 绘制
@@ -134,9 +134,9 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab, w float32) {
 			} else {
 				a.methodText(c, t.draft.Method)
 			}
-			col, wt := p.muted, 500
+			col, wt := p.muted, tabTitleWeight(false)
 			if active {
-				col, wt = p.fg, 650
+				col, wt = p.fg, tabTitleWeight(true)
 			} else if hover {
 				col = p.fg
 			}
@@ -147,8 +147,8 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab, w float32) {
 				return
 			}
 			closeCol := p.muted
-			cb := ui.ButtonBase(c.Key("tc:"+t.draft.ID)).Size(18, 18).Radius(5).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
-				Tooltip(a.t("关闭 (⌘W)", "Close (⌘W)")).Label(a.t("关闭 (⌘W)", "Close (⌘W)"))
+			cb := a.tip(c, ui.ButtonBase(c.Key("tc:"+t.draft.ID)).Size(18, 18).Radius(5).Shrink(0).AlignItems(ui.Center).Justify(ui.Center),
+				a.t("关闭 (⌘W)", "Close (⌘W)")).Label(a.t("关闭 (⌘W)", "Close (⌘W)"))
 			if cb.Hovered() {
 				cb = cb.Background(p.press)
 				closeCol = p.fg
@@ -169,6 +169,15 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab, w float32) {
 			a.activate(i)
 		})
 	}
+}
+
+// tabTitleWeight 是标签标题的字重：选中的更粗。量宽（判断是否需要悬浮提示）必须用和绘制相同的字重，
+// 否则选中标签里被截断的标题会因为按细字重量宽而不出提示。
+func tabTitleWeight(active bool) int {
+	if active {
+		return 650
+	}
+	return 500
 }
 
 // tabMenu 是标签的右键菜单：关闭、关闭其他、关闭全部。
@@ -222,8 +231,8 @@ func (a *app) tabMenu(m *ui.Menu, i int) {
 // tabListButton 是“显示所有标签”的下拉按钮：点击展开 tabListDropdown。
 func (a *app) tabListButton(c *ui.Context) {
 	p := a.p
-	btn := ui.ButtonBase(c.Key("tablist")).Size(22, 22).Radius(radiusSm).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
-		Tooltip(a.t("显示所有标签", "Show all tabs")).Label(a.t("显示所有标签", "Show all tabs"))
+	btn := a.tip(c, ui.ButtonBase(c.Key("tablist")).Size(22, 22).Radius(radiusSm).Shrink(0).AlignItems(ui.Center).Justify(ui.Center),
+		a.t("显示所有标签", "Show all tabs")).Label(a.t("显示所有标签", "Show all tabs"))
 	if btn.Hovered() || a.tabListOpen {
 		btn = btn.Background(p.hover)
 	}

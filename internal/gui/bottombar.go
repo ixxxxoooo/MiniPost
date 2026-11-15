@@ -117,7 +117,7 @@ func (a *app) statusInfo(c *ui.Context) {
 	// 设计稿：「POST /post → 200 · 773ms」，方法着色，路径灰色，状态着色
 	ui.Box(c).Width(1).Height(12).Background(p.tabDivider).Shrink(0)
 	last := a.con.entries[len(a.con.entries)-1]
-	ui.Row(c.Key("foot:last")).Gap(6).AlignItems(ui.Center).Shrink(1).Tooltip(a.t("最近一次请求", "Last request")).Children(func() {
+	a.tip(c, ui.Row(c.Key("foot:last")).Gap(6).AlignItems(ui.Center).Shrink(1), a.t("最近一次请求", "Last request")).Children(func() {
 		txtMono(c, methodAbbr(last.method), fsSmall, p.method(last.method), 600)
 		txtEMono(c, urlPathQuery(last.url), fsSmall, p.muted, 0).MaxWidth(280)
 		txt(c, "→", fsSmall, p.muted, 0)

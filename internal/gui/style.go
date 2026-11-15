@@ -265,8 +265,16 @@ func (p *palette) theme(fontSize float32) *ui.Theme {
 	th.Spacing = 3
 	th.FontSize = fontSize
 	th.ScrollbarWidth = 6
+	// 悬浮提示与 Toast 的反色底：设计稿 .tip（fg 92% 混黑底、bg 色字）。必须显式给出：
+	// 侧栏、标签栏所在的子主题把 Background 设成了透明，缺省的反色文字会跟着变透明，提示就成了一块没有字的黑块。
+	th.Inverse = p.tipFill()
+	th.InverseText = p.surface
+	th.TooltipDelay = tipDelay
 	return th
 }
+
+// tipFill 是悬浮提示的底色（设计稿 .tip：color-mix(fg 92%, black)）。
+func (p *palette) tipFill() ui.Color { return p.fg.Mix(ui.RGBA(0, 0, 0, 1), 0.08) }
 
 // methodAbbr 返回树、标签与历史里用的方法缩写（设计稿：DELETE→DEL、OPTIONS→OPT，其余原样），
 // 保证最长 5 个字符，能在 32px 的方法列里对齐。
@@ -479,7 +487,7 @@ func (a *app) button(c *ui.Context, o btnOpts, content func(hover bool)) bool {
 		b = b.Border(1, *o.border)
 	}
 	if o.tip != "" {
-		b = b.Tooltip(o.tip).Label(o.tip) // 同时作为无障碍名称
+		b = a.tip(c, b, o.tip).Label(o.tip) // 同时作为无障碍名称
 	}
 	if o.disabled {
 		b = b.Disabled(true)
@@ -971,7 +979,7 @@ func (a *app) btn(c *ui.Context, o dbtn) bool {
 		}
 	}
 	if o.tip != "" {
-		b = b.Tooltip(o.tip).Label(o.tip)
+		b = a.tip(c, b, o.tip).Label(o.tip)
 	}
 	if o.disabled {
 		b = b.Disabled(true).Opacity(0.45)

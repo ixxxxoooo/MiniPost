@@ -82,7 +82,7 @@ func (a *app) crumbBar(c *ui.Context, t *tab) {
 			if a.textOverflows(c, seg.name, fsSmall, 0, 120) {
 				tip = seg.name + "\n" + tip // 名称被截断时，提示里带上全名
 			}
-			sb := ui.ButtonBase(c.Key("seg" + itoa(i))).Height(22).PaddingX(4).Radius(radiusSm - 2).AlignItems(ui.Center).Shrink(1).MinWidth(0).Tooltip(tip)
+			sb := a.tip(c, ui.ButtonBase(c.Key("seg"+itoa(i))).Height(22).PaddingX(4).Radius(radiusSm-2).AlignItems(ui.Center).Shrink(1).MinWidth(0), tip)
 			if sb.Hovered() {
 				sb = sb.Background(p.hover)
 			}
@@ -123,8 +123,8 @@ func (a *app) crumbBar(c *ui.Context, t *tab) {
 func (a *app) requestName(c *ui.Context, t *tab) {
 	p := a.p
 	if !t.editName {
-		btn := ui.ButtonBase(c.Key("reqname")).Height(22).Radius(radiusSm - 2).PaddingX(4).AlignItems(ui.Center).Justify(ui.Start).Shrink(1).MinWidth(0).
-			Tooltip(a.t("单击编辑请求名称", "Click to edit request name"))
+		btn := a.tip(c, ui.ButtonBase(c.Key("reqname")).Height(22).Radius(radiusSm-2).PaddingX(4).AlignItems(ui.Center).Justify(ui.Start).Shrink(1).MinWidth(0),
+			a.t("单击编辑请求名称", "Click to edit request name"))
 		if btn.Hovered() {
 			btn = btn.Background(p.hover)
 		}
@@ -237,7 +237,7 @@ func (a *app) sendGroup(c *ui.Context, t *tab) {
 		box = box.Opacity(0.5)
 	}
 	p.gradAccent(box, false).Children(func() {
-		send := ui.ButtonBase(c.Key("send")).FillHeight().PaddingX(14).AlignItems(ui.Center).Justify(ui.Center).Gap(7).Disabled(empty).Tooltip("⌘↩")
+		send := a.tip(c, ui.ButtonBase(c.Key("send")).FillHeight().PaddingX(14).AlignItems(ui.Center).Justify(ui.Center).Gap(7).Disabled(empty), "⌘↩")
 		if send.Hovered() && !empty {
 			send = send.Background(ui.RGBA(255, 255, 255, 0.08))
 		}

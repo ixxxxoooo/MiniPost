@@ -38,14 +38,19 @@ var (
 	motionDlg = &ui.Motion{Y: 14, Scale: 0.955, Blur: 4}
 	// motionQuick 是快速打开面板的入场（设计稿 qkIn）：自顶部落下 10px，缩放 .97，带轻微模糊。
 	motionQuick = &ui.Motion{Y: -10, Scale: 0.97, Blur: 4}
-	motionItem  = &ui.Motion{Y: 5}
-	motionPane  = &ui.Motion{Y: 6}
+	// motionTip 是悬浮提示的入场（设计稿 tipIn）：自上 3px 落下，缩放 .96。
+	motionTip  = &ui.Motion{Y: -3, Scale: 0.96}
+	motionItem = &ui.Motion{Y: 5}
+	motionPane = &ui.Motion{Y: 6}
 	// motionPaneOut 是面板退场（设计稿 paneOut：上移 4px 淡出）。
 	motionPaneOut = &ui.Motion{Y: -4}
 )
 
 // durPaneOut 是面板退场时长；退场结束后新面板才进场（fx.js：退场幽灵 110ms 后 paneIn）。
 const durPaneOut = 110 * time.Millisecond
+
+// tipDelay 是鼠标停在元素上多久后出现悬浮提示（设计稿 overlays.js：450ms）。
+const tipDelay = 450 * time.Millisecond
 
 // enterTransition 返回带入场（和可选退场）的过渡；delay 用于列表逐行错开（设计稿 --i × 24ms）。
 func enterTransition(in *ui.Motion, dur time.Duration, delay time.Duration) ui.ElementTransition {

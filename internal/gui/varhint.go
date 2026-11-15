@@ -60,7 +60,7 @@ func (a *app) undefinedHint(c *ui.Context, t *tab) {
 	if a.env() == nil {
 		tip += a.t("（当前未选择环境）", " (no environment selected)")
 	}
-	ui.Row(c.Key("undefhint")).Width(28).FillHeight().Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Tooltip(tip).Children(func() {
+	a.tip(c, ui.Row(c.Key("undefhint")).Width(28).FillHeight().Shrink(0).AlignItems(ui.Center).Justify(ui.Center), tip).Children(func() {
 		icon(c, "info", 14, a.p.warning)
 	})
 }

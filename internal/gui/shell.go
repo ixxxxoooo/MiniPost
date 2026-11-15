@@ -61,7 +61,7 @@ func (a *app) ib(c *ui.Context, key, iconName, tip string, on, disabled bool, ac
 		b = b.Background(p.hover)
 	}
 	if tip != "" {
-		b = b.Tooltip(tip).Label(tip)
+		b = a.tip(c, b, tip).Label(tip)
 	}
 	if disabled {
 		b = b.Disabled(true)
@@ -95,7 +95,7 @@ func (a *app) ibSmOn(c *ui.Context, key, iconName, tip string, on, disabled bool
 		b = b.Background(p.hover)
 	}
 	if tip != "" {
-		b = b.Tooltip(tip).Label(tip)
+		b = a.tip(c, b, tip).Label(tip)
 	}
 	if disabled {
 		b = b.Disabled(true)
@@ -126,8 +126,8 @@ func (a *app) island(c *ui.Context) {
 // searchPill 是胶囊里的搜索入口（设计稿 .cmdk2）：150px 宽的浅底胶囊，点击打开快速打开面板。
 func (a *app) searchPill(c *ui.Context) {
 	p := a.p
-	b := ui.ButtonBase(c.Key("tb-quick")).Width(150).Height(sizeIsland - 6).Radius((sizeIsland - 6) / 2).PaddingStart(8).PaddingEnd(10).Gap(6).
-		AlignItems(ui.Center).Shrink(0).Tooltip(a.t("快速打开", "Quick open") + " (⌘K)").Label(a.t("搜索", "Search"))
+	b := a.tip(c, ui.ButtonBase(c.Key("tb-quick")).Width(150).Height(sizeIsland-6).Radius((sizeIsland-6)/2).PaddingStart(8).PaddingEnd(10).Gap(6).
+		AlignItems(ui.Center).Shrink(0), a.t("快速打开", "Quick open")+" (⌘K)").Label(a.t("搜索", "Search"))
 	if b.Hovered() {
 		b = b.Background(p.press)
 	} else {

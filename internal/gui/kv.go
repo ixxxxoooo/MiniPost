@@ -431,7 +431,7 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 						}
 						// 设计稿 .fchip：已选文件显示为淡色胶囊（图片图标 + 加粗文件名 + 大小），点击重新选择
 						ui.Row(c).FillWidth().PaddingX(8).Children(func() {
-							chip := ui.ButtonBase(c.Key("file:" + r.ID)).Height(20).Radius(10).PaddingX(8).Gap(5).AlignItems(ui.Center).Background(p.acSoft).Tooltip(r.FilePath)
+							chip := a.tip(c, ui.ButtonBase(c.Key("file:"+r.ID)).Height(20).Radius(10).PaddingX(8).Gap(5).AlignItems(ui.Center).Background(p.acSoft), r.FilePath)
 							chip.Transition(transColors).Children(func() {
 								icon(c, "image", 12, p.accent)
 								txtE(c, r.FileName, fsSmall, p.accent, 650)

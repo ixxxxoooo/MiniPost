@@ -2,6 +2,29 @@ package gui
 
 import "github.com/egoist/mygo/ui"
 
+// tip 给元素加悬浮提示（设计稿 .tip）：停留 tipDelay 后出现在元素正下方、居中，下方放不下时自动翻到上方；
+// 深色圆角胶囊、11px 字，自上轻落入场。不用 Element.Tooltip，因为它固定摆在元素上方：
+// 标签栏、工具栏贴着窗口顶部，提示会盖住标题栏，和设计稿不一致。
+// 同时把提示文字作为无障碍描述。s 为空时原样返回。
+func (a *app) tip(c *ui.Context, e ui.Element, s string) ui.Element {
+	if s == "" {
+		return e
+	}
+	e.Description(s)
+	p := a.p
+	ui.TooltipBase(c, e, func(t ui.Element) {
+		t.MaxWidth(280).Padding(4, 8).Radius(6).Background(p.tipFill()).TextColor(p.surface).FontSize(fsTipText).
+			Shadow(0, 4, 14, -2, ui.RGBA(0, 0, 0, 0.35)).
+			AttachTo(e, ui.AnchorBottom, ui.AnchorTop).Margin(6, 0, 6, 0).
+			Transition(enterWith(motionTip, durBase, 0, easeOut))
+		t.Children(func() { ui.Text(c, s) })
+	})
+	return e
+}
+
+// fsTipText 是悬浮提示的字号（设计稿 .tip font-size: 11px）。
+const fsTipText float32 = 11
+
 // textOverflows 报告 s 以给定字号和字重单行显示时，是否放不进 avail 宽度（也就是会被省略号截断）。
 // 用真实的文字排版量宽，中英文混排也准确。
 func (a *app) textOverflows(c *ui.Context, s string, size float32, weight int, avail float32) bool {
@@ -15,7 +38,7 @@ func (a *app) textOverflows(c *ui.Context, s string, size float32, weight int, a
 // tipIfLong 在文字会被截断时给元素加上显示全文的悬停提示；放得下时原样返回，避免无意义的提示。
 func (a *app) tipIfLong(c *ui.Context, e ui.Element, s string, size float32, weight int, avail float32) ui.Element {
 	if a.textOverflows(c, s, size, weight, avail) {
-		return e.Tooltip(s)
+		return a.tip(c, e, s)
 	}
 	return e
 }

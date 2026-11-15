@@ -318,8 +318,8 @@ func (a *app) projectCard(c *ui.Context, pr model.Project) {
 					})
 				}
 				if hover {
-					ui.ButtonBase(c.Key("pcm:"+pr.ID)).Size(22, 22).Radius(radiusSm).AlignItems(ui.Center).Justify(ui.Center).Shrink(0).
-						Tooltip(a.t("更多操作", "More actions")).PopoverMenuButton(func(m *ui.Menu) { a.projectCardMenu(m, pr) }, a.menuOpts()).
+					a.tip(c, ui.ButtonBase(c.Key("pcm:"+pr.ID)).Size(22, 22).Radius(radiusSm).AlignItems(ui.Center).Justify(ui.Center).Shrink(0), a.t("更多操作", "More actions")).
+						PopoverMenuButton(func(m *ui.Menu) { a.projectCardMenu(m, pr) }, a.menuOpts()).
 						Children(func() { icon(c, "more", 13, p.muted) })
 				}
 			})
@@ -470,7 +470,7 @@ func (a *app) homeDetail(c *ui.Context, pr model.Project) {
 						}
 					})
 					if hex == "" {
-						b.Tooltip(a.t("跟随外观配色", "Follow appearance"))
+						a.tip(c, b, a.t("跟随外观配色", "Follow appearance"))
 					}
 					if b.Clicked() {
 						id := pr.ID
