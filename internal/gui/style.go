@@ -741,12 +741,20 @@ func (a *app) dialog(c *ui.Context, open *bool, w, h, radius float32, fn func())
 
 // dialogDim 与 dialog 相同，但可指定遮罩的黑色透明度（旧版 cURL 弹窗用 0.5）。
 func (a *app) dialogDim(c *ui.Context, open *bool, w, h, radius, dim float32, fn func()) {
+	a.dialogAt(c, open, w, h, radius, dim, 0, fn)
+}
+
+// dialogAt 在 dialogDim 的基础上可让面板贴顶显示：top > 0 时面板距窗口顶部 top（设计稿 .scrim.top 的 padding-top:70，用于快速打开）。
+func (a *app) dialogAt(c *ui.Context, open *bool, w, h, radius, dim, top float32, fn func()) {
 	p := a.p
 	cw, ch := c.Size()
 	ui.DialogBase(c, open, func(back, panel ui.Element) {
 		// 设计稿 .dlg：大圆角（--r-lg）、近乎不透明的玻璃底（无法做背景模糊，故用高不透明度）、细边框 + 顶部高光 + 大投影
 		scrim := ui.RGBA(0, 0, 0, dim)
 		back.Background(scrim)
+		if top > 0 {
+			back.AlignItems(ui.Start).Justify(ui.Start).Padding(top, 0, 0, 0)
+		}
 		radius = max(radius, radiusLg)
 		panel.Width(w).Radius(radius).Gradient(p.elevated(), p.elevated(), 180).Border(1, p.border).Clip().
 			Shadow(0, 14, 40, -8, p.shadowLg()).Shadow(0, 2, 6, 0, p.shadowLg()).InsetShadow(0, 1, 0, 0, ui.RGBA(255, 255, 255, 0.18))
@@ -754,7 +762,7 @@ func (a *app) dialogDim(c *ui.Context, open *bool, w, h, radius, dim float32, fn
 			panel.Height(h)
 		}
 		panel.MaxWidth(cw * 0.92).MaxHeight(ch * 0.88)
-		panel.Transition(enterTransition(motionPop, durBase, 0)) // 设计稿 popIn：自下方 6px、缩放 .97 淡入
+		panel.Transition(enterWith(motionDlg, durXL, 0, easeSoft)) // 设计稿 dlgIn：自下 14px、缩放 .955 淡入
 		fn()
 	})
 }
@@ -1029,6 +1037,46 @@ func (a *app) segTabs(c *ui.Context, key string, sel *int, labels []string) bool
 func (a *app) menuOpts() ui.PopoverMenuButtonOptions {
 	bg := a.p.elevated()
 	return ui.PopoverMenuButtonOptions{Panel: func(panel ui.Element) {
-		panel.Gradient(bg, bg, 180).Transition(enterTransition(motionPop, durBase, 0)) // 设计稿 popIn
+		panel.Gradient(bg, bg, 180).Transition(enterTransition(motionPop, durSlow, 0)) // 设计稿 popIn
 	}}
+}
+
+// popPanel 是自绘下拉面板（项目、环境、详情卡片）共用的外观（设计稿 .pop）：--elev 不透明渐变底、--r-lg 圆角、
+// 1px 描边、分层大投影 + 顶部高光，内边距 5，带 popIn 入场；width 为 0 时由内容决定宽度。
+func (a *app) popPanel(panel ui.Element, w float32) ui.Element {
+	p := a.p
+	panel = panel.Radius(radiusLg).Gradient(p.elevated(), p.elevated(), 180).Border(1, p.border).Padding(5).
+		Shadow(0, 14, 40, -8, p.shadowLg()).Shadow(0, 2, 6, 0, p.shadowLg()).InsetShadow(0, 1, 0, 0, ui.RGBA(255, 255, 255, 0.18)).
+		Transition(enterTransition(motionPop, durSlow, 0))
+	if w > 0 {
+		panel = panel.Width(w)
+	}
+	return panel
+}
+
+// popItem 是下拉面板里的一行（设计稿 .pop .pi，28 高、圆角 --r-sm）：选中为强调色渐变底，悬停为向右渐隐的淡强调色；
+// i 为行序号，用于 itemIn 的逐条错开。返回行元素，调用方在 Children 里放内容。
+func (a *app) popItem(c *ui.Context, key string, i int, selected bool) ui.Element {
+	p := a.p
+	row := ui.ButtonBase(c.Key(key)).FillWidth().Height(28).Shrink(0).Radius(radiusSm).PaddingX(8).Gap(8).AlignItems(ui.Center).Justify(ui.Start)
+	switch {
+	case selected:
+		row = row.Gradient(p.acSoft2, p.acSoft, 90)
+	case row.Hovered():
+		row = row.Gradient(p.acSoft, p.acSoft.Alpha(0), 90)
+	}
+	return row.Transition(itemEnter(i))
+}
+
+// popSep 是下拉面板里的分隔线（设计稿 .hsep：1px，上下各 4）。
+func (a *app) popSep(c *ui.Context) {
+	ui.Box(c).FillWidth().Height(1).Shrink(0).Margin(4, 0, 4, 0).Background(a.p.border)
+}
+
+// curBadge 是“当前”绿色小标（设计稿 .cur-badge：16 高圆角胶囊，成功色淡底 + 细环）。
+func (a *app) curBadge(c *ui.Context) {
+	p := a.p
+	ui.Row(c).Height(16).PaddingX(6).Radius(8).Background(p.okSoft).Border(1, p.success.Alpha(0.24)).AlignItems(ui.Center).Shrink(0).Children(func() {
+		txt(c, a.t("当前", "Current"), fsTiny, p.success, 600)
+	})
 }

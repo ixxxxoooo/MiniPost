@@ -78,11 +78,16 @@ func (a *app) responsePane(c *ui.Context, t *tab) {
 	})
 }
 
-// respReady 是响应区还没发送过请求时的空态（设计稿 .empty-r）：徽标图形 + “准备就绪” + 说明 + 三个快捷键提示。
+// respReady 是响应区还没发送过请求时的空态（设计稿 .empty-r）：应用图标 + “准备就绪” + 说明 + 三个快捷键提示。
 func (a *app) respReady(c *ui.Context, t *tab) {
 	p := a.p
 	ui.Column(c).Grow(1).Basis(0).FillWidth().AlignItems(ui.Center).Justify(ui.Center).Gap(10).Children(func() {
-		icon(c, "plane", 40, p.accent).Shadow(0, 6, 16, -4, p.glowS)
+		// 应用图标（与欢迎页同一张图，44px）：设计稿 .empty-r 里的 logo(44)
+		if img := logoImage(p.dark); img != nil {
+			ui.Row(c).Size(44, 44).Radius(11).Shadow(0, 8, 18, -4, p.accent.Alpha(0.30)).Children(func() {
+				ui.Image(c, img).Size(44, 44).Fit(ui.Contain)
+			})
+		}
 		txt(c, a.t("准备就绪", "Ready"), fsLarge, p.fg, 650)
 		txt(c, a.t("点击「发送」，响应会显示在这里", "Click Send and the response shows up here"), fsSmall, p.muted, 0)
 		ui.Row(c).Gap(14).Margin(4, 0, 0, 0).AlignItems(ui.Center).Children(func() {
@@ -263,32 +268,21 @@ func (rs *respState) statusInfo() (code int, text, proto string) {
 	return 0, "", ""
 }
 
-// statusBadge 返回状态码徽标的文字色与底色，取值同旧版 statusBadgeClass（1xx 灰、2xx 绿、3xx 蓝、4xx 橙、其余红）。
+// statusBadge 返回状态码徽标的文字色与底色（设计稿 .pill.ok/.warn/.err/.info）：全部取语义令牌，随配色方案与明暗联动。
+// 1xx 灰、2xx 成功、3xx 信息、4xx 警告、其余危险。
 func (a *app) statusBadge(code int) (fg, bg ui.Color) {
-	if a.p.dark {
-		switch {
-		case code >= 100 && code < 200:
-			return ui.Hex("#aeb4bd"), ui.Hex("#2d2f34")
-		case code >= 200 && code < 300:
-			return ui.Hex("#7ce0ad"), ui.Hex("#123a2c")
-		case code >= 300 && code < 400:
-			return ui.Hex("#72c7e4"), ui.Hex("#113342")
-		case code >= 400 && code < 500:
-			return ui.Hex("#f3bf67"), ui.Hex("#3f2f16")
-		}
-		return ui.Hex("#ff8a83"), ui.Hex("#402222")
-	}
+	p := a.p
 	switch {
 	case code >= 100 && code < 200:
-		return ui.Hex("#6f7782"), ui.Hex("#f1f2f4")
+		return p.fg2, p.surface2
 	case code >= 200 && code < 300:
-		return ui.Hex("#2b8a57"), ui.Hex("#e6f6ec")
+		return p.success, p.okSoft
 	case code >= 300 && code < 400:
-		return ui.Hex("#2a7f95"), ui.Hex("#e6f3f8")
+		return p.info, p.infoSoft
 	case code >= 400 && code < 500:
-		return ui.Hex("#a56412"), ui.Hex("#fbf2e6")
+		return p.warning, p.warnSoft
 	}
-	return ui.Hex("#b44840"), ui.Hex("#fbeceb")
+	return p.danger, p.errSoft
 }
 
 // statusDot 返回状态点颜色：2xx 成功色、3xx info、4xx 警告色、其余危险色（同旧版 statusDotClass）。
@@ -329,16 +323,19 @@ func (a *app) responseBody(c *ui.Context, t *tab) {
 			ui.Spacer(c)
 			a.respMeta(c, rs)
 		})
-		switch {
-		case rs.sub == 1:
-			a.respHeadersView(c, rs)
-		case rs.sub == 2:
-			a.respCookiesView(c, rs)
-		case rs.sub == 3 && rs.streamed:
-			a.streamView(c, rs)
-		default:
-			a.bodyView(c, t, rs)
-		}
+		// 响应体 / 响应头 / Cookies / Stream 切换：旧面板先淡出，新面板再进入（设计稿 paneOut → paneIn）
+		a.pane(c, "resp"+itoa(rs.sub), func() {
+			switch {
+			case rs.sub == 1:
+				a.respHeadersView(c, rs)
+			case rs.sub == 2:
+				a.respCookiesView(c, rs)
+			case rs.sub == 3 && rs.streamed:
+				a.streamView(c, rs)
+			default:
+				a.bodyView(c, t, rs)
+			}
+		})
 	})
 	_ = p
 }
@@ -355,7 +352,8 @@ func (a *app) respMeta(c *ui.Context, rs *respState) {
 		return
 	}
 	resp := rs.resp
-	ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
+	// 设计稿 .resp-h .meta：状态、耗时、大小、网络收进同一枚玻璃胶囊，项目之间是发丝竖线
+	ui.Row(c).Height(26).PaddingX(3).Gap(0).Radius(13).Background(p.surface2.Alpha(0.7)).Border(0.5, p.hair).AlignItems(ui.Center).Shrink(0).Children(func() {
 		if len(resp.Warnings) > 0 {
 			ui.Row(c).Height(20).PaddingX(8).Radius(10).Background(p.warning.Alpha(0.14)).AlignItems(ui.Center).Children(func() {
 				txtE(c, a.t("警告", "Warning")+": "+resp.Warnings[0], fsSmall, p.warning, 600).MaxWidth(260)
@@ -363,21 +361,28 @@ func (a *app) respMeta(c *ui.Context, rs *respState) {
 		}
 		// 设计稿 C：状态胶囊（圆点 + 状态，1px 同色细环）+ 带图标的灰色度量（耗时、大小、TLS）
 		fg, bg := a.statusBadge(code)
-		badge := ui.Row(c.Key("badge")).Height(20).PaddingX(8).Gap(5).Radius(10).Background(bg).Border(1, fg.Alpha(0.13)).AlignItems(ui.Center).Shrink(0)
+		badge := ui.Row(c.Key("badge")).Height(20).PaddingX(8).Gap(5).Radius(10).Margin(0, 3, 0, 0).Background(bg).Border(1, fg.Alpha(0.18)).Shadow(0, 0, 10, -3, fg.Alpha(0.45)).AlignItems(ui.Center).Shrink(0)
 		badge.Children(func() {
 			ui.Box(c).Size(6, 6).Radius(3).Background(fg).Shrink(0)
 			txt(c, respStatusLabel(code, text), fsSmall, fg, 600)
 		})
 		a.hoverCard(c, "status", badge, 340, func() { a.statusCard(c, code, text) })
+		first := true
 		mi := func(key, ic, label string, w float32, card func()) {
-			el := ui.Row(c.Key(key)).Height(22).PaddingX(6).Gap(4).Radius(6).AlignItems(ui.Center).Shrink(0)
-			if el.Hovered() {
+			el := ui.Row(c.Key(key)).Height(20).PaddingX(9).Gap(4).Radius(10).AlignItems(ui.Center).Shrink(0)
+			hov := el.Hovered()
+			if hov {
 				el = el.Background(p.hover)
 			}
-			el.Children(func() {
+			sep := !first && !hov // 与前一项之间的发丝竖线：悬停时隐去
+			first = false
+			el.Transition(transColors).Children(func() {
+				if sep {
+					ui.Box(c).Absolute().Left(-0.5).Top(5).Bottom(5).Width(1).Background(p.border)
+				}
 				icon(c, ic, 12, p.muted)
 				if label != "" {
-					txt(c, label, fsSmall+0.5, p.fg2, 0)
+					txtMono(c, label, fsSmall, p.fg2, 0)
 				}
 			})
 			a.hoverCard(c, strings.TrimSuffix(key, "anchor"), el, w, card)
@@ -403,11 +408,10 @@ func spaceUnit(s string) string {
 
 // hoverCard 在锚点被悬停时，于其下方（右对齐）弹出详情卡片；鼠标移入卡片时保持显示。
 func (a *app) hoverCard(c *ui.Context, key string, anchor ui.Element, w float32, build func()) {
-	p := a.p
 	open := anchor.Hovered() || a.side.cardHot == key
 	hot := false
 	ui.PopoverBase(c, anchor, &open, func(panel ui.Element) {
-		panel = panel.AttachTo(anchor, ui.AnchorBottomRight, ui.AnchorTopRight).Margin(6, 0, 0, 0).Width(w).Radius(10).Background(p.surface).Border(1, p.border).Padding(10, 12)
+		panel = a.popPanel(panel.AttachTo(anchor, ui.AnchorBottomRight, ui.AnchorTopRight).Margin(6, 0, 0, 0), w).Padding(10, 12)
 		if panel.Hovered() {
 			hot = true
 		}

@@ -209,6 +209,21 @@ var compareScenes = []compareScene{
 		defaultTabs(t, a, tt)
 		_ = tt.Click("Cookies")
 	}},
+	{"proj-menu", func(t *testing.T, a *app, tt *ui.Tester, be *fakeBackend) {
+		defaultTabs(t, a, tt)
+		a.projMenu.open = true
+	}},
+	{"env-menu", func(t *testing.T, a *app, tt *ui.Tester, be *fakeBackend) {
+		defaultTabs(t, a, tt)
+		_ = tt.Click("切换环境") // 标题栏里的环境选择
+	}},
+	{"send-menu", func(t *testing.T, a *app, tt *ui.Tester, be *fakeBackend) {
+		defaultTabs(t, a, tt)
+		a.sendMenuOpen = true // 发送按钮右侧的下拉箭头
+	}},
+	{"tabs-many", func(t *testing.T, a *app, tt *ui.Tester, be *fakeBackend) {
+		openTabs(a, tt, 3, "r1", "r2", "r3", "r4", "r5", "r6")
+	}},
 	{"resp-empty", func(t *testing.T, a *app, tt *ui.Tester, be *fakeBackend) {
 		openTabs(a, tt, 0, "r1", "r2", "r5")
 	}},

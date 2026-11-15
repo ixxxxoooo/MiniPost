@@ -3,7 +3,7 @@ package gui
 import (
 	"regexp"
 	"strings"
-	"unicode/utf8"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -16,94 +16,62 @@ type projMenuState struct {
 	query string
 }
 
-// 旧版面板尺寸常量：宽度 = 84 + 最长名称长度×11，限制在 220~320。
-const (
-	projPanelMin  = 220
-	projPanelMax  = 320
-	projPanelBase = 84
-	projCharWidth = 11
-	projRowH      = 30 // 项目行固定高度（12px 文字 18 + 上下内边距 6）
-)
+// projPanelW 是项目下拉面板的宽度（设计稿 .pop 的 260）。
+const projPanelW = 260
 
 // projectDropdown 绘制项目下拉面板：搜索/新建栏 + 项目列表（当前标记、悬停时的导出与删除）。
 func (a *app) projectDropdown(c *ui.Context, anchor ui.Element, trigW float32) {
 	p := a.p
 	pm := &a.projMenu
-	longest := 0
-	if pr := a.project(); pr != nil {
-		longest = utf8.RuneCountInString(pr.Name)
-	}
-	for _, pr := range a.projects {
-		longest = max(longest, utf8.RuneCountInString(pr.Name))
-	}
-	w := min(float32(projPanelMax), max(float32(projPanelMin), float32(projPanelBase+longest*projCharWidth)))
-	w = max(w, trigW)
+	w := max(float32(projPanelW), trigW)
 	open := true
 	create := false
 	ui.PopoverBase(c, anchor, &open, func(panel ui.Element) {
-		panel.AttachTo(anchor, ui.AnchorBottomLeft, ui.AnchorTopLeft).Margin(6, 0, 0, 0).Width(w).Radius(9).Background(p.elevated()).
-			Border(1, p.btnBorder).Clip().Shadow(0, 8, 24, 0, p.shadowLg())
+		a.popPanel(panel.AttachTo(anchor, ui.AnchorBottomLeft, ui.AnchorTopLeft).Margin(6, 0, 0, 0), w).Clip()
 		ui.Column(c).FillWidth().Children(func() {
-			// 搜索 / 新建
-			ui.Row(c).FillWidth().Padding(6).Gap(6).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
-				bd := p.btnBorder
-				in := a.input(c, &pm.query, a.t("搜索或新建项目...", "Search or create project..."), fieldOpts{
-					h: 28, radius: 7, fs: 10, icon: "search", key: "pm-q", bd: &bd, focus: true, iconSize: 10, iconLeft: 10, iconGap: 8,
+			// 搜索 / 新建（设计稿：输入框 + 26 高“新建”按钮）
+			ui.Row(c).FillWidth().Padding(2, 2, 6, 2).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
+				in := a.input(c, &pm.query, a.t("搜索或新建项目…", "Search or create project…"), fieldOpts{
+					h: 26, radius: radiusR, fs: fsBase, icon: "search", key: "pm-q", focus: true, iconSize: 12, iconLeft: 8, iconGap: 6,
 				})
 				if in.Submitted() {
 					create = true
 				}
-				if a.button(c, btnOpts{h: 28, radius: 7, padX: 10, border: &bd, bg: &p.surface, hoverBg: &p.surface2, key: "pm-new"}, func(bool) {
-					txt(c, a.t("新建", "New"), 10, p.fg, 500)
+				bd := p.btnBorder
+				if a.button(c, btnOpts{h: 26, radius: radiusR, padX: 11, border: &bd, bg: &p.surface, hoverBg: &p.surface2, key: "pm-new"}, func(bool) {
+					txt(c, a.t("新建", "New"), fsBase, p.fg, 550)
 				}) {
 					create = true
 				}
 			})
-			// 项目列表
+			// 项目列表（行高 28：悬停时的操作按钮替换右侧时间，不会撑高行）
 			ui.Scroll(c).FillWidth().MaxHeight(320).Scrollbars(a.scrollbarsVisible()).Children(func() {
-				ui.Column(c).FillWidth().Padding(4).Children(func() {
+				ui.Column(c).FillWidth().Children(func() {
 					q := strings.ToLower(pm.query)
+					now := time.Now()
+					i := 0
 					for _, pr := range a.projects {
 						if q != "" && !strings.Contains(strings.ToLower(pr.Name), q) {
 							continue
 						}
 						pr := pr
 						selected := pr.ID == a.projectID
-						// 行高固定为 30：悬停时才出现的 20px 操作按钮不会把行撑高，否则列表会随鼠标移动抖动。
-						row := ui.Row(c.Key("pm:" + pr.ID)).FillWidth().Height(projRowH).Radius(7).PaddingX(8).Gap(8).AlignItems(ui.Center)
+						row := a.popItem(c, "pm-sel:"+pr.ID, i, selected)
+						i++
 						hover := row.Hovered()
-						switch {
-						case selected:
-							row = row.Background(p.selected)
-						case hover:
-							row = row.Background(p.surface2)
-						}
 						row.Children(func() {
-							dot := p.accent
-							if pr.ThemeColor != "" {
-								dot = ui.Hex(pr.ThemeColor)
-							}
-							main := ui.ButtonBase(c.Key("pm-sel:" + pr.ID)).Grow(1).Basis(0).MinWidth(0).Gap(8).AlignItems(ui.Center).Justify(ui.Start)
-							main.Children(func() {
-								ui.Box(c).Size(10, 10).Radius(5).Background(dot).Shrink(0)
-								txtE(c, pr.Name, fsBase, p.fg, 500).Grow(1).Basis(0)
-							})
-							if main.Clicked() {
-								id, name := pr.ID, pr.Name
-								a.later(func() { a.chooseProject(id, name) })
-							}
-							if selected {
-								txt(c, a.t("当前", "Current"), 9, p.muted, 500).Shrink(0)
-							}
-							if hover {
+							a.projectAvatar(c, pr, 16, 9)
+							txtE(c, pr.Name, fsBase, p.fg, 500).Grow(1).Basis(0)
+							switch {
+							case hover:
 								ui.Row(c).Gap(2).Shrink(0).Children(func() {
-									if a.button(c, btnOpts{w: 20, h: 20, radius: 4, hoverBg: &p.btnBg, tip: a.t("导出项目", "Export project"), key: "pm-ex:" + pr.ID}, func(bool) {
+									if a.button(c, btnOpts{w: 20, h: 20, radius: 5, hoverBg: &p.btnBg, tip: a.t("导出项目", "Export project"), key: "pm-ex:" + pr.ID}, func(bool) {
 										icon(c, "download", 11, p.muted)
 									}) {
 										id, name := pr.ID, pr.Name
 										a.later(func() { a.exportProjectByID(id, name) })
 									}
-									if a.button(c, btnOpts{w: 20, h: 20, radius: 4, hoverBg: &p.btnBg, tip: a.t("删除项目", "Delete project"), key: "pm-del:" + pr.ID}, func(bool) {
+									if a.button(c, btnOpts{w: 20, h: 20, radius: 5, hoverBg: &p.btnBg, tip: a.t("删除项目", "Delete project"), key: "pm-del:" + pr.ID}, func(bool) {
 										icon(c, "delete", 11, p.muted)
 									}) {
 										id, name := pr.ID, pr.Name
@@ -113,11 +81,36 @@ func (a *app) projectDropdown(c *ui.Context, anchor ui.Element, trigW float32) {
 										})
 									}
 								})
+							case selected:
+								a.curBadge(c)
+							default:
+								txt(c, a.relTime(pr.UpdatedAt, now), fsSmall-0.5, p.muted, 0).Shrink(0)
 							}
 						})
+						if row.Clicked() {
+							id, name := pr.ID, pr.Name
+							a.later(func() { a.chooseProject(id, name) })
+						}
 					}
 				})
 			})
+			a.popSep(c)
+			// 全部项目…（回到项目主页）
+			all := a.popItem(c, "pm-all", len(a.projects), false)
+			all.Children(func() {
+				icon(c, "grid", 13, p.fg2)
+				txt(c, a.t("全部项目…", "All projects…"), fsBase, p.fg, 0).Grow(1)
+				a.kbdHint(c, "⌘⇧H")
+			})
+			if all.Clicked() {
+				a.later(func() {
+					pm.open = false
+					if !a.showHome {
+						a.persistSession()
+						a.showHome = true
+					}
+				})
+			}
 		})
 	})
 	if !open {

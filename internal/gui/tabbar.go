@@ -13,8 +13,9 @@ func (a *app) tabBar(c *ui.Context) {
 	p := a.p
 	ui.Row(c).FillWidth().Height(sizeTabStrip).Shrink(0).Background(p.toolbar.Mix(p.surface2, 0.42)).Padding(6, 8, 0, 8).Gap(3).AlignItems(ui.End).
 		BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
-		ui.ScrollHorizontal(c).Grow(1).Basis(0).Scrollbars(false).Children(func() {
-			ui.Row(c).Height(tabHeight).Gap(tabGap).AlignItems(ui.End).Children(func() {
+		// 容器向下伸出 1px（盖住标签栏的分隔线）、向左右各伸出 10px（容纳选中标签两侧的凹圆角），否则会被滚动区域裁掉
+		ui.ScrollHorizontal(c).Grow(1).Basis(0).Margin(0, 0, -1, -tabFillet).Scrollbars(false).Children(func() {
+			ui.Row(c).Height(tabHeight).Gap(tabGap).AlignItems(ui.End).Padding(0, 0, 0, tabFillet).Children(func() {
 				w := a.tabCellWidth(c)
 				for i, t := range a.tabs {
 					a.tabItem(c, i, t, w)
@@ -108,8 +109,8 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab, w float32) {
 	cell = a.tipIfLong(c, cell, t.title(), fsV2xs, 500, w-tabChrome)
 	switch {
 	case active:
-		// 与内容区同色，左右上三边细线，底边不画线并压住标签栏的分隔线（-1）
-		cell = cell.Background(p.surface).BorderWidth(1, 1, 0, 1).BorderColor(p.border).Margin(0, 0, -1, 0).Shadow(0, -6, 14, -8, p.glowS).ZIndex(2)
+		// 与内容区同色，压住标签栏的分隔线（-1）；整圈亮轮廓由 tabOutline 绘制
+		cell = cell.Background(p.surface).Margin(0, 0, -1, 0).Shadow(0, -6, 14, -8, p.glowS).ZIndex(2)
 	case hover:
 		cell = cell.Background(p.surface.Alpha(0.55))
 	}
@@ -118,11 +119,8 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab, w float32) {
 			ui.Box(c).Absolute().Top(2).Bottom(2).Left(-2).Width(2).Radius(1).Background(p.accent).ZIndex(1)
 		}
 		if active {
-			// 顶部强调线（带光晕），在标签之间滑动；两侧各有一个凹圆角，让标签与内容区连成一体
-			ui.Box(c.Key("tabline")).Absolute().Left(12).Right(12).Top(0).Height(2).Radius(0, 0, 3, 3).Background(p.accent).Shadow(0, 1, 8, 0, p.glow).
-				Transition(ui.ElementTransition{Duration: durSlide, Ease: easeSlide, Match: "tabline"})
-			a.tabFillet(c, true)
-			a.tabFillet(c, false)
+			// 轮廓（两侧凹圆角 + 整圈亮线 + 顶部细→粗→细的强调光），在标签之间滑动
+			a.tabOutline(c, w)
 		} else if !hover && i < len(a.tabs)-1 && !(i+1 == a.active && !a.showHome) {
 			// 相邻未选中标签之间的发丝分隔线
 			ui.Box(c).Absolute().Right(-1).Top(9).Bottom(9).Width(1).Background(p.border.Alpha(0.8))
@@ -256,19 +254,50 @@ func (a *app) methodText(c *ui.Context, method string) {
 	txtMono(c, methodAbbr(method), 9.5, a.p.method(method), 750).Width(28).Shrink(0)
 }
 
-// tabFillet 在选中标签底部的左右两侧各画一个 10×10 的凹圆角（设计稿 .tab.on::after），颜色同内容区，
-// 使标签像文件夹标签一样自然过渡到下方内容。
-func (a *app) tabFillet(c *ui.Context, left bool) {
+// tabFillet 是选中标签两侧凹圆角的半径（设计稿 .tab.on::after 的 10px）。
+const tabFillet = 10
+
+// tabOutline 绘制选中标签的轮廓（设计稿 .tab.on 的轮廓线 + ::before 顶部强调光 + ::after 凹圆角），随选中标签滑动：
+//   - 左右各一个凹圆角，底色同内容区，使标签与下方内容连成一体（标签下方没有横线）；
+//   - 整圈轮廓取“强调色混边框色”（比普通边框亮），从左凹圆角底部起，经左边、顶部、右边，到右凹圆角底部；
+//   - 顶部叠一道半椭圆强调光：中间最粗、向两端渐细（细 → 粗 → 细），带光晕。
+func (a *app) tabOutline(c *ui.Context, w float32) {
 	p := a.p
-	clear, bg := p.surface.Alpha(0), p.surface
-	g := ui.RadialGradient{Stops: []ui.GradientStop{{Color: clear, At: 0}, {Color: clear, At: 0.95}, {Color: bg, At: 1}}, Radius: 10}
-	e := ui.Box(c.Key("fillet"+map[bool]string{true: "L", false: "R"}[left])).Absolute().Bottom(0).Size(10, 10)
-	if left {
-		g.Center = ui.Point{X: 0, Y: 0}
-		e = e.Left(-10)
-	} else {
-		g.Center = ui.Point{X: 1, Y: 0}
-		e = e.Right(-10)
-	}
-	e.RadialGradient(g)
+	ln := p.border.Mix(p.accent, 0.58)
+	fill, glow, accent := p.surface, p.glow, p.accent
+	const f, k = float32(tabFillet), 0.5523 // k 为四分之一圆弧的贝塞尔控制点系数
+	ui.Box(c.Key("tabline")).PassThrough().Absolute().Left(-f).Right(-f).Top(-1).Bottom(0).
+		Transition(ui.ElementTransition{Duration: durSlide, Ease: easeSlide, Match: "tabline"}).
+		Draw(func(pt *ui.Painter, r ui.Rect) {
+			// 以标签自身左上角为原点：r 比标签向左右各宽 f、向上高 1。
+			ox, oy := r.X+f, r.Y+1
+			tw, h := r.W-2*f, r.H-1
+			X := func(x float32) float32 { return ox + x }
+			Y := func(y float32) float32 { return oy + y }
+			// 凹圆角底色：弧线与下角之间的小块，与标签同色
+			left := (&ui.Path{}).MoveTo(X(-f), Y(h)).LineTo(X(0), Y(h)).LineTo(X(0), Y(h-f)).
+				CubeTo(X(0), Y(h-f+f*k), X(-f+f*k), Y(h), X(-f), Y(h)).Close()
+			right := (&ui.Path{}).MoveTo(X(tw+f), Y(h)).LineTo(X(tw), Y(h)).LineTo(X(tw), Y(h-f)).
+				CubeTo(X(tw), Y(h-f+f*k), X(tw+f-f*k), Y(h), X(tw+f), Y(h)).Close()
+			pt.FillPath(left, fill)
+			pt.FillPath(right, fill)
+			// 整圈轮廓（外缘偏出 0.5px，线宽 1）
+			o := float32(0.5)
+			ring := (&ui.Path{}).MoveTo(X(-f), Y(h)).
+				CubeTo(X(-f+f*k), Y(h), X(-o), Y(h-f+f*k), X(-o), Y(h-f)).
+				LineTo(X(-o), Y(f)).
+				CubeTo(X(-o), Y(f-f*k), X(f-f*k), Y(-o), X(f), Y(-o)).
+				LineTo(X(tw-f), Y(-o)).
+				CubeTo(X(tw-f+f*k), Y(-o), X(tw+o), Y(f-f*k), X(tw+o), Y(f)).
+				LineTo(X(tw+o), Y(h-f)).
+				CubeTo(X(tw+o), Y(h-f+f*k), X(tw+f-f*k), Y(h), X(tw+f), Y(h))
+			pt.StrokePath(ring, 1, ln)
+			// 顶部强调光：半椭圆（中间厚 3.5、两端 0），先画光晕再画实体
+			const th = float32(3.5)
+			lens := (&ui.Path{}).MoveTo(X(0), Y(-1)).
+				CubeTo(X(0), Y(-1+th*k), X(tw/2-tw/2*k), Y(-1+th), X(tw/2), Y(-1+th)).
+				CubeTo(X(tw/2+tw/2*k), Y(-1+th), X(tw), Y(-1+th*k), X(tw), Y(-1)).Close()
+			pt.Shadow(ui.Rect{X: X(f), Y: Y(-1), W: tw - 2*f, H: 2}, 1, 0, 1, 8, 0, glow)
+			pt.FillPath(lens, accent)
+		})
 }

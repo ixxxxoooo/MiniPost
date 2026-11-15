@@ -75,6 +75,8 @@ type app struct {
 	con          consoleState  // 控制台（console.go）
 	side         sideState     // 侧栏（sidebar.go）
 	projMenu     projMenuState // 工具栏项目下拉面板状态
+	envOpen      bool          // 工具栏环境下拉面板是否展开
+	sendMenuOpen bool          // 发送按钮的下拉面板是否展开
 	scrollAt     time.Time     // 最近一次滚动输入的时间（滚动条自动隐藏用）
 }
 

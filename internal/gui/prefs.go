@@ -125,7 +125,8 @@ func (a *app) prefsView(c *ui.Context) {
 				})
 				hline(c, p.border)
 				ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
-					ui.Column(c).FillWidth().Padding(4, 20, 14, 20).Gap(6).Children(func() {
+					// 切换分区时：旧页先淡出，新页再进入
+					ui.Column(c.Key("pane:prefs"+itoa(s.section))).FillWidth().Padding(4, 20, 14, 20).Gap(6).Transition(paneTransition()).Children(func() {
 						switch s.section {
 						case 0:
 							changed = a.prefsGeneral(c, s) || changed

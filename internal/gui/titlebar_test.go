@@ -128,24 +128,24 @@ func TestTitleBarEnvPill(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	menu := tt.Menu()
-	for _, want := range []string{"无环境", "预发环境", "生产环境", "管理环境…"} {
-		found := false
-		for _, m := range menu {
-			if m == want {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("环境菜单缺少 %q，实际 %q", want, menu)
+	if !a.envOpen {
+		t.Fatal("点击环境胶囊后应展开环境下拉面板")
+	}
+	// 设计稿 .pop[type=env]：说明、无环境、各环境（带变量数）、管理环境…
+	for _, want := range []string{"无环境", "预发环境", "生产环境", "管理环境…", "切换后，请求里的 {{变量名}} 会立即换成对应值。"} {
+		if !tt.HasText(want) {
+			t.Fatalf("环境面板缺少 %q，实际 %q", want, tt.Texts())
 		}
 	}
-	if err := tt.ChooseMenuItem("生产环境"); err != nil {
+	if err := tt.Click("生产环境"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
 	if a.envID != "e2" {
 		t.Fatalf("选择后当前环境应为 e2，实际 %q", a.envID)
+	}
+	if a.envOpen {
+		t.Fatal("选择环境后面板应收起")
 	}
 	if !tt.HasText("生产环境") {
 		t.Fatalf("胶囊应显示新环境名: %q", tt.Texts())

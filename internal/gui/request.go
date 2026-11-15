@@ -231,40 +231,77 @@ func (a *app) sendGroup(c *ui.Context, t *tab) {
 		}
 		return
 	}
+	var sendAnchor ui.Element
 	box := ui.Row(c.Key("sendgrp")).Height(h).Shrink(0).Radius(h/2).Clip().Shadow(0, 2, 4, 0, p.glow).Shadow(0, 8, 20, -6, p.glow)
 	if empty {
 		box = box.Opacity(0.5)
 	}
 	p.gradAccent(box, false).Children(func() {
-		send := ui.ButtonBase(c.Key("send")).FillHeight().Padding(0, 14, 0, 16).AlignItems(ui.Center).Justify(ui.Center).Gap(7).Disabled(empty).Tooltip("⌘↩")
+		send := ui.ButtonBase(c.Key("send")).FillHeight().PaddingX(14).AlignItems(ui.Center).Justify(ui.Center).Gap(7).Disabled(empty).Tooltip("⌘↩")
 		if send.Hovered() && !empty {
 			send = send.Background(ui.RGBA(255, 255, 255, 0.08))
 		}
 		send.Children(func() {
 			icon(c, "send", 14, p.accentFg)
 			txt(c, a.t("发送", "Send"), fsBase, p.accentFg, 650)
-			ui.Row(c).Height(16).PaddingX(5).Radius(4).Background(p.accentFg.Alpha(0.16)).AlignItems(ui.Center).Shrink(0).Children(func() {
+			ui.Row(c).Height(18).PaddingX(6).Radius(5).Background(p.accentFg.Alpha(0.16)).AlignItems(ui.Center).Shrink(0).Children(func() {
 				txtMono(c, "⌘↵", fsTiny, p.accentFg, 500)
 			})
 		})
 		if send.Clicked() {
 			a.later(func() { a.sendTab(t) })
 		}
-		arrow := ui.ButtonBase(c.Key("sendmore")).Width(28).FillHeight().Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Disabled(empty).
-			BorderWidth(0, 0, 0, 1).BorderColor(p.accentFg.Alpha(0.28)).
-			PopoverMenuButton(func(m *ui.Menu) {
-				if m.Item("Send and Download").Chosen() {
-					a.later(func() {
-						t.downloadAfter = true
-						a.sendTab(t)
-					})
-				}
-			}, a.menuOpts())
+		arrow := ui.ButtonBase(c.Key("sendmore")).Width(24).FillHeight().Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Disabled(empty).
+			BorderWidth(0, 0, 0, 1).BorderColor(p.accentFg.Alpha(0.28))
 		if arrow.Hovered() && !empty {
 			arrow = arrow.Background(ui.RGBA(255, 255, 255, 0.08))
 		}
+		if arrow.Clicked() {
+			a.sendMenuOpen = !a.sendMenuOpen
+		}
 		arrow.Children(func() { icon(c, "tbChevDown", 12, p.accentFg) })
+		sendAnchor = box
 	})
+	if a.sendMenuOpen && !empty {
+		a.sendDropdown(c, sendAnchor, t)
+	} else {
+		a.sendMenuOpen = false
+	}
+}
+
+// sendDropdown 是发送按钮右侧箭头弹出的面板（设计稿 .pop[type=send]，210 宽、右对齐）：发送 / 发送并保存响应。
+func (a *app) sendDropdown(c *ui.Context, anchor ui.Element, t *tab) {
+	p := a.p
+	open := true
+	ui.PopoverBase(c, anchor, &open, func(panel ui.Element) {
+		a.popPanel(panel.AttachTo(anchor, ui.AnchorBottomRight, ui.AnchorTopRight).Margin(6, 0, 0, 0), 210).Clip()
+		ui.Column(c).FillWidth().Children(func() {
+			item := func(key string, i int, ic, label, kbd string, fn func()) {
+				r := a.popItem(c, key, i, false)
+				r.Children(func() {
+					icon(c, ic, 13, p.fg2)
+					txt(c, label, fsBase, p.fg, 0).Grow(1)
+					if kbd != "" {
+						a.kbdHint(c, kbd)
+					}
+				})
+				if r.Clicked() {
+					a.later(func() {
+						a.sendMenuOpen = false
+						fn()
+					})
+				}
+			}
+			item("send-now", 0, "send", a.t("发送", "Send"), "⌘↵", func() { a.sendTab(t) })
+			item("send-dl", 1, "download", a.t("发送并保存响应…", "Send and save response…"), "", func() {
+				t.downloadAfter = true
+				a.sendTab(t)
+			})
+		})
+	})
+	if !open {
+		a.sendMenuOpen = false
+	}
 }
 
 // requestPane 是请求参数区：Params / Headers / Body / Auth 子标签（右侧并入面包屑与保存按钮）。
@@ -292,7 +329,7 @@ func (a *app) requestPane(c *ui.Context, t *tab) {
 			a.underlineTabs(c, "rq", &t.sub, labels, counts, extras, 30)
 			a.crumbBar(c, t)
 		})
-		ui.Column(c).Grow(1).Basis(0).Children(func() {
+		a.pane(c, "req"+itoa(t.sub), func() {
 			switch t.sub {
 			case 0:
 				if a.kvTableOpts(c, &d.Params, kvOpts{id: t.draft.ID + ":params", keyPH: a.t("参数名", "Key"), valPH: a.t("参数值", "Value"), hint: a.t("查询参数 · 修改后自动同步到地址栏", "Query params · synced to the URL")}) {

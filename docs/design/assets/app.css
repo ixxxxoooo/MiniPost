@@ -159,7 +159,7 @@
 
 /* ---------- 标签栏 ---------- */
 .tabs { height: var(--tabh); flex: none; display: flex; align-items: flex-end; gap: 1px; padding: 0 6px; background: var(--chrome); border-bottom: 1px solid var(--bd); position: relative; min-width: 0; }
-.tabs-sc { display: flex; align-items: flex-end; gap: 1px; min-width: 0; overflow: hidden; flex: 0 1 auto; }
+.tabs-sc { display: flex; align-items: flex-end; gap: 1px; min-width: 0; overflow: hidden; flex: 0 1 auto; padding: 0 10px 1px; margin: 0 -10px -1px; }
 .tab { position: relative; height: 28px; min-width: 96px; width: 164px; flex: 0 1 164px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 10px; border-radius: 8px 8px 0 0; color: var(--fg2); cursor: pointer; transition: background var(--dur-fast), color var(--dur-fast); }
 .tab:hover { background: var(--hover); color: var(--fg); }
 .tab.on { background: var(--bg); color: var(--fg); margin-bottom: -1px; height: 29px; box-shadow: inset 0 0 0 1px var(--bd); clip-path: inset(0 0 -1px 0); }
@@ -278,6 +278,12 @@
 .meta .mi { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; color: var(--fg2); font-size: 11.5px; cursor: pointer; padding: 2px 6px; border-radius: 6px; transition: background var(--dur-fast); }
 .meta .mi:hover { background: var(--hover); color: var(--fg); }
 .meta .mi svg { color: var(--mu); }
+/* 响应元信息胶囊：状态 / 耗时 / 大小 / 网络收进同一枚玻璃胶囊，项目之间是发丝竖线，数值用等宽字体；状态色全部取语义令牌，随配色与明暗联动 */
+.resp-h .meta { gap: 0; height: 26px; padding: 0 3px; border-radius: 999px; background: color-mix(in oklab, var(--bg2) 70%, var(--bg)); box-shadow: inset 0 0 0 .5px var(--hair), inset 0 1px 1.5px color-mix(in oklab, var(--fg) 4%, transparent); }
+.resp-h .meta .pill { height: 20px; margin-right: 3px; box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 18%, transparent), 0 0 10px -3px color-mix(in oklab, currentColor 45%, transparent); }
+.resp-h .meta .mi { height: 20px; padding: 0 9px; border-radius: 999px; position: relative; font: 11px var(--font-mono); letter-spacing: -.01em; }
+.resp-h .meta .mi + .mi::before { content: ''; position: absolute; left: -.5px; top: 5px; bottom: 5px; width: 1px; background: var(--hair); }
+.resp-h .meta .mi:hover::before, .resp-h .meta .mi:hover + .mi::before { opacity: 0; }
 .rb { flex: 1; min-height: 0; display: flex; flex-direction: column; animation: paneIn var(--dur-base) var(--ease-out); }
 .rtool { display: flex; align-items: center; gap: 4px; padding: 6px 10px; flex: none; }
 .fmt { height: 24px; padding: 0 8px; border-radius: var(--r-sm); background: var(--bg2); display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer; font-size: 11.5px; transition: background var(--dur-fast); }
@@ -983,6 +989,7 @@
 @keyframes popIn { from { opacity: 0; transform: translateY(8px) scale(.96); filter: blur(3px) } to { opacity: 1; transform: none; filter: none } }
 @keyframes dlgIn { from { opacity: 0; transform: translateY(14px) scale(.955); filter: blur(4px) } to { opacity: 1; transform: none; filter: none } }
 @keyframes paneIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+@keyframes paneOut { from { opacity: 1; transform: none } to { opacity: 0; transform: translateY(-4px) } }
 @keyframes rowIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
 @keyframes itemIn { from { opacity: 0; transform: translateY(5px) } to { opacity: 1; transform: none } }
 @keyframes lineIn { from { opacity: 0; transform: translateX(-8px) } to { opacity: 1; transform: none } }
@@ -1070,11 +1077,16 @@
 .win[data-dir="c"] .tab { height: 31px; border-radius: 10px 10px 0 0; min-width: 104px; flex: 0 1 176px; padding: 0 6px 0 11px; color: var(--mu); background: none; }
 .win[data-dir="c"] .tab:hover { background: color-mix(in oklab, var(--bg) 55%, transparent); color: var(--fg); }
 .win[data-dir="c"] .tab .tt { font-weight: 500; }
-.win[data-dir="c"] .tab.on { height: 32px; margin: 0 0 -1px; background: var(--bg); color: var(--fg); clip-path: none; box-shadow: -1px 0 0 var(--bd), 1px 0 0 var(--bd), 0 -1px 0 var(--bd), 0 -6px 14px -8px var(--ac-glow-s); z-index: 2; }
+.win[data-dir="c"] .tab.on { height: 32px; margin: 0 0 -1px; background: var(--bg); color: var(--fg); clip-path: none; z-index: 2;
+  /* 整圈轮廓取「强调色混边框色」，比普通边框亮；顶部再叠一道细→粗→细的强调光 */
+  --tab-ln: color-mix(in oklab, var(--ac) 58%, var(--bd));
+  box-shadow: -1px 0 0 var(--tab-ln), 1px 0 0 var(--tab-ln), 0 -1px 0 var(--tab-ln), 0 -6px 14px -8px var(--ac-glow-s); }
 .win[data-dir="c"] .tab.on .tt { font-weight: 650; }
-.win[data-dir="c"] .tab.on::before { left: 12px; right: 12px; top: 0; bottom: auto; height: 2px; border-radius: 0 0 3px 3px; background: var(--ac); box-shadow: 0 1px 8px var(--ac-glow); }
-.win[data-dir="c"] .tab.on::after { display: block; content: ''; position: absolute; left: -10px; right: -10px; bottom: 0; height: 10px; background: none; pointer-events: none;
-  background: radial-gradient(circle at 0 0, transparent 9.5px, var(--bg) 10px) left bottom / 10px 10px no-repeat, radial-gradient(circle at 100% 0, transparent 9.5px, var(--bg) 10px) right bottom / 10px 10px no-repeat; }
+/* 顶部强调光：中间最粗，向两端渐细，沿圆角顺势收尾（椭圆渐变 = 细→粗→细） */
+.win[data-dir="c"] .tab.on::before { left: 0; right: 0; top: -1px; bottom: auto; height: 3.5px; border-radius: 0; background: var(--ac); clip-path: ellipse(50% 100% at 50% 0); filter: drop-shadow(0 1px 5px var(--ac-glow)); box-shadow: none; }
+/* 两侧凹圆角：底色同内容区，弧线带同款轮廓色，并从上到下渐淡（轮廓在底部收细） */
+.win[data-dir="c"] .tab.on::after { display: block; content: ''; position: absolute; left: -10px; right: -10px; bottom: 0; height: 10px; pointer-events: none;
+  background: radial-gradient(circle at 0 0, transparent 8.6px, var(--tab-ln) 9.2px, var(--tab-ln) 9.8px, var(--bg) 10.4px) left bottom / 10px 10px no-repeat, radial-gradient(circle at 100% 0, transparent 8.6px, var(--tab-ln) 9.2px, var(--tab-ln) 9.8px, var(--bg) 10.4px) right bottom / 10px 10px no-repeat; }
 .win[data-dir="c"] .tab:not(.on)::after { content: ''; position: absolute; right: -1px; top: 9px; bottom: 9px; width: 1px; background: color-mix(in oklab, var(--bd) 80%, transparent); transition: opacity var(--dur-fast); }
 .win[data-dir="c"] .tab:not(.on):hover::after, .win[data-dir="c"] .tab:has(+ .tab.on)::after, .win[data-dir="c"] .tab:last-child::after { opacity: 0; }
 .win[data-dir="c"] .tab .m::before { display: none; }

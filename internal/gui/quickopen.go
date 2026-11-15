@@ -14,10 +14,14 @@ import (
 type quickState struct {
 	open  bool
 	query string
-	sel   int // 当前高亮行（在扁平化结果里的下标）
+	sel   int  // 当前高亮行（在扁平化结果里的下标）
+	moved bool // 刚用 ↑↓ 移动过高亮：下一帧把高亮行滚入可视区
 }
 
 // 各分组最多显示的条数，保证面板不会超出窗口高度。
+// quickPanelH 是面板最大高度（设计稿 .qk 的 max-height:440）；结果多时列表区滚动。
+const quickPanelH = 440
+
 const (
 	quickMaxRequests = 7
 	quickMaxEnvs     = 3
@@ -34,12 +38,13 @@ const (
 
 // quickItem 是一条可执行的结果。
 type quickItem struct {
-	kind   quickKind
-	method string // 仅请求：方法（显示缩写）
-	label  string
-	hint   string // 次要说明，如请求所在文件夹
-	accel  string // 命令的快捷键提示
-	run    func()
+	kind    quickKind
+	method  string // 仅请求：方法（显示缩写）
+	label   string
+	hint    string // 次要说明，如请求所在文件夹
+	accel   string // 命令的快捷键提示
+	current bool   // 仅环境：是当前环境，右侧显示“当前”标
+	run     func()
 }
 
 // openQuick 打开快速打开面板；已在项目工作区之外或已有对话框时不响应。
@@ -78,13 +83,10 @@ func (a *app) quickResults(q string) []quickItem {
 			break
 		}
 		id := id
-		hint := ""
-		if pn, ok := a.tree.nodes[nd.parent]; ok {
+		// 设计稿：说明只写所在文件夹，根目录下的请求写“根目录”
+		hint := a.t("根目录", "Root")
+		if pn, ok := a.tree.nodes[nd.parent]; ok && pn.name != "" {
 			hint = pn.name
-		}
-		if pr := a.project(); pr != nil {
-			hint = strings.TrimSpace(pr.Name + " · " + hint)
-			hint = strings.TrimSuffix(hint, " ·")
 		}
 		out = append(out, quickItem{kind: quickRequest, method: nd.method, label: nd.name, hint: hint, run: func() {
 			a.showHome = false
@@ -95,14 +97,14 @@ func (a *app) quickResults(q string) []quickItem {
 	n = 0
 	for i := range a.envs {
 		e := a.envs[i]
-		label := a.t("切换到「"+e.Name+"」", "Switch to “"+e.Name+"”")
+		label := e.Name // 设计稿：行名是环境名，说明是“切换为当前环境”，当前环境右侧有“当前”标
 		if q != "" && !strings.Contains(strings.ToLower(label), q) {
 			continue
 		}
 		if n++; n > quickMaxEnvs {
 			break
 		}
-		out = append(out, quickItem{kind: quickEnv, label: label, run: func() {
+		out = append(out, quickItem{kind: quickEnv, label: label, hint: a.t("切换为当前环境", "Make current environment"), current: a.envID == e.ID, run: func() {
 			a.setEnv(e.ID)
 			a.toastOK(a.t("已切换到环境「"+e.Name+"」", "Switched to environment “"+e.Name+"”"))
 		}})
@@ -147,8 +149,8 @@ func (a *app) quickView(c *ui.Context) {
 	qs.sel = max(0, min(qs.sel, len(items)-1))
 
 	run := -1
-	a.dialog(c, &qs.open, 580, 0, radiusLg, func() {
-		ui.Column(c).FillWidth().Children(func() {
+	a.dialogAt(c, &qs.open, 580, 0, radiusLg, 0.35, 70, func() {
+		ui.Column(c).FillWidth().MaxHeight(quickPanelH).Children(func() {
 			// 搜索行
 			ui.Row(c).FillWidth().Height(44).PaddingX(14).Gap(10).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
 				icon(c, "search", 14, p.accent)
@@ -159,11 +161,11 @@ func (a *app) quickView(c *ui.Context) {
 					qs.sel = 0
 				case in.Shortcut(0, ui.KeyDown):
 					if len(items) > 0 {
-						qs.sel = (qs.sel + 1) % len(items)
+						qs.sel, qs.moved = (qs.sel+1)%len(items), true
 					}
 				case in.Shortcut(0, ui.KeyUp):
 					if len(items) > 0 {
-						qs.sel = (qs.sel + len(items) - 1) % len(items)
+						qs.sel, qs.moved = (qs.sel+len(items)-1)%len(items), true
 					}
 				case in.Submitted(), in.Shortcut(ui.Cmd, ui.KeyEnter):
 					run = qs.sel
@@ -171,25 +173,28 @@ func (a *app) quickView(c *ui.Context) {
 				a.kbdChip(c, "esc")
 			})
 			// 结果
-			ui.Column(c).FillWidth().Padding(6).Gap(1).Children(func() {
-				if len(items) == 0 {
-					ui.Row(c).FillWidth().Padding(18, 0).Justify(ui.Center).Children(func() {
-						txt(c, a.t("没有匹配的结果", "No results"), fsBase, p.muted, 0)
-					})
-					return
-				}
-				last := quickKind(-1)
-				for i, it := range items {
-					if it.kind != last {
-						last = it.kind
-						ui.Row(c.Key("qg"+itoa(int(it.kind)))).FillWidth().Height(26).Padding(0, 8, 3, 8).AlignItems(ui.End).Children(func() {
-							txt(c, a.quickGroupTitle(it.kind), 10.5, p.muted, 650)
+			ui.Scroll(c.Key("quick-list")).FillWidth().Shrink(1).MaxHeight(quickPanelH - 44 - 30 - 2).Scrollbars(a.scrollbarsVisible()).Children(func() {
+				ui.Column(c).FillWidth().Padding(6).Gap(1).Children(func() {
+					if len(items) == 0 {
+						ui.Row(c).FillWidth().Padding(18, 0).Justify(ui.Center).Children(func() {
+							txt(c, a.t("没有匹配的结果", "No results"), fsBase, p.muted, 0)
 						})
+						return
 					}
-					if a.quickRow(c, i, it, i == qs.sel) {
-						run = i
+					last := quickKind(-1)
+					for i, it := range items {
+						if it.kind != last {
+							last = it.kind
+							ui.Row(c.Key("qg"+itoa(int(it.kind)))).FillWidth().Height(26).Padding(0, 8, 3, 8).AlignItems(ui.End).Children(func() {
+								txt(c, a.quickGroupTitle(it.kind), 10.5, p.muted, 650)
+							})
+						}
+						if a.quickRow(c, i, it, i == qs.sel, qs.moved) {
+							run = i
+						}
 					}
-				}
+					qs.moved = false
+				})
 			})
 			// 键位提示
 			ui.Row(c).FillWidth().Height(30).PaddingX(14).Gap(14).AlignItems(ui.Center).Background(p.surface2.Alpha(0.4)).BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(func() {
@@ -199,6 +204,8 @@ func (a *app) quickView(c *ui.Context) {
 						txt(c, h[1], fsSmall, p.muted, 0)
 					})
 				}
+				ui.Spacer(c)
+				txt(c, a.t(itoa(len(items))+" 个结果", itoa(len(items))+" results"), fsSmall, p.muted, 0)
 			})
 		})
 	})
@@ -211,7 +218,7 @@ func (a *app) quickView(c *ui.Context) {
 }
 
 // quickRow 绘制一条结果，返回是否被点击。
-func (a *app) quickRow(c *ui.Context, i int, it quickItem, selected bool) bool {
+func (a *app) quickRow(c *ui.Context, i int, it quickItem, selected, reveal bool) bool {
 	p := a.p
 	row := ui.ButtonBase(c.Key("qr" + itoa(i))).FillWidth().Height(32).PaddingX(10).Gap(10).Radius(radiusR).AlignItems(ui.Center).Justify(ui.Start)
 	switch {
@@ -219,6 +226,9 @@ func (a *app) quickRow(c *ui.Context, i int, it quickItem, selected bool) bool {
 		row = row.Background(p.acSoft).InsetShadow(2, 0, 0, 0, p.accent)
 	case row.Hovered():
 		row = row.Background(p.hover)
+	}
+	if selected && reveal {
+		row.ScrollIntoView()
 	}
 	row.Children(func() {
 		// 左侧 20px 图标块（设计稿 .qk-r .ico）：选中时为淡强调色底
@@ -248,6 +258,8 @@ func (a *app) quickRow(c *ui.Context, i int, it quickItem, selected bool) bool {
 			ui.Spacer(c)
 		}
 		switch {
+		case it.current:
+			a.curBadge(c)
 		case it.accel != "":
 			a.kbdChip(c, it.accel)
 		case selected:

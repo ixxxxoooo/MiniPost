@@ -97,14 +97,44 @@
       GROUPS.forEach((g) => $$(g[0], root).forEach((box) => $$(g[1], box).forEach((el, i) => el.style.setProperty('--i', i))));
     }
 
+    // 4) 退场幽灵：视图切换（响应体 → 响应头、Params → Body、设置分页……）时，旧面板先淡出上移，新面板稍后再入场。
+    //    重绘是整块 innerHTML 替换，旧节点已不存在，所以重绘前克隆旧面板，浮在原位置播放 paneOut 后移除；新面板入场延后 --dur-fast。
+    const PANES = ['.rb', '.rq-body', '.set-cb', '.home', '.envp', '.welcome'];
+    function grabPanes(win) {
+      const k = scaleOf(win), out = {};
+      PANES.forEach((sel) => {
+        const els = $$(sel, $('#app', win) || win);
+        if (els.length !== 1) return;
+        const el = els[0], r = el.getBoundingClientRect(), pr = (el.offsetParent || win).getBoundingClientRect();
+        out[sel] = { node: el.cloneNode(true), left: (r.left - pr.left) / k, top: (r.top - pr.top) / k, w: r.width / k, h: r.height / k };
+      });
+      return out;
+    }
+    function ghostPanes(win, old) {
+      Object.keys(old).forEach((sel) => {
+        const els = $$(sel, $('#app', win) || win);
+        if (els.length !== 1) return;
+        const el = els[0], g = old[sel], host = el.parentElement;
+        if (!host) return;
+        if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+        const node = g.node;
+        node.removeAttribute('id'); node.classList.add('pane-ghost');
+        Object.assign(node.style, { position: 'absolute', left: g.left + 'px', top: g.top + 'px', width: g.w + 'px', height: g.h + 'px', margin: '0', pointerEvents: 'none', zIndex: 6, animation: 'paneOut var(--dur-fast) var(--ease-out) forwards' });
+        host.appendChild(node);
+        el.style.animationDelay = '110ms'; el.style.animationFillMode = 'both';
+        setTimeout(() => { node.remove(); el.style.animationDelay = ''; el.style.animationFillMode = ''; }, 420);
+      });
+    }
+
     const wrap = (name, make) => { const orig = MPA[name]; if (typeof orig === 'function') MPA[name] = make(orig); };
 
     wrap('renderApp', (orig) => function () {
       const win = $('#win');
       if (!win) return orig.apply(this, arguments);
-      const snap = capture(win), first = !('boot' in last);
+      const snap = capture(win), first = !('boot' in last), panes = first ? null : grabPanes(win);
       const r = orig.apply(this, arguments);
       flag(win, 'enter', sigView());
+      if (panes && win.dataset.enter === '1' && !S.static) ghostPanes(win, panes);
       flag(win, 'con', String(S.con && S.con.open));
       flag(win, 'ex', S.con && S.con.open ? S.con.ex + '|' + S.con.filter : 'x');
       if (first) { last.boot = 1; win.dataset.boot = ''; const off = () => { delete win.dataset.boot; }; setTimeout(off, 900); window.addEventListener('pointerdown', off, { once: true }); }

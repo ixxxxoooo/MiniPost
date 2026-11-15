@@ -50,25 +50,30 @@ func px(img *image.RGBA, x, y int) [3]uint8 {
 
 func rgb(c ui.Color) [3]uint8 { return [3]uint8{c.R, c.G, c.B} }
 
-// accentRun 在标签条里选中标签的顶部强调线（tabItem 里 2px 的强调色线，左右各缩进 12，标签边框 1px）所在的那一行上
-// 扫描强调色像素，返回第一段连续强调色的起点 x 与长度；没有则返回 -1, 0。
-// 顶线会在标签之间滑动（Match 过渡），先让动画走完再取样；标签从标签栏顶部往下 6px 开始，线在边框内侧再下 1px 处。
+// accentRun 在标签条里选中标签的顶部强调线（设计稿 .tab.on::before：中间粗两端细的透镜形，宽度略小于标签）上
+// 取样：在标签顶部附近逐行扫描强调色像素，取最长的那一段连续强调色，返回它的起点 x 与长度；没有则返回 -1, 0。
+// 顶线会在标签之间滑动（Match 过渡），先让动画走完再取样。
 func accentRun(a *app, tt *ui.Tester) (x, n int) {
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 8; i++ {
 		tt.Advance(100 * time.Millisecond)
 	}
 	img := tt.Image()
-	y := sizeToolbar + 6 + 2
 	acc := rgb(a.p.accent)
 	x = -1
-	for i := 0; i < img.Bounds().Dx(); i++ {
-		if px(img, i, y) == acc {
-			if x < 0 {
-				x = i
+	for y := sizeToolbar + 2; y <= sizeToolbar+14; y++ {
+		start, run := -1, 0
+		for i := 0; i <= img.Bounds().Dx(); i++ {
+			if i < img.Bounds().Dx() && px(img, i, y) == acc {
+				if start < 0 {
+					start = i
+				}
+				run++
+				continue
 			}
-			n++
-		} else if x >= 0 {
-			break
+			if run > n {
+				x, n = start, run
+			}
+			start, run = -1, 0
 		}
 	}
 	if x < 0 {
@@ -89,12 +94,12 @@ func TestActiveTabIsRaisedPill(t *testing.T) {
 		t.Fatal("选中的标签底部应有强调线")
 	}
 	img := tt.Image()
-	// 强调线两端各缩进 12（外加 1px 边框），所以标签的左右边缘是 x-13 与 x+n+13；取右侧靠内 3px、上沿下方 10px 的位置（避开顶线光晕与文字）。
-	inside := px(img, x+n+10, sizeToolbar+6+10)
+	// 透镜形顶线几乎铺满标签宽度（比标签窄约 8px），标签右缘约在 x+n+4；取右缘内侧 14px、上沿下方 12px 的位置（避开顶线光晕与文字）。
+	inside := px(img, x+n-14, sizeToolbar+6+12)
 	if inside != rgb(a.p.surface) {
 		t.Fatalf("选中标签内部应是内容底色 %v，实际 %v", rgb(a.p.surface), inside)
 	}
-	outside := px(img, x+n+13+tabGap+40, sizeToolbar+6+10) // 标签右侧的空白标签栏
+	outside := px(img, x+n+13+tabGap+40, sizeToolbar+6+12) // 标签右侧的空白标签栏
 	if outside == rgb(a.p.surface) {
 		t.Fatalf("标签栏空白处不应与内容底同色（标签栏是 chrome 与内容底的混合色）: %v", outside)
 	}
@@ -115,9 +120,9 @@ func TestTabWidthStableOnSwitch(t *testing.T) {
 	tt.Frame()
 	tt.Frame()
 	x1, n1 := accentRun(a, tt)
-	// 强调线两端缩进 12，且两端是圆角，最外侧几个像素颜色会被抗锯齿冲淡，允许少 8px
-	if n0 != n1 || n0 > tabMaxWidth-24 || n0 < tabMaxWidth-34 {
-		t.Errorf("两个标签的强调线应一样宽，约 %d（标签宽 %d 两端各缩进 12），实际 %d、%d", tabMaxWidth-24, tabMaxWidth, n0, n1)
+	// 顶线是中间粗两端细的透镜形，两端渐细处颜色会被抗锯齿冲淡，所以整段强调色比标签窄一点（约 8~16px）
+	if n0 != n1 || n0 > tabMaxWidth || n0 < tabMaxWidth-20 {
+		t.Errorf("两个标签的强调线应一样宽，约 %d（标签宽 %d），实际 %d、%d", tabMaxWidth-8, tabMaxWidth, n0, n1)
 	}
 	if x1-x0 != tabMaxWidth+tabGap {
 		t.Errorf("第二个标签应从第一个标签右边 %d（标签宽 + 间距）处开始，实际相差 %d", tabMaxWidth+tabGap, x1-x0)

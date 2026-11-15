@@ -38,6 +38,7 @@
       ['resp-error', '响应 · 失败诊断', (s) => withTabs(s, [tab('r8', 'params', 'error'), tab('r1'), tab('r5', 'params', 'none')], 0)],
       ['resp-422', '响应 · 4xx 业务错误', (s) => withTabs(s, [tab('r6', 'body', 'ok', 422), tab('r1'), tab('r5', 'params', 'none')], 0)],
       ['resp-204', '响应 · 空响应（204）', (s) => withTabs(s, [tab('r4', 'params', 'ok', 204), tab('r1'), tab('r5', 'params', 'none')], 0)],
+      ['tabs-many', '标签栏 · 多标签（选中在中间）', (s) => withTabs(s, [tab('r1', 'params', 'ok'), tab('r2'), tab('r3'), tab('r4'), tab('r5'), tab('r6')], 3)],
       ['resp-empty', '响应 · 尚未发送', (s) => { s.tabs[0].resp = 'none'; }],
       ['resp-stream', '响应 · SSE 事件流', (s) => withTabs(s, [tab('r7', 'body', 'stream', 200, 'stream'), tab('r1'), tab('r5', 'params', 'none')], 0)],
       ['resp-merged', '响应 · 流式合并文本', (s) => withTabs(s, [tab('r7', 'body', 'stream', 200, 'stream', { merged: true }), tab('r1'), tab('r5', 'params', 'none')], 0)],

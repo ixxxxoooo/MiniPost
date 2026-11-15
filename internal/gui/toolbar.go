@@ -107,31 +107,79 @@ func (a *app) envPill(c *ui.Context) {
 	if a.env() != nil {
 		dot = p.success
 	}
-	btn := islandChip(c, "envsel", false, p).
-		Tooltip(a.t("切换环境", "Switch environment")).Label(a.t("切换环境", "Switch environment")).
-		PopoverMenuButton(func(m *ui.Menu) { a.envMenu(m) }, a.menuOpts())
+	btn := islandChip(c, "envsel", a.envOpen, p).
+		Tooltip(a.t("切换环境", "Switch environment")).Label(a.t("切换环境", "Switch environment"))
 	btn.Children(func() {
 		icon(c, "globe", 13, p.fg)
 		txtE(c, a.envLabel(), fsBase, p.fg, 500).MaxWidth(140)
 		ui.Box(c).Size(8, 8).Radius(4).Background(dot).Shrink(0)
-		icon(c, "tbChevDown", 11, p.muted)
+		arrow := icon(c, "tbChevDown", 11, p.muted)
+		if a.envOpen {
+			arrow.Rotate(180) // 面板展开时箭头翻转（同项目选择器）
+		}
 	})
+	if btn.Clicked() {
+		a.envOpen = !a.envOpen
+	}
+	if a.envOpen {
+		a.envDropdown(c, btn)
+	}
 }
 
-// envMenu 列出全部环境，当前环境带勾选，末尾可进入环境管理。
-func (a *app) envMenu(m *ui.Menu) {
-	if m.Item(a.t("无环境", "No environment")).Checked(a.envID == "").Chosen() {
-		a.later(func() { a.setEnv("") })
-	}
-	for _, e := range a.envs {
-		id := e.ID
-		if m.Item(e.Name).Checked(a.envID == id).Chosen() {
-			a.later(func() { a.setEnv(id) })
-		}
-	}
-	m.Separator()
-	if m.Item(a.t("管理环境…", "Manage environments…")).Chosen() {
-		a.later(a.openEnvManager)
+// envPanelW 是环境下拉面板的宽度（设计稿 .pop 的 230）。
+const envPanelW = 230
+
+// envDropdown 绘制环境下拉面板（设计稿 .pop[type=env]）：顶部一句说明、“无环境”与各环境行（名称 + 变量数 + 当前勾选），
+// 分隔线之后是“管理环境…”。面板右对齐在环境按钮下方，带 popIn 与逐条 itemIn 入场。
+func (a *app) envDropdown(c *ui.Context, anchor ui.Element) {
+	p := a.p
+	open := true
+	ui.PopoverBase(c, anchor, &open, func(panel ui.Element) {
+		a.popPanel(panel.AttachTo(anchor, ui.AnchorBottomRight, ui.AnchorTopRight).Margin(6, 0, 0, 0), envPanelW).Clip()
+		ui.Column(c).FillWidth().Children(func() {
+			ui.Text(c, a.t("切换后，请求里的 {{变量名}} 会立即换成对应值。", "After switching, {{variables}} in requests resolve to the new values right away.")).
+				FontSize(fsSmall).TextColor(p.muted).FixedLineHeight(fsSmall*1.5).FillWidth().Padding(4, 8, 6, 8)
+			row := func(key string, i int, name, count string, selected bool, fn func()) {
+				r := a.popItem(c, key, i, selected)
+				r.Children(func() {
+					icon(c, "globe", 13, p.fg2)
+					txtE(c, name, fsBase, p.fg, 0).Grow(1).Basis(0)
+					if count != "" {
+						txt(c, count, fsSmall-0.5, p.muted, 0).Shrink(0)
+					}
+					if selected {
+						icon(c, "check", 13, p.accent).Shrink(0)
+					}
+				})
+				if r.Clicked() {
+					a.later(func() {
+						a.envOpen = false
+						fn()
+					})
+				}
+			}
+			row("env-none", 0, a.t("无环境", "No environment"), "", a.envID == "", func() { a.setEnv("") })
+			for i, e := range a.envs {
+				id := e.ID
+				row("env-"+id, i+1, e.Name, a.t(itoa(len(e.Variables))+" 变量", itoa(len(e.Variables))+" vars"), a.envID == id, func() { a.setEnv(id) })
+			}
+			a.popSep(c)
+			manage := a.popItem(c, "env-manage", len(a.envs)+1, false)
+			manage.Children(func() {
+				icon(c, "sliders", 13, p.fg2)
+				txt(c, a.t("管理环境…", "Manage environments…"), fsBase, p.fg, 0).Grow(1)
+				a.kbdHint(c, "⌘⌥E")
+			})
+			if manage.Clicked() {
+				a.later(func() {
+					a.envOpen = false
+					a.openEnvManager()
+				})
+			}
+		})
+	})
+	if !open {
+		a.envOpen = false
 	}
 }
 

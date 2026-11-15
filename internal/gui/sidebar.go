@@ -26,18 +26,21 @@ func (a *app) sidebar(c *ui.Context) {
 	ui.Row(c).Fill().Children(func() {
 		ui.Column(c).Grow(1).Basis(0).FillHeight().Children(func() {
 			a.sideTabs(c)
-			switch a.side.tab {
-			case 1:
-				a.historyView(c)
-				a.sideFoot(c, "clock", a.t(fmt.Sprintf("%d 条记录", len(a.history)), fmt.Sprintf("%d entries", len(a.history))))
-			case 2:
-				a.envList(c)
-				a.sideFoot(c, "info", a.t("切换后 {{变量}} 立即替换", "Switching replaces {{variables}} immediately"))
-			default:
-				a.collectionView(c)
-				reqs, folders := a.treeCounts()
-				a.sideFoot(c, "layers", a.t(fmt.Sprintf("%d 个请求 · %d 个文件夹", reqs, folders), fmt.Sprintf("%d requests · %d folders", reqs, folders)))
-			}
+			// 请求 / 历史 / 环境 切换：旧内容先淡出，新内容再进入
+			a.pane(c, "side"+itoa(a.side.tab), func() {
+				switch a.side.tab {
+				case 1:
+					a.historyView(c)
+					a.sideFoot(c, "clock", a.t(fmt.Sprintf("%d 条记录", len(a.history)), fmt.Sprintf("%d entries", len(a.history))))
+				case 2:
+					a.envList(c)
+					a.sideFoot(c, "info", a.t("切换后 {{变量}} 立即替换", "Switching replaces {{variables}} immediately"))
+				default:
+					a.collectionView(c)
+					reqs, folders := a.treeCounts()
+					a.sideFoot(c, "layers", a.t(fmt.Sprintf("%d 个请求 · %d 个文件夹", reqs, folders), fmt.Sprintf("%d requests · %d folders", reqs, folders)))
+				}
+			})
 		})
 	})
 }
