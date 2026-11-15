@@ -1,0 +1,19 @@
+---
+description: MiniPost UI 令牌与设计稿规则：改界面前必读，保证所有页面按「流光」设计稿统一
+globs: internal/gui/**/*.go,docs/design/**
+alwaysApply: false
+---
+
+# UI 令牌规则（流光 · 方案 C）
+
+完整规则见 `docs/design/TOKENS.md`；令牌事实来源是 `docs/design/assets/tokens.css`。
+
+1. **先改设计稿，再改代码**：任何视觉变更先更新 `docs/design`（tokens.css / app.css / app.js），再改 `internal/gui`，最后截图对比后交付。
+2. **不得手写色值与时长**：颜色走 `palette`（`style.go`），时长/曲线走 `motion.go` 的 `dur*` / `ease*`；
+   需要新令牌时先加到 `tokens.css`，再加到 Go，并让 `tokens_sync_test.go` 覆盖。
+3. **项目主题色**必须经 `adaptProjectColor` 适配当前配色，不得直接使用存储的 hex 做显示色。
+4. **表格**统一 28 高表头 + 发丝竖线 + 28 高行 + 34 宽首列；**分段控件**用滑动胶囊；**标签栏**用文件夹式融合标签。
+5. **浮层**：`PopoverMenuButton` 必须传 `a.menuOpts()`（不透明渐变面板）；对话框面板使用同色 Gradient。
+6. **动效**：指示器（分段、下划线、标签顶线、开关旋钮）必须滑动；颜色变化用 `transColors`；入场用 `motion*`。
+7. 用户可见文案走 `t(zh, en)`，搜索占位符保持简短。
+8. 改动后运行 `go test ./internal/gui -run TestTokens` 与 `TestCompareScenes` 截图对比。

@@ -100,6 +100,9 @@ func (a *app) prefsView(c *ui.Context) {
 							b = b.Background(p.btnBg)
 						}
 						b.Children(func() {
+							if active { // 设计稿 .ni.on::before：左缘 3px 强调色竖条 + 柔光
+								ui.Box(c.Key("secbar")).Absolute().Left(-8).Top(7).Bottom(7).Width(3).Radius(0, 1.5, 1.5, 0).Background(p.accent).Shadow(0, 0, 8, 0, p.glow)
+							}
 							ui.Row(c).Grow(1).Gap(8).AlignItems(ui.Center).Children(func() {
 								icon(c, sec.icon, 14, col)
 								txt(c, a.t(sec.zh, sec.en), fsBase, col, 550)
@@ -122,7 +125,7 @@ func (a *app) prefsView(c *ui.Context) {
 				})
 				hline(c, p.border)
 				ui.Scroll(c).Grow(1).Basis(0).Scrollbars(a.scrollbarsVisible()).Children(func() {
-					ui.Column(c).FillWidth().Padding(4, 20, 14, 20).Gap(14).Children(func() {
+					ui.Column(c).FillWidth().Padding(4, 20, 14, 20).Gap(6).Children(func() {
 						switch s.section {
 						case 0:
 							changed = a.prefsGeneral(c, s) || changed
@@ -158,7 +161,7 @@ func (a *app) prefsView(c *ui.Context) {
 // settingsRow 是一行设置：左侧标题与说明，右侧控件；last 为 true 时不画下边线。
 func (a *app) settingsRow(c *ui.Context, key string, title, desc string, last bool, control func()) {
 	p := a.p
-	row := ui.Row(c.Key(key)).FillWidth().PaddingY(9).Gap(16).AlignItems(ui.Center)
+	row := ui.Row(c.Key(key)).FillWidth().PaddingY(8.5).Gap(16).AlignItems(ui.Center)
 	if !last {
 		row = row.BorderWidth(0, 0, 1, 0).BorderColor(p.border.Alpha(0.65))
 	}
@@ -177,7 +180,7 @@ func (a *app) numberField(c *ui.Context, key string, v *string, unit string, dis
 	in := ui.Row(c.Key(key)).Height(28).Radius(radiusInput).Border(1, p.btnBorder).Background(p.surface).AlignItems(ui.Center).PaddingEnd(8).Shrink(0)
 	changed := false
 	in.Children(func() {
-		e := ui.TextInputBase(c, v).Width(92).FillHeight().PaddingX(10).FontSize(fsSmall).TextColor(p.fg).TextAlign(ui.End)
+		e := ui.TextInputBase(c, v).Width(78).FillHeight().PaddingX(10).FontSize(fsSmall).TextColor(p.fg).TextAlign(ui.End)
 		if disabled {
 			e = e.Disabled(true)
 		}
@@ -198,7 +201,7 @@ func atoiOr(s string, def int) int {
 func (a *app) selectBox(c *ui.Context, key string, sel *int, labels []string) bool {
 	p := a.p
 	changed := false
-	b := ui.ButtonBase(c.Key(key)).Width(124).Height(28).Radius(radiusInput).PaddingX(10).AlignItems(ui.Center).Border(1, p.btnBorder).Background(p.surface)
+	b := ui.ButtonBase(c.Key(key)).Width(104).Height(28).Radius(radiusInput).PaddingX(10).AlignItems(ui.Center).Border(1, p.btnBorder).Background(p.surface)
 	b.PopoverMenuButton(func(m *ui.Menu) {
 		for i, l := range labels {
 			if m.Item(l).Checked(*sel == i).Chosen() {
@@ -207,10 +210,10 @@ func (a *app) selectBox(c *ui.Context, key string, sel *int, labels []string) bo
 				changed = true
 			}
 		}
-	}).Children(func() {
+	}, a.menuOpts()).Children(func() {
 		txt(c, labels[min(max(*sel, 0), len(labels)-1)], fsBase, p.fg, 0)
 		ui.Spacer(c)
-		icon(c, "arrowDown", 9, p.muted)
+		icon(c, "chevUD", 11, p.muted)
 	})
 	return changed
 }
@@ -218,7 +221,7 @@ func (a *app) selectBox(c *ui.Context, key string, sel *int, labels []string) bo
 // prefsGroup 画设置分组：小标题 + 一组无外框、行间细线的设置行。
 func (a *app) prefsGroup(c *ui.Context, title string, rows func()) {
 	ui.Column(c).FillWidth().Gap(2).Children(func() {
-		txt(c, title, fsSmall, a.p.fg2, 600).Margin(2, 0, 4, 0)
+		a.prefsSectionLabel(c, title, "")
 		rows()
 	})
 }
@@ -362,7 +365,7 @@ func (a *app) previewCard(c *ui.Context, key, label string, selected bool, previ
 // prefsSectionLabel 是设置页分组的小标题（设计稿 .sgrp）：11px 弱色 650 + 可选小徽标 + 向右延伸的细线。
 func (a *app) prefsSectionLabel(c *ui.Context, s, badge string) {
 	p := a.p
-	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Margin(14, 0, 2, 0).Children(func() {
+	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Margin(14, 0, 0, 0).Children(func() {
 		txt(c, s, fsSmall, p.muted, 650)
 		if badge != "" {
 			ui.Row(c).Height(16).PaddingX(6).Radius(4).Background(p.acSoft).AlignItems(ui.Center).Children(func() {
@@ -385,7 +388,7 @@ func (a *app) prefsAppearance(c *ui.Context, s *prefsState) bool {
 
 	// 外观主题：浅色 / 深色 / 跟随系统（左浅右深）
 	a.prefsSectionLabel(c, a.t("外观主题", "Theme"), "")
-	ui.Row(c.Key("theme")).FillWidth().Gap(10).Margin(8, 0).Children(func() {
+	ui.Row(c.Key("theme")).FillWidth().Gap(10).Margin(6, 0, 2, 0).Children(func() {
 		names := []string{a.t("浅色", "Light"), a.t("深色", "Dark"), a.t("跟随系统", "System")}
 		for i, v := range themeValues {
 			i, v := i, v
@@ -400,7 +403,7 @@ func (a *app) prefsAppearance(c *ui.Context, s *prefsState) bool {
 					miniWindow(c, dark, 2)
 				}
 			}
-			if a.previewCard(c, "theme-"+v, names[i], set.Theme == v, preview, nil, false) {
+			if a.previewCard(c, "theme-"+v, names[i], set.Theme == v, preview, nil, true) {
 				set.Theme = v
 				changed = true
 			}
@@ -408,7 +411,7 @@ func (a *app) prefsAppearance(c *ui.Context, s *prefsState) bool {
 	})
 	// 配色：雾蓝 / 墨白 / 松石 / 琥珀 / 玫瑰
 	a.prefsSectionLabel(c, a.t("配色", "Color scheme"), a.t("新增 2 套", "2 new"))
-	ui.Row(c.Key("scheme")).FillWidth().Gap(8).Margin(8, 0).Children(func() {
+	ui.Row(c.Key("scheme")).FillWidth().Gap(8).Margin(6, 0, 2, 0).Children(func() {
 		names := map[string]string{"mist": a.t("雾蓝", "Mist"), "ink": a.t("墨白", "Ink"), "jade": a.t("松石", "Jade"), "amber": a.t("琥珀", "Amber"), "rose": a.t("玫瑰", "Rose")}
 		for _, name := range colorSchemeNames {
 			name := name
@@ -520,25 +523,22 @@ func (a *app) prefsData(c *ui.Context, s *prefsState) bool {
 		ui.Column(c).FillWidth().Gap(6).Padding(2, 0, 0, 0).Children(func() {
 			for _, bf := range s.backups {
 				bf := bf
-				row := ui.ButtonBase(c.Key("bk:"+bf.Name)).FillWidth().Height(32).Radius(8).PaddingX(10).Gap(8).AlignItems(ui.Center).Border(1, p.border).Tooltip(a.t("点击从此备份恢复", "Click to restore from this backup"))
-				if row.Hovered() {
-					row = row.Background(p.hover)
-				}
-				row.Children(func() {
-					icon(c, "clock", 12, p.success)
-					txtMono(c, bf.ModTime.Format("2006-01-02 15:04"), fsSmall, p.fg, 0).Grow(1)
-					txtMono(c, formatSizeShort(bf.Size), fsTiny, p.muted, 0)
+				// 设计稿 .bk：淡底圆角行，数据库图标 + 等宽时间 + 大小 + 右侧“恢复”幽灵按钮
+				ui.Row(c.Key("bk:" + bf.Name)).FillWidth().Height(34).Radius(radiusInput).PaddingX(10).Gap(10).AlignItems(ui.Center).Background(p.surface2.Alpha(0.7)).Children(func() {
+					icon(c, "database", 14, p.fg2)
+					txtMono(c, bf.ModTime.Format("2006-01-02 15:04"), fsBase, p.fg, 0).Grow(1)
+					txt(c, formatSizeShort(bf.Size), fsSmall, p.muted, 0)
+					if a.btn(c, dbtn{key: "bkr:" + bf.Name, label: a.t("恢复", "Restore"), sm: true, ghost: true}) {
+						path := bf.Path
+						a.later(func() { a.confirmRestore(path) })
+					}
 				})
-				if row.Clicked() {
-					path := bf.Path
-					a.later(func() { a.confirmRestore(path) })
-				}
 			}
 		})
 	})
 	dir := a.be.DataDir()
-	ui.Column(c).FillWidth().Gap(4).Margin(10, 0, 0, 0).Children(func() {
-		txt(c, a.t("数据位置", "Data location"), fsSmall, p.fg2, 600)
+	ui.Column(c).FillWidth().Gap(4).Children(func() {
+		a.prefsSectionLabel(c, a.t("数据位置", "Data location"), "")
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
 			txtEMono(c, tildePath(dir), fsSmall, p.fg2, 0).Grow(1).Basis(0).Selectable()
 			bd := p.btnBorder
@@ -597,7 +597,7 @@ func (a *app) prefsAbout(c *ui.Context) {
 	p := a.p
 	ui.Column(c).FillWidth().AlignItems(ui.Center).Gap(8).Padding(8, 0, 0, 0).Children(func() {
 		if img := logoImage(p.dark); img != nil {
-			ui.Image(c, img).Size(52, 52).Fit(ui.Contain)
+			ui.Image(c, img).Size(72, 72).Fit(ui.Contain).Shadow(0, 8, 18, 0, p.glowS)
 		}
 		txt(c, "MiniPost", 16, p.fg, 600)
 		txtMono(c, a.t("版本 ", "Version ")+a.appVersion(), fsSmall, p.muted, 0)
@@ -613,8 +613,8 @@ func (a *app) prefsAbout(c *ui.Context) {
 				txt(c, a.t(zh, en), fsSmall, p.fg2, 0)
 			})
 		}
-		note("lock", "数据只保存在本机 ~/.minipost，仅所有者可读写。", "Data stays on this machine in ~/.minipost, readable only by you.")
-		note("info", "日志不记录请求体、令牌和 Cookie。", "Logs never include request bodies, tokens or cookies.")
+		note("okC", "数据只保存在本机 ~/.minipost，仅所有者可读写。", "Data stays on this machine in ~/.minipost, readable only by you.")
+		note("okC", "日志不记录请求体、令牌和 Cookie。", "Logs never include request bodies, tokens or cookies.")
 	})
 }
 

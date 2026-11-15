@@ -22,25 +22,29 @@ func (a *app) bodyTab(c *ui.Context, t *tab) {
 			kind = i
 		}
 	}
+	// 类型分段控件：与 Params / Headers 共用同一条 34 高的子工具条（右侧放该类型的动作）
+	typeSeg := func() {
+		if a.pillSeg(c, "body", &kind, []string{"none", "form-data", "raw", "JSON", "urlencoded"}, nil, segOpts{h: 22, padX: 11, fs: fsSmall + 0.5}) {
+			d.Body.Type = bodyKinds[kind]
+		}
+	}
 	ui.Column(c).Grow(1).Basis(0).Children(func() {
-		ui.Row(c).FillWidth().Shrink(0).Padding(8, 12).Gap(4).AlignItems(ui.Center).Children(func() {
-			if a.kindPills(c, "body", &kind, []string{"none", "form-data", "raw", "JSON", "urlencoded"}, 10) {
-				d.Body.Type = bodyKinds[kind]
-			}
-			ui.Spacer(c)
-			if d.Body.Type == client.BodyJSON || d.Body.Type == client.BodyRaw {
-				if a.button(c, btnOpts{padX: 6, h: 20, gap: 4, noHover: true, key: "beautify"}, func(hover bool) {
-					col := p.accent
-					if hover {
-						col = p.accentHover
+		if d.Body.Type != client.BodyURLEncoded {
+			a.subBar(c, typeSeg, func() {
+				if d.Body.Type == client.BodyJSON || d.Body.Type == client.BodyRaw {
+					if a.button(c, btnOpts{padX: 6, h: 22, gap: 4, noHover: true, key: "beautify"}, func(hover bool) {
+						col := p.accent
+						if hover {
+							col = p.accentHover
+						}
+						icon(c, "sparkle", 12, col)
+						txt(c, a.t("格式化", "Beautify"), fsSmall, col, 600)
+					}) {
+						a.formatBody(t)
 					}
-					icon(c, "formatList", 12, col)
-					txt(c, a.t("格式化", "Beautify"), fsBase, col, 600)
-				}) {
-					a.formatBody(t)
 				}
-			}
-		})
+			})
+		}
 		switch d.Body.Type {
 		case client.BodyJSON:
 			a.markUndefinedInEditor(t.jsonEd)
@@ -51,7 +55,7 @@ func (a *app) bodyTab(c *ui.Context, t *tab) {
 		case client.BodyFormData:
 			a.formTable(c, &d.Body.FormData)
 		case client.BodyURLEncoded:
-			a.kvTableOpts(c, &d.Body.URLEncoded, kvOpts{id: d.ID + ":urlenc", keyPH: "Key", valPH: "Value", noDesc: true})
+			a.kvTableOpts(c, &d.Body.URLEncoded, kvOpts{id: d.ID + ":urlenc", keyPH: a.t("键", "Key"), valPH: a.t("值", "Value"), noDesc: true, lead: typeSeg})
 		default:
 			// 没有请求体：居中的图标与两行提示
 			ui.Column(c).FillWidth().Grow(1).Basis(0).Gap(6).AlignItems(ui.Center).Justify(ui.Center).Children(func() {

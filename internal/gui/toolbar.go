@@ -109,7 +109,7 @@ func (a *app) envPill(c *ui.Context) {
 	}
 	btn := islandChip(c, "envsel", false, p).
 		Tooltip(a.t("切换环境", "Switch environment")).Label(a.t("切换环境", "Switch environment")).
-		PopoverMenuButton(func(m *ui.Menu) { a.envMenu(m) })
+		PopoverMenuButton(func(m *ui.Menu) { a.envMenu(m) }, a.menuOpts())
 	btn.Children(func() {
 		icon(c, "globe", 13, p.fg)
 		txtE(c, a.envLabel(), fsBase, p.fg, 500).MaxWidth(140)

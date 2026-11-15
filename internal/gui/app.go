@@ -60,6 +60,8 @@ type app struct {
 	deferred     []func()    // 在本帧构建结束后执行的变更，避免在遍历数据时修改它
 	toastMsgs    []toastNote // 待显示的提示（见 toast.go）
 	toastActs    []toastAct  // 带按钮的提示（更新提示等）
+	toastHot     bool        // 上一帧鼠标是否停在某条提示上（此时所有提示的计时都暂停，其余提示不能卡在渐显的半途）
+	toastHotNow  bool        // 本帧鼠标是否停在某条提示上
 	applied      appliedTheme
 	p            *palette  // 当前亮/暗调色板
 	th           *ui.Theme // 当前 MyGo 主题（每帧都要重新设置）

@@ -288,9 +288,9 @@ func (a *app) treeNode(c *ui.Context, id string, depth int) {
 // nodeMoreButton 是行右侧的“···”按钮，点击弹出节点菜单。
 func (a *app) nodeMoreButton(c *ui.Context, id string) {
 	p := a.p
-	ui.ButtonBase(c.Key("more:" + id)).Width(16).Height(20).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
+	ui.ButtonBase(c.Key("more:"+id)).Width(16).Height(20).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
 		Tooltip(a.t("更多操作", "More actions")).
-		PopoverMenuButton(func(m *ui.Menu) { a.nodeMenu(m, id) }).
+		PopoverMenuButton(func(m *ui.Menu) { a.nodeMenu(m, id) }, a.menuOpts()).
 		Children(func() { icon(c, "more", 12, p.muted) })
 }
 
@@ -447,7 +447,7 @@ func (a *app) toggleFolder(id string) {
 func (a *app) historyView(c *ui.Context) {
 	p := a.p
 	ui.Row(c).FillWidth().Shrink(0).Padding(0, 8, 6, 8).Gap(2).AlignItems(ui.Center).Children(func() {
-		a.input(c, &a.side.histQuery, a.t("搜索历史（方法 / 地址 / 状态码 / 4xx）", "Search history (method / URL / status / 4xx)"), fieldOpts{icon: "search", radius: radiusR, key: "hist-search", h: 26, bd: &a.p.border})
+		a.input(c, &a.side.histQuery, a.t("搜索历史…", "Search history…"), fieldOpts{icon: "search", radius: radiusR, key: "hist-search", h: 26, bd: &a.p.border})
 		a.ib(c, "hist-refresh", "arrowUpDown", a.t("刷新", "Refresh"), false, false, a.reloadHistory)
 		a.ib(c, "hist-clear", "delete", a.t("清空历史", "Clear history"), false, len(a.history) == 0, func() {
 			a.overlays.askConfirm(a.t("清空历史记录？", "Clear history?"), a.t("此操作无法撤销。", "This can't be undone."), a.t("清空", "Clear"), func() {

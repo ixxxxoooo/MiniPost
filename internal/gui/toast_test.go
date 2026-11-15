@@ -151,3 +151,40 @@ func TestPushToastUnknownKindFallsBack(t *testing.T) {
 		t.Fatalf("应退回普通提示，实际 %+v", a.toastMsgs)
 	}
 }
+
+// 鼠标停在某条提示上时计时暂停；其余提示不能停在渐显的半途（看不见），而应完整显示。
+func TestToastHoverKeepsOthersVisible(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.toastWarn("第一条")
+	a.toastErr("第二条")
+	tt.Frame()
+	// 把鼠标放到第二条上，再登记一条新提示
+	r2, ok := tt.Find("第二条")
+	if !ok {
+		t.Fatalf("应显示第二条，实际 %q", tt.Texts())
+	}
+	tt.Move(r2.X+4, r2.Y+4)
+	tt.Frame()
+	a.toastOK("第三条")
+	for i := 0; i < 4; i++ {
+		tt.Advance(100 * time.Millisecond)
+		tt.Frame()
+	}
+	r3, ok := tt.Find("第三条")
+	if !ok {
+		t.Fatalf("应显示第三条，实际 %q", tt.Texts())
+	}
+	// 第三条文字所在位置应能看到深色文字像素（不是整张卡片透明）
+	img := tt.Image()
+	dark := 0
+	for x := int(r3.X); x < int(r3.X+r3.W); x++ {
+		for y := int(r3.Y); y < int(r3.Y+r3.H); y++ {
+			if px := img.RGBAAt(x, y); int(px.R)+int(px.G)+int(px.B) < 300 {
+				dark++
+			}
+		}
+	}
+	if dark == 0 {
+		t.Fatal("鼠标停在其他提示上时，新提示不应保持透明")
+	}
+}

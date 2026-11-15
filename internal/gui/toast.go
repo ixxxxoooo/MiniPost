@@ -17,7 +17,7 @@ const (
 const (
 	toastFade      = 180 * time.Millisecond // 进出场渐变时长
 	toastSlide     = 14                     // 进场时从右侧滑入的距离（px）
-	toastMinW      = 220                    // 提示条最小宽度
+	toastMinW      = 300                    // 提示条最小宽度（设计稿 .toasts 宽 330，短消息也保持统一宽度）
 	toastMaxW      = 380                    // 提示条最大宽度，更长的文字自动换行
 	toastEdge      = 12                     // 与窗口右边缘的距离
 	toastBottomGap = 10                     // 与窗口下边缘的最小距离
@@ -81,6 +81,7 @@ func (a *app) toastAction(msg, label string, fn func()) {
 
 // showToasts 把登记的提示交给 MyGo，并按自绘样式在右上角画出所有正在显示的提示。
 func (a *app) showToasts(c *ui.Context) {
+	a.toastHot, a.toastHotNow = a.toastHotNow, false // 上一帧的悬停状态；提示卡在本帧稍后才构建，所以在帧首交接
 	for _, n := range a.toastMsgs {
 		c.AddToast(ui.Toast{ID: n.msg, Title: n.msg, Type: n.kind, Timeout: toastTimeout(n.kind)})
 	}
@@ -128,8 +129,12 @@ func (a *app) toastCard(c *ui.Context, t ui.Toast) {
 	opacity, shift := float32(1), float32(0)
 	left := tp.Left()
 	age := t.Timeout - left // Timeout 总是非零，Left 为 0 表示不会自动关闭
+	hovered := tp.Root.Hovered()
+	if hovered {
+		a.toastHotNow = true
+	}
 	switch {
-	case tp.Root.Hovered():
+	case hovered || a.toastHot: // 鼠标停在提示上：计时暂停，所有提示保持完整显示
 	case left > 0 && age < toastFade:
 		k := float32(age) / float32(toastFade)
 		opacity, shift = k, (1-k)*toastSlide
@@ -145,7 +150,7 @@ func (a *app) toastCard(c *ui.Context, t ui.Toast) {
 	// 图标、文字、按钮顶部对齐：长消息换行后图标和关闭按钮仍贴着第一行。
 	card := tp.Root.Row().AlignItems(ui.Start).Gap(10).Padding(10, 8, 10, 15).Radius(radiusLg).Clip().
 		MinWidth(toastMinW).MaxWidth(min(toastMaxW, winW-2*toastEdge)).
-		Background(p.elevated().Alpha(0.97)).Border(1, p.border).
+		Gradient(p.elevated(), p.elevated(), 180).Border(1, p.border).
 		Shadow(0, 8, 22, -6, p.shadowLg()).Shadow(0, 1, 3, 0, p.shadowLg()).
 		Opacity(opacity).Translate(shift, 0)
 	card.Children(func() {

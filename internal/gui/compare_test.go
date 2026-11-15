@@ -51,6 +51,13 @@ func designProject(be *fakeBackend) string {
 	r2.Body = model.RequestBody{Type: "json", JSON: "{\n  \"name\": \"Alice\",\n  \"email\": \"alice@example.com\",\n  \"roles\": [\"admin\", \"editor\"],\n  \"profile\": {\n    \"age\": 28,\n    \"active\": true,\n    \"avatar\": null\n  }\n}"}
 	r2.Auth = r1.Auth
 	r3 := mk("r3", "更新用户资料", "PUT", "{{host}}/users/1024", "f1", 2)
+	r3.Headers = []model.KeyValue{{Key: "Content-Type", Value: "multipart/form-data"}}
+	r3.Body = model.RequestBody{Type: "form-data", FormData: []model.FormData{
+		{Key: "name", Value: "Alice", Type: "text"},
+		{Key: "avatar", Type: "file", FileName: "avatar.png", FilePath: "/tmp/avatar.png", Description: "头像，最大 2 MB"},
+		{Key: "note", Type: "text", Disabled: true},
+	}}
+	r3.Auth = r1.Auth
 	r4 := mk("r4", "删除用户", "DELETE", "{{host}}/users/1024", "f1", 3)
 	r5 := mk("r5", "订单列表", "GET", "{{host}}/orders?status=paid", "f2", 0)
 	r6 := mk("r6", "创建订单", "POST", "{{host}}/orders", "f2", 1)
@@ -60,6 +67,10 @@ func designProject(be *fakeBackend) string {
 	r11 := mk("r11", "登录获取 Token", "POST", "{{host}}/auth/login", "f4", 0)
 	r12 := mk("r12", "刷新 Token", "POST", "{{host}}/auth/refresh", "f4", 1)
 	r8 := mk("r8", "健康检查", "GET", "{{host}}/healthz", "", 4)
+	r11.Headers = []model.KeyValue{{Key: "Content-Type", Value: "application/x-www-form-urlencoded"}}
+	r11.Body = model.RequestBody{Type: "form-urlencoded", FormUrlEncoded: []model.KeyValue{{Key: "username", Value: "alice@example.com"}, {Key: "password", Value: "{{password}}"}, {Key: "grant_type", Value: "password"}}}
+	r12.Headers = []model.KeyValue{{Key: "Content-Type", Value: "text/plain"}}
+	r12.Body = model.RequestBody{Type: "raw", Raw: "refresh_token=rt_2f8a91c0b7d4\nclient_id=minipost-desktop"}
 	cd.Requests = []model.RequestItem{r1, r2, r3, r4, r5, r6, r9, r7, r10, r11, r12, r8}
 	cd.TreeNodes = []model.CollectionNode{
 		{NodeID: "f1", NodeType: model.CollectionNodeTypeFolder, ProjectID: pid, SortOrder: 0},
@@ -166,6 +177,26 @@ var compareScenes = []compareScene{
 		openTabs(a, tt, 1, "r1", "r2", "r5")
 		_ = tt.Click("Body")
 	}},
+	{"req-body-form", func(t *testing.T, a *app, tt *ui.Tester, be *fakeBackend) {
+		openTabs(a, tt, 0, "r3", "r1", "r5")
+		_ = tt.Click("Body")
+	}},
+	{"req-body-urlenc", func(t *testing.T, a *app, tt *ui.Tester, be *fakeBackend) {
+		openTabs(a, tt, 0, "r11", "r1", "r5")
+		_ = tt.Click("Body")
+	}},
+	{"req-body-raw", func(t *testing.T, a *app, tt *ui.Tester, be *fakeBackend) {
+		openTabs(a, tt, 0, "r12", "r1", "r5")
+		_ = tt.Click("Body")
+	}},
+	{"tabs-list", func(t *testing.T, a *app, tt *ui.Tester, be *fakeBackend) {
+		defaultTabs(t, a, tt)
+		tt.Press(1151, 67) // 右上角“显示所有标签”图标按钮（无文字，只能按坐标点）
+		for i := 0; i < 30; i++ {
+			tt.Advance(100 * time.Millisecond)
+			tt.Frame()
+		}
+	}},
 	{"req-auth", func(t *testing.T, a *app, tt *ui.Tester, be *fakeBackend) {
 		defaultTabs(t, a, tt)
 		_ = tt.Click("Auth")
@@ -233,6 +264,12 @@ var compareScenes = []compareScene{
 		defaultTabs(t, a, tt)
 		a.openPrefs()
 		a.overlays.prefs.section = 2
+		// 与设计稿一致的两条备份记录
+		a.overlays.prefs.backups = []model.BackupFile{
+			{Name: "a.zip", Path: "/tmp/a.zip", Size: 48 << 10, ModTime: time.Date(2026, 11, 15, 10, 42, 0, 0, time.Local)},
+			{Name: "b.zip", Path: "/tmp/b.zip", Size: 46 << 10, ModTime: time.Date(2026, 11, 14, 22, 10, 0, 0, time.Local)},
+		}
+		a.overlays.prefs.backupsLoaded = true
 	}},
 	{"set-shortcuts", func(t *testing.T, a *app, tt *ui.Tester, be *fakeBackend) {
 		defaultTabs(t, a, tt)
@@ -305,6 +342,10 @@ func TestCompareScenes(t *testing.T) {
 				a, tt, be := compareApp(t, mode == "dark", scheme)
 				sc.setup(t, a, tt, be)
 				tt.Frame()
+				for i := 0; i < 6; i++ { // 走完弹层/遮罩的入场动画再截图
+					tt.Advance(100 * time.Millisecond)
+					tt.Frame()
+				}
 				if dir == "" {
 					return
 				}

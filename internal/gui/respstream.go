@@ -379,7 +379,7 @@ func (a *app) streamDetail(c *ui.Context, rs *respState, e model.StreamChunk) {
 					if m.Item(a.t("文本", "Text")).Checked(mode == "text").Chosen() {
 						a.later(func() { v.mode[id] = "text" })
 					}
-				}).Children(func() {
+				}, a.menuOpts()).Children(func() {
 				txt(c, label, fsSmall, p.fg, 0)
 				icon(c, "arrowDown", 8, p.muted)
 			})

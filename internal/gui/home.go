@@ -43,8 +43,8 @@ func (a *app) projectStats(pr model.Project) projStats {
 
 // projectColor 是项目的主题色，未设置时用当前配色的强调色。
 func (a *app) projectColor(pr model.Project) ui.Color {
-	if pr.ThemeColor != "" {
-		return ui.Hex(pr.ThemeColor)
+	if len(pr.ThemeColor) == 7 && pr.ThemeColor[0] == '#' {
+		return adaptProjectColor(pr.ThemeColor, a.p.baseAccent)
 	}
 	return a.p.accent
 }
@@ -239,7 +239,7 @@ func (a *app) homeFilterRow(c *ui.Context, n int) {
 				if m.Item(a.t("名称", "Name")).Checked(a.homeSort == "name").Chosen() {
 					a.later(func() { a.homeSort = "name" })
 				}
-			})
+			}, a.menuOpts())
 		sortBtn.Children(func() {
 			txt(c, a.t("排序：", "Sort: ")+label, fsBase, p.fg, 500)
 			icon(c, "chevUD", 12, p.muted)
@@ -319,7 +319,7 @@ func (a *app) projectCard(c *ui.Context, pr model.Project) {
 				}
 				if hover {
 					ui.ButtonBase(c.Key("pcm:"+pr.ID)).Size(22, 22).Radius(radiusSm).AlignItems(ui.Center).Justify(ui.Center).Shrink(0).
-						Tooltip(a.t("更多操作", "More actions")).PopoverMenuButton(func(m *ui.Menu) { a.projectCardMenu(m, pr) }).
+						Tooltip(a.t("更多操作", "More actions")).PopoverMenuButton(func(m *ui.Menu) { a.projectCardMenu(m, pr) }, a.menuOpts()).
 						Children(func() { icon(c, "more", 13, p.muted) })
 				}
 			})
@@ -457,17 +457,29 @@ func (a *app) homeDetail(c *ui.Context, pr model.Project) {
 		ui.Column(c).FillWidth().Children(func() {
 			label(a.t("主题色", "Theme color"))
 			ui.Row(c).FillWidth().Wrap().Gap(7).Children(func() {
-				for _, hex := range projectColors {
+				// 第一个色块「跟随外观」：不设项目色，直接用当前配色的强调色；其余色块只取色相，明度/彩度跟随配色
+				swatch := func(key, hex string, fill ui.Color) {
 					on := strings.EqualFold(pr.ThemeColor, hex)
-					b := ui.ButtonBase(c.Key("col"+hex)).Size(20, 20).Radius(10).Background(ui.Hex(hex)).AlignItems(ui.Center).Justify(ui.Center)
+					b := ui.ButtonBase(c.Key(key)).Size(20, 20).Radius(10).Background(fill).AlignItems(ui.Center).Justify(ui.Center).Transition(transColors)
 					if on {
 						b = b.Border(2, p.fg).Shadow(0, 0, 0, 2, p.surface)
 					}
-					b.Children(func() {})
-					if b.Clicked() {
-						id, color := pr.ID, hex
-						a.later(func() { a.setProjectTheme(id, color) })
+					b.Children(func() {
+						if hex == "" {
+							ui.Box(c).Size(8, 8).Radius(4).Background(p.accentFg.Alpha(0.9))
+						}
+					})
+					if hex == "" {
+						b.Tooltip(a.t("跟随外观配色", "Follow appearance"))
 					}
+					if b.Clicked() {
+						id := pr.ID
+						a.later(func() { a.setProjectTheme(id, hex) })
+					}
+				}
+				swatch("col-auto", "", p.baseAccent)
+				for _, hex := range projectColors {
+					swatch("col"+hex, hex, adaptProjectColor(hex, p.baseAccent))
 				}
 			})
 		})

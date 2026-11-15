@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -57,6 +58,7 @@ type palette struct {
 	dark bool
 
 	accent, accentHover, accentFg ui.Color
+	baseAccent                    ui.Color // 配色方案本身的强调色（项目主题色会覆盖 accent，适配项目色时以它为基准）
 
 	surface, surface2, fg, fg2, muted  ui.Color
 	border, btnBg, btnBorder, selected ui.Color
@@ -184,7 +186,7 @@ func schemePalette(scheme string, dark bool) *palette {
 	hov := fg.Alpha(0.05)
 	return &palette{
 		dark:   dark,
-		accent: ac, accentHover: ui.Hex(t.ach), accentFg: ui.Hex(t.acf),
+		accent: ac, baseAccent: ac, accentHover: ui.Hex(t.ach), accentFg: ui.Hex(t.acf),
 		surface: bg, surface2: ui.Hex(t.bg2),
 		fg: fg, fg2: ui.Hex(t.fg2), muted: ui.Hex(t.mu),
 		border: ui.Hex(t.bd), btnBg: ui.Hex(t.bg2), btnBorder: ui.Hex(t.bd2), selected: bg.Mix(fg, 0.08),
@@ -213,12 +215,13 @@ func glassBase(bg, bg2 ui.Color, dark bool) ui.Color {
 	return bg
 }
 
-// withAccent 按项目主题色覆盖强调色及相关令牌，规则同旧版 applyProjectThemeColor。
+// withAccent 按项目主题色覆盖强调色及相关令牌（规则同旧版 applyProjectThemeColor），
+// 但项目色先经 adaptProjectColor 适配当前配色的明度与彩度。
 func (p *palette) withAccent(hex string) *palette {
 	if len(hex) != 7 || hex[0] != '#' {
 		return p
 	}
-	base := ui.Hex(hex)
+	base := adaptProjectColor(hex, p.baseAccent)
 	q := *p
 	q.accent = base
 	q.tabActiveBorder = base
@@ -652,7 +655,9 @@ func (a *app) underlineTabs(c *ui.Context, key string, sel *int, labels []string
 		b.Children(func() {
 			if active {
 				// 下划线压在行底的分隔线上（-1），左右各缩进 9
-				ui.Box(c).Absolute().Left(9).Right(9).Bottom(-1).Height(2).Radius(2, 2, 0, 0).Background(p.accent).Shadow(0, -1, 8, 0, p.glow)
+				// 同一个指示器在标签之间滑动（Match 让新位置的元素从旧位置飞过来，对应设计稿 fx.js）
+				ui.Box(c.Key(key+"ul")).Absolute().Left(9).Right(9).Bottom(-1).Height(2).Radius(2, 2, 0, 0).Background(p.accent).Shadow(0, -1, 8, 0, p.glow).
+					Transition(ui.ElementTransition{Duration: durSlide, Ease: easeSlide, Match: "ul:" + key})
 			} else if hover {
 				ui.Box(c).Absolute().Left(9).Right(9).Bottom(-1).Height(2).Radius(2, 2, 0, 0).Background(p.btnBorder)
 			}
@@ -680,31 +685,6 @@ func (a *app) underlineTabs(c *ui.Context, key string, sel *int, labels []string
 				}
 			})
 		})
-		if b.Clicked() && !active {
-			*sel = i
-			changed = true
-		}
-	}
-	return changed
-}
-
-// kindPills 是 Body/Auth 的类型小标签：24px 高的胶囊，选中时为浅强调色底与加粗深色文字，未选中为次要色。
-func (a *app) kindPills(c *ui.Context, key string, sel *int, labels []string, padX float32) bool {
-	p := a.p
-	changed := false
-	for i, l := range labels {
-		active := *sel == i
-		b := ui.ButtonBase(c.Key(key + l)).Height(24).Radius(12).PaddingX(padX + 2).AlignItems(ui.Center).Shrink(0)
-		col, w := p.fg2, 0
-		switch {
-		case active:
-			b = b.Background(p.accent.Alpha(0.13))
-			col, w = p.fg, 600
-		case b.Hovered():
-			b = b.Background(p.hover)
-			col = p.fg
-		}
-		b.Children(func() { txt(c, l, fsBase, col, w) })
 		if b.Clicked() && !active {
 			*sel = i
 			changed = true
@@ -765,29 +745,36 @@ func (a *app) dialogDim(c *ui.Context, open *bool, w, h, radius, dim float32, fn
 	cw, ch := c.Size()
 	ui.DialogBase(c, open, func(back, panel ui.Element) {
 		// 设计稿 .dlg：大圆角（--r-lg）、近乎不透明的玻璃底（无法做背景模糊，故用高不透明度）、细边框 + 顶部高光 + 大投影
-		back.Background(ui.RGBA(0, 0, 0, dim))
+		scrim := ui.RGBA(0, 0, 0, dim)
+		back.Background(scrim)
 		radius = max(radius, radiusLg)
-		panel.Width(w).Radius(radius).Background(p.elevated().Alpha(0.97)).Border(1, p.border).Clip().
+		panel.Width(w).Radius(radius).Gradient(p.elevated(), p.elevated(), 180).Border(1, p.border).Clip().
 			Shadow(0, 14, 40, -8, p.shadowLg()).Shadow(0, 2, 6, 0, p.shadowLg()).InsetShadow(0, 1, 0, 0, ui.RGBA(255, 255, 255, 0.18))
 		if h > 0 {
 			panel.Height(h)
 		}
 		panel.MaxWidth(cw * 0.92).MaxHeight(ch * 0.88)
+		panel.Transition(enterTransition(motionPop, durBase, 0)) // 设计稿 popIn：自下方 6px、缩放 .97 淡入
 		fn()
 	})
 }
 
-// toggle 是 36×20 的开关：开启时为强调色，旋钮 15px 白色圆。返回是否被切换。
+// toggle 是设计稿 .sw：32×19 的胶囊，开启时为强调色渐变 + 柔光，旋钮 15px 白色圆，开关时带过冲弹簧滑动。返回是否被切换。
 func (a *app) toggle(c *ui.Context, key string, on *bool) bool {
 	p := a.p
-	bg, bd := p.btnBg, p.btnBorder
-	just := ui.Start
+	b := ui.ButtonBase(c.Key(key)).Size(32, 19).Radius(9.5).Shrink(0)
 	if *on {
-		bg, bd, just = p.accent, p.accent, ui.End
+		p.gradAccent(b, false).Shadow(0, 1, 5, 0, p.glowS)
+	} else {
+		b = b.Background(p.btnBorder)
 	}
-	b := ui.ButtonBase(c.Key(key)).Size(36, 20).Radius(10).Background(bg).Border(1, bd).Padding(1).AlignItems(ui.Center).Justify(just).Shrink(0)
+	knobX := float32(2)
+	if *on {
+		knobX = 15
+	}
 	b.Children(func() {
-		ui.Box(c).Size(15, 15).Radius(7.5).Background(ui.Hex("#ffffff")).Border(1, ui.RGBA(0, 0, 0, 0.05)).Shrink(0)
+		ui.Box(c.Key(key+"knob")).Absolute().Left(knobX).Top(2).Size(15, 15).Radius(7.5).Background(ui.Hex("#ffffff")).
+			Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.3)).Transition(ui.ElementTransition{Duration: 320 * time.Millisecond, Ease: easeSpring, Position: true})
 	})
 	if b.Clicked() {
 		*on = !*on
@@ -818,10 +805,12 @@ func (a *app) pillSeg(c *ui.Context, key string, sel *int, labels, icons []strin
 		o.fs = fsBase
 	}
 	changed := false
-	track := ui.Row(c.Key(key)).Height(o.h + 4).Padding(2).Gap(2).Radius((o.h + 4) / 2).Background(p.fg.Alpha(0.07)).AlignItems(ui.Stretch).Shrink(0)
+	track := ui.Row(c.Key(key)).Height(o.h+4).Padding(2).Gap(2).Radius((o.h+4)/2).Background(p.fg.Alpha(0.07)).AlignItems(ui.Stretch).Shrink(0).
+		InsetShadow(0, 1, 2, 0, p.fg.Alpha(0.05))
 	if o.full {
 		track = track.Grow(1).Basis(0)
 	}
+	var activeB ui.Rect
 	track.Children(func() {
 		for i, l := range labels {
 			active := *sel == i
@@ -832,28 +821,34 @@ func (a *app) pillSeg(c *ui.Context, key string, sel *int, labels, icons []strin
 			col, w := p.fg2, 500
 			switch {
 			case active:
-				b = p.shadowSm(b.Background(p.surface))
+				activeB = b.Bounds()
 				col, w = p.fg, 600
 			case b.Hovered():
 				b = b.Background(p.hover)
 				col = p.fg
 			}
+			b.Transition(transColors)
 			b.Children(func() {
 				if i < len(icons) && icons[i] != "" {
 					ic := p.muted
 					if active {
 						ic = p.accent
 					}
-					icon(c, icons[i], 13, ic)
+					icon(c, icons[i], 13, ic).ZIndex(5)
 				}
 				if l != "" {
-					txt(c, l, o.fs, col, w)
+					txt(c, l, o.fs, col, w).ZIndex(5)
 				}
 			})
 			if b.Clicked() && !active {
 				*sel = i
 				changed = true
 			}
+		}
+		// 选中滑块：单个元素在各选项之间弹性滑动（设计稿 fx.js 的 FLIP）；首帧还没有边界时退回静态绘制
+		if r, ok := slideRect(track.Bounds(), activeB); ok {
+			th := ui.Box(c.Key(key+"thumb")).Absolute().Left(r.X).Top(r.Y).Size(r.W, r.H).Radius(o.h / 2).Background(p.surface).ZIndex(-1).Transition(transSlide)
+			p.shadowSm(th)
 		}
 	})
 	return changed
@@ -1029,9 +1024,11 @@ func (a *app) segTabs(c *ui.Context, key string, sel *int, labels []string) bool
 	return a.pillSeg(c, key, sel, labels, nil, segOpts{padX: 12})
 }
 
-// dlgIcon 绘制对话框标题行左侧的 28px 图标块（设计稿 .dlg-h .ico：淡强调色渐变底 + 细环 + 强调色图标）。
-func (a *app) dlgIcon(c *ui.Context, name string) {
-	p := a.p
-	ui.Row(c).Size(28, 28).Shrink(0).Radius(radiusSm).Gradient(p.acSoft, p.acSoft.Alpha(0.06), 180).Shadow(0, 0, 0, 1, p.acSoft2).Shadow(0, 2, 8, -2, p.glowS).
-		AlignItems(ui.Center).Justify(ui.Center).Children(func() { icon(c, name, 14, p.accent) })
+// menuOpts 是所有下拉菜单共用的面板样式。MyGo 把“渐变”层画在“纯色”层之后，弹出菜单的纯色底会被下面的渐变元素
+// （发送按钮、强调色按钮等）盖住而显得半透明；所以面板底也用一层同色（--elev）渐变，让它与那些元素在同一层里按先后顺序绘制。
+func (a *app) menuOpts() ui.PopoverMenuButtonOptions {
+	bg := a.p.elevated()
+	return ui.PopoverMenuButtonOptions{Panel: func(panel ui.Element) {
+		panel.Gradient(bg, bg, 180).Transition(enterTransition(motionPop, durBase, 0)) // 设计稿 popIn
+	}}
 }

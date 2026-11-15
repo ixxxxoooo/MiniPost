@@ -289,7 +289,7 @@ func (a *app) updateCard(c *ui.Context) {
 	u := &a.upd
 	p := a.p
 	enabled := a.updater.Enabled()
-	ui.Column(c.Key("upd-card")).FillWidth().Radius(11).Border(1, p.border).Padding(14).Gap(10).Children(func() {
+	ui.Column(c.Key("upd-card")).FillWidth().Radius(radiusLg).Border(1, p.border).Background(p.surface2.Alpha(0.55)).Padding(12, 14).Gap(10).Children(func() {
 		ui.Row(c).FillWidth().Gap(10).AlignItems(ui.Center).Children(func() {
 			title, sub := a.t("已是最新版本", "You're up to date"), ""
 			switch {
@@ -310,8 +310,11 @@ func (a *app) updateCard(c *ui.Context) {
 			case !u.checkedAt.IsZero():
 				sub = a.t("上次检查 "+u.checkedAt.Format("15:04"), "Last checked "+u.checkedAt.Format("15:04"))
 			}
+			if enabled && u.phase == upIdle { // 设计稿：已是最新版本前带一个绿色对勾圆标
+				icon(c, "okC", 16, p.success)
+			}
 			ui.Column(c).Grow(1).Basis(0).Gap(2).Children(func() {
-				txt(c, title, fsLarge, p.fg, 500)
+				txt(c, title, fsBase+0.5, p.fg, 650)
 				if sub != "" {
 					ui.Text(c, sub).FontSize(fsSmall).FixedLineHeight(18).TextColor(p.fg2).Selectable()
 				}

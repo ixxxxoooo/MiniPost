@@ -188,7 +188,7 @@ func TestTabBarHasNoEnvSelector(t *testing.T) {
 	}
 }
 
-// 项目选择器左侧的圆点取项目主题色。
+// 项目选择器左侧是项目头像方块（渐变：上方提亮 22% 到项目色），颜色取项目主题色校准后的结果（adaptProjectColor）。
 func TestTitleBarProjectDotUsesThemeColor(t *testing.T) {
 	a, tt, _ := zhApp(t)
 	a.setProjectTheme(a.projectID, "#ff3366")
@@ -197,10 +197,19 @@ func TestTitleBarProjectDotUsesThemeColor(t *testing.T) {
 	if !ok || name.Y >= sizeToolbar {
 		t.Fatalf("找不到标题栏里的项目名: %+v", name)
 	}
-	// 圆点在名称左侧：间距 7 + 半径 4
-	px := tt.Image().RGBAAt(int(name.X)-7-4, int(name.Y+name.H/2))
-	if px.R < 0xe0 || px.G > 0x60 || px.B < 0x40 {
-		t.Fatalf("项目圆点应为项目主题色 #ff3366，实际 %v", px)
+	// 项目色会按外观配色校准明度与彩度，保留色相：头像像素应落在“校准色 → 提亮 22% 的校准色”之间
+	want := adaptProjectColor("#ff3366", a.p.baseAccent)
+	top := want.Mix(ui.RGB(255, 255, 255), 0.22)
+	in := func(v, lo, hi uint8) bool { return int(v) >= int(lo)-6 && int(v) <= int(hi)+6 }
+	y := int(name.Y + name.H/2)
+	found := false
+	// 在名称左侧 40px 内横向扫描头像方块（避开中间白色首字）
+	for x := int(name.X) - 6; x > int(name.X)-40 && !found; x-- {
+		px := tt.Image().RGBAAt(x, y)
+		found = in(px.R, want.R, top.R) && in(px.G, want.G, top.G) && in(px.B, want.B, top.B)
+	}
+	if !found {
+		t.Fatalf("名称左侧应出现项目头像（颜色在 %v ~ %v 之间）", want, top)
 	}
 }
 

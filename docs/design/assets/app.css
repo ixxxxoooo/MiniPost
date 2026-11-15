@@ -462,7 +462,7 @@
 .fs-chips b { width: 28px; height: 26px; display: grid; place-items: center; border: 1px solid var(--bd2); border-radius: var(--r-sm); cursor: pointer; font-weight: 550; transition: all var(--dur-fast); }
 .fs-chips b:hover { background: var(--hover); } .fs-chips b.on { border-color: var(--ac); color: var(--ac); background: var(--ac-soft); font-weight: 700; }
 .sc-r { display: flex; align-items: center; height: 32px; border-bottom: 1px solid color-mix(in oklab, var(--bd) 65%, transparent); }
-.sc-r span { flex: 1; } .sc-r .kbd { font-size: 11px; padding: 2px 7px; }
+.sc-r span { flex: 1; } .sc-r .kbd { flex: none; font-size: 11px; padding: 2px 7px; }
 .upd { padding: 11px 13px; border: 1px solid var(--bd); border-radius: var(--r-lg); display: grid; gap: 8px; }
 .upd .pr { height: 6px; border-radius: 3px; background: var(--bg2); overflow: hidden; } .upd .pr i { display: block; height: 100%; border-radius: 3px; background: var(--ac); width: 62%; animation: grow 1.6s var(--ease-out); position: relative; overflow: hidden; }
 .upd .pr i::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .45), transparent); animation: shimmer2 1.4s linear infinite; }
@@ -1041,3 +1041,46 @@
 .updchip.ready { color: var(--acf); background: var(--grad-ac); box-shadow: 0 2px 4px var(--ac-glow), 0 6px 14px -4px var(--ac-glow), var(--hl-ac); }
 .updchip .dotm { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: blinkDot 1.6s ease-in-out infinite; }
 @keyframes blinkDot { 50% { opacity: .35 } }
+
+
+/* ==========================================================================
+   v3 · 统一数据表格 / 子工具条 / 标签栏 / 项目主题色
+   所有键值表（Params、Headers、form-data、urlencoded、响应头、Cookies、环境变量）共用这一套：
+   表头 28 高、同样的列间发丝线、首列固定 34 宽（可编辑表放复选框，只读表放序号）。
+   ========================================================================== */
+.kv .hd { height: 28px; font-size: 11px; font-weight: 600; letter-spacing: .02em; background: color-mix(in oklab, var(--bg2) 55%, var(--bg)); border-bottom: 1px solid var(--bd); }
+.kv .hd > span { display: flex; align-items: center; justify-content: flex-start; text-align: left; }
+.kv .hd > span:nth-child(n+2):not(:last-child) { border-left: 1px solid color-mix(in oklab, var(--bd) 70%, transparent); }
+.kv .kr > .c { border-left: 1px solid color-mix(in oklab, var(--bd) 70%, transparent); }
+.kv .kr .ix { font: 10px var(--font-mono); color: var(--mu); text-align: center; padding: 0; justify-content: center; }
+.kv .kr:last-child { border-bottom: 0; }
+.kv .tsel { height: 20px; display: inline-flex; align-items: center; gap: 3px; padding: 0 4px 0 8px; border-radius: 6px; background: var(--bg2); color: var(--fg2); font-size: 11px; font-weight: 550; cursor: pointer; box-shadow: inset 0 0 0 .5px var(--bd); transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast) var(--ease-spring); }
+.kv .tsel svg { color: var(--mu); }
+.kv .tsel:hover { background: var(--press); color: var(--fg); } .kv .tsel:active { transform: scale(.95); }
+
+/* 子工具条：Params / Headers / Body 顶部的同一条 34 高条带；左侧是说明或分段控件，右侧是动作 */
+.hint { height: 34px; padding: 0 12px; background: color-mix(in oklab, var(--bg2) 38%, var(--bg)); border-bottom: 1px solid color-mix(in oklab, var(--bd) 70%, transparent); }
+.hint .seg { height: 24px; } .hint .seg > b { height: 20px; padding: 0 11px; font-size: 11.5px; }
+.hint.sub .lk, .hint .lk { font-size: 11.5px; }
+
+/* 标签栏 v3：与下方内容同色的「文件夹标签」。选中标签底部与内容区无缝相连，左右各一个凹圆角；
+   未选中标签只有文字，相邻之间用发丝线分隔；方法名用着色文字而不是色块，省出标题空间。 */
+.win[data-dir="c"] .tabs { background: color-mix(in oklab, var(--chrome) 58%, var(--bg2)); padding: 6px 8px 0; align-items: flex-end; gap: 2px; border-bottom: 1px solid var(--bd); }
+.win[data-dir="c"] .tabs .plus, .win[data-dir="c"] .tabs .more { align-self: center; margin-bottom: 3px; }
+.win[data-dir="c"] .tab { height: 31px; border-radius: 10px 10px 0 0; min-width: 104px; flex: 0 1 176px; padding: 0 6px 0 11px; color: var(--mu); background: none; }
+.win[data-dir="c"] .tab:hover { background: color-mix(in oklab, var(--bg) 55%, transparent); color: var(--fg); }
+.win[data-dir="c"] .tab .tt { font-weight: 500; }
+.win[data-dir="c"] .tab.on { height: 32px; margin: 0 0 -1px; background: var(--bg); color: var(--fg); clip-path: none; box-shadow: -1px 0 0 var(--bd), 1px 0 0 var(--bd), 0 -1px 0 var(--bd), 0 -6px 14px -8px var(--ac-glow-s); z-index: 2; }
+.win[data-dir="c"] .tab.on .tt { font-weight: 650; }
+.win[data-dir="c"] .tab.on::before { left: 12px; right: 12px; top: 0; bottom: auto; height: 2px; border-radius: 0 0 3px 3px; background: var(--ac); box-shadow: 0 1px 8px var(--ac-glow); }
+.win[data-dir="c"] .tab.on::after { display: block; content: ''; position: absolute; left: -10px; right: -10px; bottom: 0; height: 10px; background: none; pointer-events: none;
+  background: radial-gradient(circle at 0 0, transparent 9.5px, var(--bg) 10px) left bottom / 10px 10px no-repeat, radial-gradient(circle at 100% 0, transparent 9.5px, var(--bg) 10px) right bottom / 10px 10px no-repeat; }
+.win[data-dir="c"] .tab:not(.on)::after { content: ''; position: absolute; right: -1px; top: 9px; bottom: 9px; width: 1px; background: color-mix(in oklab, var(--bd) 80%, transparent); transition: opacity var(--dur-fast); }
+.win[data-dir="c"] .tab:not(.on):hover::after, .win[data-dir="c"] .tab:has(+ .tab.on)::after, .win[data-dir="c"] .tab:last-child::after { opacity: 0; }
+.win[data-dir="c"] .tab .m::before { display: none; }
+.win[data-dir="c"] .tab .m { font-size: 9.5px; font-weight: 750; letter-spacing: .02em; min-width: 0; padding: 0; text-align: left; }
+.win[data-dir="c"] .req-top { background: var(--bg); }
+
+/* 项目主题色：色相取自所选颜色，明度/彩度跟随当前配色，换配色时自动协调；首个色块「跟随外观」 */
+.swatches i.auto { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--bg) 70%, transparent); }
+.swatches i.auto::before { content: ''; position: absolute; inset: 6px; border-radius: 50%; background: var(--acf); opacity: .9; }

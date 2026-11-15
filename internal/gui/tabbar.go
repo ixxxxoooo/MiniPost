@@ -6,22 +6,24 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// tabBar 绘制请求标签栏（设计稿方案 C：高 sizeTabStrip=38，内边距 5/8，标签间距 3，底色是 chrome 与内容底的 7:3 混合）：
+// tabBar 绘制请求标签栏（设计稿方案 C · v3「文件夹标签」）：高 sizeTabStrip=38，顶部留 6、两侧留 8，底边一条分隔线；
+// 底色比内容区略深，选中的标签与内容区同色、底部压住分隔线，和下方地址栏连成一体。
 // 左侧是各请求标签与“+”，右侧是标签列表。
 func (a *app) tabBar(c *ui.Context) {
 	p := a.p
-	ui.Row(c).FillWidth().Height(sizeTabStrip).Shrink(0).Background(p.toolbar.Mix(p.surface, 0.3)).Padding(5, 8).Gap(3).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).FillWidth().Height(sizeTabStrip).Shrink(0).Background(p.toolbar.Mix(p.surface2, 0.42)).Padding(6, 8, 0, 8).Gap(3).AlignItems(ui.End).
+		BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {
 		ui.ScrollHorizontal(c).Grow(1).Basis(0).Scrollbars(false).Children(func() {
-			ui.Row(c).Height(28).Gap(tabGap).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Height(tabHeight).Gap(tabGap).AlignItems(ui.End).Children(func() {
 				w := a.tabCellWidth(c)
 				for i, t := range a.tabs {
 					a.tabItem(c, i, t, w)
 				}
-				a.newTabButton(c)
+				ui.Row(c).Height(tabHeight).AlignItems(ui.Center).Children(func() { a.newTabButton(c) })
 			})
 		})
 		if len(a.tabs) > 0 {
-			a.tabListButton(c)
+			ui.Row(c).Height(tabHeight).AlignItems(ui.Center).Children(func() { a.tabListButton(c) })
 		}
 	})
 }
@@ -44,13 +46,13 @@ type tabDrag struct{ t *tab }
 // 请求标签（设计稿 .tab）：基础宽 tabBaseWidth，标签多了按可用宽度平分，但不小于 tabMinWidth；
 // 超出时标签栏横向滚动。tabGap 是标签间距。
 const (
-	tabBaseWidth = 164
-	tabMinWidth  = 90
+	tabBaseWidth = 176
+	tabMinWidth  = 104
 	tabMaxWidth  = tabBaseWidth
-	tabGap       = 3
-	tabHeight    = 28
-	// 标签里标题之外固定占用的宽度：左内边距 10 + 右内边距 6 + 方法徽章与间距 40 + 关闭按钮 18 + 间距 12。
-	tabChrome = 10 + 6 + 40 + 18 + 12
+	tabGap       = 2
+	tabHeight    = 32 // 选中标签高度；未选中的矮 2（见 tabItem），底边都落在分隔线上
+	// 标签里标题之外固定占用的宽度：左内边距 11 + 右内边距 6 + 方法文字与间距 36 + 关闭按钮 18 + 间距 6。
+	tabChrome = 11 + 6 + 36 + 18 + 6
 )
 
 // tabCellWidth 是每个标签的宽度：可用宽度（窗口宽 - 侧栏 - 外边距 - 内边距 - “+”与标签列表按钮）按标签数平分，夹在 [tabMinWidth, tabBaseWidth] 之间。
@@ -71,7 +73,11 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab, w float32) {
 	p := a.p
 	active := i == a.active && !a.showHome
 	t.shownW = w
-	cell := ui.Row(c.Key("tab:" + t.draft.ID)).Height(tabHeight).Width(w).Shrink(0).Radius(9).Drag(tabDrag{t: t}).
+	h := float32(tabHeight - 2)
+	if active {
+		h = tabHeight
+	}
+	cell := ui.Row(c.Key("tab:"+t.draft.ID)).Height(h).Width(w).Shrink(0).Radius(10, 10, 0, 0).Drag(tabDrag{t: t}).
 		ContextMenu(func(m *ui.Menu) { a.tabMenu(m, i) }).
 		HandleInput(func(ev ui.InputEvent) bool {
 			// 中键按下时接管这次点按，抬起时关闭（和浏览器标签页的习惯一致）。
@@ -102,27 +108,34 @@ func (a *app) tabItem(c *ui.Context, i int, t *tab, w float32) {
 	cell = a.tipIfLong(c, cell, t.title(), fsV2xs, 500, w-tabChrome)
 	switch {
 	case active:
-		cell = p.shadowSm(cell.Background(p.surface).Shadow(0, 0, 0, 1, p.border))
+		// 与内容区同色，左右上三边细线，底边不画线并压住标签栏的分隔线（-1）
+		cell = cell.Background(p.surface).BorderWidth(1, 1, 0, 1).BorderColor(p.border).Margin(0, 0, -1, 0).Shadow(0, -6, 14, -8, p.glowS).ZIndex(2)
 	case hover:
-		cell = cell.Background(p.hover)
+		cell = cell.Background(p.surface.Alpha(0.55))
 	}
-	cell.Children(func() {
+	cell.Transition(transColors).Children(func() {
 		if dropHere {
 			ui.Box(c).Absolute().Top(2).Bottom(2).Left(-2).Width(2).Radius(1).Background(p.accent).ZIndex(1)
 		}
 		if active {
-			// 底部强调线：左右各缩进 10，贴着标签底边
-			ui.Box(c).Absolute().Left(10).Right(10).Bottom(0).Height(2).Radius(2, 2, 0, 0).Background(p.accent)
+			// 顶部强调线（带光晕），在标签之间滑动；两侧各有一个凹圆角，让标签与内容区连成一体
+			ui.Box(c.Key("tabline")).Absolute().Left(12).Right(12).Top(0).Height(2).Radius(0, 0, 3, 3).Background(p.accent).Shadow(0, 1, 8, 0, p.glow).
+				Transition(ui.ElementTransition{Duration: durSlide, Ease: easeSlide, Match: "tabline"})
+			a.tabFillet(c, true)
+			a.tabFillet(c, false)
+		} else if !hover && i < len(a.tabs)-1 && !(i+1 == a.active && !a.showHome) {
+			// 相邻未选中标签之间的发丝分隔线
+			ui.Box(c).Absolute().Right(-1).Top(9).Bottom(9).Width(1).Background(p.border.Alpha(0.8))
 		}
-		ui.Row(c).Grow(1).Basis(0).FillWidth().Padding(0, 6, 0, 7).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Grow(1).Basis(0).FillWidth().Padding(0, 6, 0, 11).Gap(6).AlignItems(ui.Center).Children(func() {
 			if t.env != nil {
-				icon(c, "globe", 13, p.accent).Shrink(0).MarginStart(3)
+				icon(c, "globe", 13, p.accent).Shrink(0)
 			} else {
-				a.methodBadge(c, t.draft.Method, 0).MarginEnd(-3)
+				a.methodText(c, t.draft.Method)
 			}
-			col, wt := p.fg2, 500
+			col, wt := p.muted, 500
 			if active {
-				col, wt = p.fg, 600
+				col, wt = p.fg, 650
 			} else if hover {
 				col = p.fg
 			}
@@ -224,7 +237,7 @@ func (a *app) tabListButton(c *ui.Context) {
 					a.later(func() { a.activate(i) })
 				}
 			}
-		}).
+		}, a.menuOpts()).
 		Children(func() { icon(c, "tbChevDown", 12, p.fg2) })
 }
 
@@ -236,4 +249,26 @@ func (a *app) tabIndex(t *tab) int {
 		}
 	}
 	return -1
+}
+
+// methodText 是标签里的方法名：只有着色的等宽粗体文字，没有色块（比徽章更省地方、更安静），宽度固定 28 让标题对齐。
+func (a *app) methodText(c *ui.Context, method string) {
+	txtMono(c, methodAbbr(method), 9.5, a.p.method(method), 750).Width(28).Shrink(0)
+}
+
+// tabFillet 在选中标签底部的左右两侧各画一个 10×10 的凹圆角（设计稿 .tab.on::after），颜色同内容区，
+// 使标签像文件夹标签一样自然过渡到下方内容。
+func (a *app) tabFillet(c *ui.Context, left bool) {
+	p := a.p
+	clear, bg := p.surface.Alpha(0), p.surface
+	g := ui.RadialGradient{Stops: []ui.GradientStop{{Color: clear, At: 0}, {Color: clear, At: 0.95}, {Color: bg, At: 1}}, Radius: 10}
+	e := ui.Box(c.Key("fillet"+map[bool]string{true: "L", false: "R"}[left])).Absolute().Bottom(0).Size(10, 10)
+	if left {
+		g.Center = ui.Point{X: 0, Y: 0}
+		e = e.Left(-10)
+	} else {
+		g.Center = ui.Point{X: 1, Y: 0}
+		e = e.Right(-10)
+	}
+	e.RadialGradient(g)
 }

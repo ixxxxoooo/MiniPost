@@ -367,7 +367,7 @@ func (a *app) formatDropdown(c *ui.Context, rs *respState) {
 				a.later(func() { v.mode = mode })
 			}
 		}
-	}).Children(body)
+	}, a.menuOpts()).Children(body)
 }
 
 // copyBody 把当前展示的内容（含格式化与过滤结果）复制到剪贴板。

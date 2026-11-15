@@ -600,7 +600,7 @@ func TestAuthTabDropdown(t *testing.T) {
 	tab.draft.Auth.Type = client.AuthBearer
 	tab.draft.Auth.Token = "abc"
 	tt.Frame()
-	for _, want := range []string{"Bearer Token", "Token", "将自动添加请求头", "Authorization: Bearer •••••"} {
+	for _, want := range []string{"Bearer Token", "Token", "预览", "请求头", "Authorization: Bearer •••••"} {
 		if !tt.HasText(want) {
 			t.Fatalf("Bearer 配置后缺少 %q：%q", want, tt.Texts())
 		}
@@ -629,6 +629,13 @@ func TestRespHeadersCopyValue(t *testing.T) {
 	rs.sub = 1
 	tt.Frame()
 	snapshot(t, tt, "rb_headers")
+	// 复制按钮只在悬停的行末出现（与请求侧表格的删除按钮一致），先把指针移到某一行上
+	r, ok := tt.Find("Content-Type")
+	if !ok {
+		t.Fatalf("响应头表格应有 Content-Type 行：%q", tt.Texts())
+	}
+	tt.Move(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
 	if err := tt.Click("复制值"); err != nil {
 		t.Fatal(err)
 	}
@@ -730,7 +737,8 @@ func TestPrefsDataRecentBackups(t *testing.T) {
 		}
 	}
 	snapshot(t, tt, "d_prefs_data")
-	if err := tt.Click("2026-11-14 18:00"); err != nil {
+	// 备份行右侧是“恢复”幽灵按钮（设计稿 .bk），点击先弹出恢复确认；第二条备份的按钮是 bkr:<文件名>
+	if err := tt.Click("恢复"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -820,7 +828,7 @@ func TestCookieManagerDesign(t *testing.T) {
 	a.openCookies()
 	a.overlays.cookies.domain = "httpbin.org"
 	tt.Frame()
-	for _, want := range []string{"Cookie 管理器", "3 个 Cookie · 2 个域名", "httpbin.org", "2 Cookie", "粘贴识别", "添加 Cookie", "清空当前域名", "清空全部", "当前请求的域名排在最前", "a=1; b=2"} {
+	for _, want := range []string{"Cookie 管理器", "httpbin.org", "api.example.dev", "粘贴识别", "添加 Cookie", "清空当前域名", "清空全部", "勾选「启用」的 Cookie 会随请求自动发送"} {
 		if !tt.HasText(want) {
 			t.Fatalf("Cookie 管理器缺少 %q：%q", want, tt.Texts())
 		}
@@ -916,33 +924,39 @@ func TestSidebarFolderCountAndFooter(t *testing.T) {
 	}
 }
 
-// Body 类型胶囊：选中项是浅强调色底（偏蓝）加粗文字，未选中项没有底色；点击后选中态跟着切换。
+// Body 类型分段控件（设计稿 .seg）：灰色轨道里，选中项是浮起的内容色胶囊（比轨道亮），未选中项直接露出轨道；
+// 点击后胶囊会滑到新的选项上（滑动动画走完后再取样）。
 func TestBodyKindPillsSelectedTint(t *testing.T) {
 	_, tt, _ := visualApp(t, false)
 	_ = tt.Click("用户服务")
 	_ = tt.Click("获取用户列表")
 	_ = tt.Click("Body")
-	tt.Frame()
+	settle := func() {
+		for i := 0; i < 8; i++ {
+			tt.Advance(100 * time.Millisecond)
+		}
+	}
+	settle()
 	none, ok1 := tt.Find("none")
 	form, ok2 := tt.Find("form-data")
 	if !ok1 || !ok2 {
-		t.Fatal("找不到 Body 类型胶囊")
+		t.Fatal("找不到 Body 类型分段")
 	}
-	// 胶囊左缘内侧（文字之外）取样
-	tint := func(r ui.Rect) int {
+	// 文字左侧（文字之外、胶囊之内）取样，用亮度比较
+	bright := func(r ui.Rect) int {
 		px := tt.Image().RGBAAt(int(r.X)-6, int(r.Y+r.H/2))
-		return int(px.B) - int(px.R)
+		return int(px.R) + int(px.G) + int(px.B)
 	}
-	if tint(none) <= tint(form) {
-		t.Fatalf("选中的 none 应有偏蓝的底色：none=%d form-data=%d", tint(none), tint(form))
+	if bright(none) <= bright(form) {
+		t.Fatalf("选中的 none 应是比轨道更亮的胶囊：none=%d form-data=%d", bright(none), bright(form))
 	}
 	if err := tt.Click("form-data"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
+	settle()
 	none, _ = tt.Find("none")
 	form, _ = tt.Find("form-data")
-	if tint(form) <= tint(none) {
-		t.Fatalf("切换后 form-data 应有底色：none=%d form-data=%d", tint(none), tint(form))
+	if bright(form) <= bright(none) {
+		t.Fatalf("切换后 form-data 应是更亮的胶囊：none=%d form-data=%d", bright(none), bright(form))
 	}
 }

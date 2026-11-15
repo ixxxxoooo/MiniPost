@@ -55,6 +55,15 @@
   const curTab = () => S.tabs[S.active] || null;
   const reqOf = (id) => Object.assign({}, M.defReq, M.reqs[id] || {});
   const ib = (icon, act, o) => { o = o || {}; return '<button class="ib ' + (o.on ? 'on ' : '') + (o.cls || '') + '" data-a="' + act + '" ' + (o.attr || '') + ' data-tip="' + esc(o.tip || '') + '">' + I(icon, o.sz || 15) + (o.badge ? '<i class="badge"></i>' : '') + '</button>'; };
+  /* 项目主题色：存储的是色相基准（hex），显示时取其色相，套用当前配色强调色的明度与彩度，使其与外观配色协调 */
+  const hexHue = (hex) => {
+    const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const [r, g, b] = [1, 3, 5].map((i) => lin(parseInt(hex.slice(i, i + 2), 16)));
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b), m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b), s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, bb = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+    return Math.round(((Math.atan2(bb, a) * 180) / Math.PI + 360) % 360);
+  };
+  const pjc = (hex) => (hex ? 'oklch(from var(--ac-base) clamp(.56, l, .8) clamp(.11, c, .17) ' + hexHue(hex) + ')' : 'var(--ac-base)');
   const mbadge = (m) => '<span class="m m-' + m + '">' + M.METHOD_ABBR[m] + '</span>';
   const varHtml = (s) => esc(s).replace(/\{\{([^}]+)\}\}/g, (m0, k) => '<span class="vt ' + (!S.curEnv && !k.startsWith('$') ? 'bad' : '') + '">{{' + k + '}}</span>');
   const cb = (on, act, attr) => '<i class="cb ' + (on ? 'on' : '') + '" ' + (act ? 'data-a="' + act + '" ' : '') + (attr || '') + '>' + I('check', 10) + '</i>';
@@ -98,7 +107,7 @@
   }
   function projChip() {
     const p = proj();
-    return '<span class="chip" data-a="projMenu" data-tip="切换项目"><span class="pav" style="background:' + p.color + '">' + esc(p.name[0]) + '</span><span>' + esc(p.name) + '</span>' + I('chevD', 11) + '</span>';
+    return '<span class="chip" data-a="projMenu" data-tip="切换项目"><span class="pav" style="background:' + pjc(p.color) + '">' + esc(p.name[0]) + '</span><span>' + esc(p.name) + '</span>' + I('chevD', 11) + '</span>';
   }
   // 标签是否放进标题栏（方案 C 的悬浮岛占据标题栏中央，所以始终使用标签条）
   const tabsInTitlebar = () => S.opt.tabs === 'titlebar' && S.view === 'work' && S.dir !== 'c';
@@ -161,7 +170,7 @@
     const rail = S.opt.nav === 'rail';
     const titles = { req: '请求', hist: '历史', env: '环境' };
     let h = '';
-    if (S.dir === 'b') h += '<div style="padding:8px 8px 0">' + '<div class="pbtn" data-a="projMenu">' + '<span class="pav" style="background:' + proj().color + '">' + esc(proj().name[0]) + '</span><span class="grow ell">' + esc(proj().name) + '</span>' + I('chevUD', 13) + '</div></div>';
+    if (S.dir === 'b') h += '<div style="padding:8px 8px 0">' + '<div class="pbtn" data-a="projMenu">' + '<span class="pav" style="background:' + pjc(proj().color) + '">' + esc(proj().name[0]) + '</span><span class="grow ell">' + esc(proj().name) + '</span>' + I('chevUD', 13) + '</div></div>';
     if (rail) h += '<div class="side-t"><span>' + titles[S.sideTab] + '</span><span class="sp"></span>' + sideActions() + '</div>';
     else h += '<div class="side-h"><div class="seg full"><b class="' + (S.sideTab === 'req' ? 'on' : '') + '" data-a="sideTab" data-t="req">' + I('layers', 13) + '请求</b><b class="' + (S.sideTab === 'hist' ? 'on' : '') + '" data-a="sideTab" data-t="hist">' + I('clock', 13) + '历史</b><b class="' + (S.sideTab === 'env' ? 'on' : '') + '" data-a="sideTab" data-t="env">' + I('globe', 13) + '环境</b></div></div>';
     return h;
@@ -178,7 +187,7 @@
     if (S.sideTab === 'hist') {
       const q = S.hq.trim().toLowerCase();
       const total = S.hist.reduce((n, g) => n + g.items.length, 0);
-      let h = '<div class="sr" style="padding:' + (S.opt.nav === 'rail' ? '4px 8px 6px' : '0 8px 6px') + '"><label class="inp grow">' + I('search', 13) + '<input data-in="hq" placeholder="搜索历史（方法 / 地址 / 状态码 / 4xx）" value="' + esc(S.hq) + '"></label>' + (S.opt.nav === 'rail' ? '' : sideActions()) + '</div><div class="tree scroll">';
+      let h = '<div class="sr" style="padding:' + (S.opt.nav === 'rail' ? '4px 8px 6px' : '0 8px 6px') + '"><label class="inp grow">' + I('search', 13) + '<input data-in="hq" placeholder="搜索历史…" value="' + esc(S.hq) + '"></label>' + (S.opt.nav === 'rail' ? '' : sideActions()) + '</div><div class="tree scroll">';
       if (!total) h += '<div class="empty-s">' + I('clock', 22) + '<b>暂无历史记录</b><span>发送请求后会自动记录在这里</span></div>';
       S.hist.forEach((g) => {
         const items = g.items.filter((it) => !q || (it[0] + it[1] + it[2]).toLowerCase().includes(q) || (q === '4xx' && String(it[2])[0] === '4') || (q === '2xx' && String(it[2])[0] === '2'));
@@ -217,33 +226,39 @@
      请求区
      ========================================================================== */
   function kvTable(rows, kind) {
-    const cols = kind === 'params' ? ['参数名', '参数值', '说明'] : kind === 'urlenc' ? ['字段名', '字段值', '说明'] : ['请求头', '值', '说明'];
-    let h = '<div class="kv scroll"><div class="hd"><span></span><span>' + cols[0] + '</span><span>' + cols[1] + '</span><span>' + cols[2] + '</span><span></span></div>';
+    const two = kind === 'urlenc'; // urlencoded 没有“说明”列
+    const cols = kind === 'params' ? ['参数名', '参数值', '说明'] : two ? ['键', '值', '说明'] : ['请求头', '值', '说明'];
+    const gt = two ? ' style="grid-template-columns:34px 1fr 1.2fr 34px"' : '';
+    const g2 = two ? 'grid-template-columns:34px 1fr 1.2fr 34px;' : '';
+    const desc = (v) => (two ? '' : '<span class="c"><input class="d" value="' + esc(v) + '" placeholder="说明"></span>');
+    let h = '<div class="kv scroll"><div class="hd"' + gt + '><span></span><span>' + cols[0] + '</span><span>' + cols[1] + '</span>' + (two ? '' : '<span>' + cols[2] + '</span>') + '<span></span></div>';
     rows.forEach((r, i) => {
       const empty = !r[0] && !r[1];
-      h += '<div class="kr ' + (r[3] === 0 ? 'off' : '') + (empty ? ' ghost' : '') + '" style="animation:rowIn var(--dur-slow) var(--ease-out) ' + i * 24 + 'ms both">' + (empty ? '<span></span>' : '<span>' + cb(r[3] !== 0, 'kvToggle') + '</span>') + '<span class="c"><input value="' + esc(r[0]) + '" placeholder="' + cols[0] + '"></span><span class="c"><input value="' + esc(r[1]) + '" placeholder="' + cols[1] + '"></span><span class="c"><input class="d" value="' + esc(r[2]) + '" placeholder="说明"></span><span>' + (empty ? '' : '<button class="ib sm del" data-a="noop" data-tip="删除">' + I('x', 12) + '</button>') + '</span></div>';
+      h += '<div class="kr ' + (r[3] === 0 ? 'off' : '') + (empty ? ' ghost' : '') + '" style="' + g2 + 'animation:rowIn var(--dur-slow) var(--ease-out) ' + i * 24 + 'ms both">' + (empty ? '<span></span>' : '<span>' + cb(r[3] !== 0, 'kvToggle') + '</span>') + '<span class="c"><input value="' + esc(r[0]) + '" placeholder="' + cols[0] + '"></span><span class="c"><input value="' + esc(r[1]) + '" placeholder="' + cols[1] + '"></span>' + desc(r[2]) + '<span>' + (empty ? '' : '<button class="ib sm del" data-a="noop" data-tip="删除">' + I('x', 12) + '</button>') + '</span></div>';
     });
-    if (rows.length && (rows[rows.length - 1][0] || rows[rows.length - 1][1])) h += '<div class="kr ghost"><span></span><span class="c"><input placeholder="' + cols[0] + '"></span><span class="c"><input placeholder="' + cols[1] + '"></span><span class="c"><input class="d" placeholder="说明"></span><span></span></div>';
+    if (rows.length && (rows[rows.length - 1][0] || rows[rows.length - 1][1])) h += '<div class="kr ghost"' + (two ? ' style="' + g2 + '"' : '') + '><span></span><span class="c"><input placeholder="' + cols[0] + '"></span><span class="c"><input placeholder="' + cols[1] + '"></span>' + desc('') + '<span></span></div>';
     return h + '</div>';
   }
   // form-data 表格：字段名 / 类型（Text、File）/ 字段值；文件字段显示文件名与大小
   function formTable(rows) {
-    const cols = '34px 1fr 84px 1.7fr 34px';
-    let h = '<div class="kv scroll"><div class="hd" style="grid-template-columns:' + cols + '"><span></span><span>字段名</span><span>类型</span><span>字段值</span><span></span></div>';
+    const cols = '34px 1fr 92px 1.4fr 1fr 34px';
+    let h = '<div class="kv scroll"><div class="hd" style="grid-template-columns:' + cols + '"><span></span><span>键</span><span>类型</span><span>值</span><span>说明</span><span></span></div>';
     rows.forEach((r, i) => {
       const file = r[4] === 'file';
-      h += '<div class="kr ' + (r[3] === 0 ? 'off' : '') + '" style="grid-template-columns:' + cols + ';animation:rowIn var(--dur-slow) var(--ease-out) ' + i * 24 + 'ms both"><span>' + cb(r[3] !== 0, 'kvToggle') + '</span><span class="c"><input value="' + esc(r[0]) + '" placeholder="字段名"></span><span class="c" style="padding:0 6px">' + sel(file ? 'File' : 'Text', 'noop', 'style="min-width:0;height:22px;width:100%"') + '</span><span class="c">' + (file ? '<span class="fchip">' + I('image', 12) + '<span class="ell">' + esc(r[1]) + '</span><em>86 KB</em></span>' : '<input value="' + esc(r[1]) + '" placeholder="字段值">') + '</span><span><button class="ib sm del" data-a="noop" data-tip="删除">' + I('x', 12) + '</button></span></div>';
+      h += '<div class="kr ' + (r[3] === 0 ? 'off' : '') + '" style="grid-template-columns:' + cols + ';animation:rowIn var(--dur-slow) var(--ease-out) ' + i * 24 + 'ms both"><span>' + cb(r[3] !== 0, 'kvToggle') + '</span><span class="c"><input value="' + esc(r[0]) + '" placeholder="键"></span><span class="c"><span class="tsel" data-a="noop">' + (file ? '文件' : '文本') + I('chevUD', 10) + '</span></span><span class="c">' + (file ? '<span class="fchip">' + I('image', 12) + '<span class="ell">' + esc(r[1]) + '</span><em>86 KB</em></span>' : '<input value="' + esc(r[1]) + '" placeholder="值">') + '</span><span class="c"><input class="d" value="' + esc(r[2]) + '" placeholder="说明"></span><span><button class="ib sm del" data-a="noop" data-tip="删除">' + I('x', 12) + '</button></span></div>';
     });
-    h += '<div class="kr ghost" style="grid-template-columns:' + cols + '"><span></span><span class="c"><input placeholder="字段名"></span><span class="c"></span><span class="c"><input placeholder="字段值"></span><span></span></div>';
+    h += '<div class="kr ghost" style="grid-template-columns:' + cols + '"><span></span><span class="c"><input placeholder="键"></span><span class="c"></span><span class="c"><input placeholder="值"></span><span class="c"><input class="d" placeholder="说明"></span><span></span></div>';
     return h + '</div>';
   }
   function bodyEditor(rq, t) {
-    const b = rq.body, types = [['none', 'none'], ['form', 'form-data'], ['raw', 'raw'], ['json', 'JSON'], ['urlenc', 'x-www-form-urlencoded']];
-    let h = '<div class="chips">' + types.map((x) => '<span class="cchip ' + (b.type === x[0] ? 'on' : '') + '" data-a="noop">' + x[1] + '</span>').join('') + '<span class="sp"></span>' + (b.type === 'json' ? '<button class="btn sm ghost" data-a="beautify">' + I('sparkle', 12) + '格式化</button>' : '') + '</div>';
+    const b = rq.body, types = [['none', 'none'], ['form', 'form-data'], ['raw', 'raw'], ['json', 'JSON'], ['urlenc', 'urlencoded']];
+    const bulk = '<span class="lk" data-a="noop">' + I('list', 12) + '批量编辑</span>';
+    const right = b.type === 'json' ? '<button class="btn sm ghost" data-a="beautify">' + I('sparkle', 12) + '格式化</button>' : b.type === 'raw' ? '<span class="sel" data-a="noop" style="min-width:96px;height:24px"><span>Text</span>' + I('chevUD', 12) + '</span>' : b.type === 'urlenc' ? bulk : '';
+    const h = '<div class="hint sub"><div class="seg">' + types.map((x) => '<b class="' + (b.type === x[0] ? 'on' : '') + '" data-a="bodyType" data-v="' + x[0] + '">' + x[1] + '</b>').join('') + '</div><span class="sp"></span>' + right + '</div>';
     if (b.type === 'none') return h + '<div class="empty-r">' + I('window', 26) + '<div class="big">此请求没有请求体</div><span>选择上方类型来添加 JSON、表单或原始文本</span></div>';
     if (b.type === 'form') return h + formTable(b.rows);
     if (b.type === 'urlenc') return h + kvTable(b.rows, 'urlenc');
-    if (b.type === 'raw') return h.replace('<span class="sp"></span>', '<span class="sp"></span><span class="sel" data-a="noop" style="min-width:96px"><span>Text</span>' + I('chevUD', 12) + '</span>') + codeBlock(b.text, { plain: true, hot: -1 });
+    if (b.type === 'raw') return h + codeBlock(b.text, { plain: true, hot: -1 });
     return h + codeBlock(b.text, { hot: t.view === 'body' && !S.static ? 1 : -1, caret: false });
   }
   function authView(rq) {
@@ -306,8 +321,8 @@
       if (t.merged) return '<div class="rb">' + head + '<div class="merged scroll">' + esc(M.mergedText) + '<i class="caret" style="display:inline-block;width:2px;height:15px;background:var(--ac);vertical-align:-3px;margin-left:2px;animation:blink 1s steps(1) infinite"></i><div class="mu" style="margin-top:10px;font-size:11px">把 OpenAI / Anthropic / Gemini / Ollama 的增量片段按顺序拼成完整回答</div></div></div>';
       return '<div class="rb">' + head + '<div class="stream scroll" style="overflow:auto">' + ev.map((e, i) => '<div class="ev" style="animation-delay:' + i * 70 + 'ms"><span class="mu">+' + e[0] + 's</span><span class="evn ' + e[1] + '">' + e[1] + '</span><span class="ell">' + esc(e[2]) + '</span></div>').join('') + '</div></div>';
     }
-    if (t.rtab === 'headers') return '<div class="rb"><div class="kv scroll"><div class="hd" style="grid-template-columns:14px 1fr 2.2fr 30px"><span></span><span>请求头</span><span>值</span><span></span></div>' + M.respHeaders.map((r, i) => '<div class="kr" style="grid-template-columns:14px 1fr 2.2fr 30px;animation:rowIn var(--dur-slow) var(--ease-out) ' + i * 22 + 'ms both"><span></span><span class="c mono" style="color:var(--info);border:0">' + r[0] + '</span><span class="c mono ell">' + esc(r[1]) + '</span><span><button class="ib sm del" data-a="copyVal" data-tip="复制值">' + I('copy', 12) + '</button></span></div>').join('') + '</div></div>';
-    if (t.rtab === 'cookies') return '<div class="rb"><div class="kv scroll"><div class="hd" style="grid-template-columns:14px 1fr 1.6fr 80px 110px 60px"><span></span><span>名称</span><span>值</span><span>路径</span><span>过期</span><span>属性</span></div>' + M.cookies.map((c) => '<div class="kr" style="grid-template-columns:14px 1fr 1.6fr 80px 110px 60px"><span></span><span class="c mono" style="border:0">' + c[0] + '</span><span class="c mono ell">' + c[1] + '</span><span class="c mono">' + c[2] + '</span><span class="c mu">' + c[3] + '</span><span class="c" style="gap:4px">' + (c[4] ? '<span class="tag mute">S</span>' : '') + (c[5] ? '<span class="tag mute">H</span>' : '') + '</span></div>').join('') + '</div></div>';
+    if (t.rtab === 'headers') return '<div class="rb"><div class="kv scroll"><div class="hd" style="grid-template-columns:34px 1fr 2.2fr 34px"><span></span><span>名称</span><span>值</span><span></span></div>' + M.respHeaders.map((r, i) => '<div class="kr" style="grid-template-columns:34px 1fr 2.2fr 34px;animation:rowIn var(--dur-slow) var(--ease-out) ' + i * 22 + 'ms both"><span class="ix">' + (i + 1) + '</span><span class="c mono" style="color:var(--info)">' + r[0] + '</span><span class="c mono ell">' + esc(r[1]) + '</span><span><button class="ib sm del" data-a="copyVal" data-tip="复制值">' + I('copy', 12) + '</button></span></div>').join('') + '</div></div>';
+    if (t.rtab === 'cookies') return '<div class="rb"><div class="kv scroll"><div class="hd" style="grid-template-columns:34px 1fr 1.6fr 80px 110px 72px"><span></span><span>名称</span><span>值</span><span>路径</span><span>过期</span><span>属性</span></div>' + M.cookies.map((c, i) => '<div class="kr" style="grid-template-columns:34px 1fr 1.6fr 80px 110px 72px;animation:rowIn var(--dur-slow) var(--ease-out) ' + i * 22 + 'ms both"><span class="ix">' + (i + 1) + '</span><span class="c mono">' + c[0] + '</span><span class="c mono ell">' + c[1] + '</span><span class="c mono">' + c[2] + '</span><span class="c mu">' + c[3] + '</span><span class="c" style="gap:4px">' + (c[4] ? '<span class="tag mute">S</span>' : '') + (c[5] ? '<span class="tag mute">H</span>' : '') + '</span></div>').join('') + '</div></div>';
     const r = RESP[t.code] || RESP[200];
     const tool = '<div class="rtool"><span class="fmt" data-a="noop">' + I('code', 12) + 'JSON' + I('chevD', 10) + '</span><span class="fmt ac" data-a="noop">' + I('eye', 12) + '预览</span><span class="sp"></span>' + ib('wrap', 'noop', { cls: 'sm', tip: '自动换行', on: t.wrap }) + ib('expandAll', 'noop', { cls: 'sm', tip: '展开全部' }) + ib('collapseAll', 'noop', { cls: 'sm', tip: '折叠全部' }) + ib('search', 'noop', { cls: 'sm', tip: '查找 ⌘F' }) + '<span class="sep"></span>' + ib('copy', 'copyResp', { cls: 'sm', tip: '复制响应体' }) + ib('download', 'noop', { cls: 'sm', tip: '保存到文件' }) + '</div>';
     if (r.large) return '<div class="rb">' + tool + '<div class="bigcard"><span class="ico">' + I('database', 22) + '</span><b>响应较大（8.2 MB）</b><span>为保持界面流畅，仅显示前 2 MB。复制或保存可获取完整内容。</span><div class="acts"><button class="btn pri sm" data-a="noop">' + I('download', 12) + '保存到文件</button><button class="btn sm" data-a="noop">' + I('copy', 12) + '复制完整内容</button><button class="btn sm ghost" data-a="noop">' + I('eye', 12) + '仍然预览前 2 MB</button></div></div></div>';
@@ -329,10 +344,10 @@
       '<div class="envp-side"><div style="display:flex;align-items:center;gap:6px;font-weight:650">' + I('zap', 13) + '动态变量<span class="mu" style="font-weight:450;font-size:11px">发送时求值</span></div>' + M.dynVars.map((d) => '<div class="dv" data-a="copyVal"><code>' + d[0] + '</code><span class="fg2">' + d[1] + '</span><span class="vv ell">' + d[2] + '</span><span class="cp">' + I('copy', 12) + '</span></div>').join('') + '</div></div>';
   }
   function projCard(p, i) {
-    return '<div class="pcard ' + (S.homeSel === p.id ? 'sel' : '') + '" style="animation-delay:' + i * 40 + 'ms" data-a="homeSel" data-id="' + p.id + '"><div class="top"><span class="pav" style="background:' + p.color + '">' + esc(p.name[0]) + '</span><div class="grow"><div class="nm ell">' + esc(p.name) + '</div><div class="mu" style="font-size:11px">' + p.reqs + ' 个请求 · ' + p.folders + ' 个文件夹</div></div>' + (p.id === S.projId ? '<span class="pill ac">当前</span>' : '') + '</div><div class="bt"><span>' + p.updated + '</span><span class="sp"></span>' + I('globe', 12) + p.envs + ' 个环境</div></div>';
+    return '<div class="pcard ' + (S.homeSel === p.id ? 'sel' : '') + '" style="animation-delay:' + i * 40 + 'ms" data-a="homeSel" data-id="' + p.id + '"><div class="top"><span class="pav" style="background:' + pjc(p.color) + '">' + esc(p.name[0]) + '</span><div class="grow"><div class="nm ell">' + esc(p.name) + '</div><div class="mu" style="font-size:11px">' + p.reqs + ' 个请求 · ' + p.folders + ' 个文件夹</div></div>' + (p.id === S.projId ? '<span class="pill ac">当前</span>' : '') + '</div><div class="bt"><span>' + p.updated + '</span><span class="sp"></span>' + I('globe', 12) + p.envs + ' 个环境</div></div>';
   }
   function projRow(p, i) {
-    return '<div class="pr ' + (S.homeSel === p.id ? 'sel' : '') + '" style="animation-delay:' + i * 35 + 'ms" data-a="homeSel" data-id="' + p.id + '"><span class="pav" style="background:' + p.color + '">' + esc(p.name[0]) + '</span><b class="ell">' + esc(p.name) + (p.id === S.projId ? ' <span class="pill ac" style="height:16px;margin-left:4px">当前</span>' : '') + '</b><span class="mu ell">' + esc(p.desc || '—') + '</span><span class="mono">' + p.reqs + '</span><span class="mono">' + p.envs + '</span><span class="mu">' + p.updated + '</span>' + ib('more', 'noop', { cls: 'sm', sz: 14 }) + '</div>';
+    return '<div class="pr ' + (S.homeSel === p.id ? 'sel' : '') + '" style="animation-delay:' + i * 35 + 'ms" data-a="homeSel" data-id="' + p.id + '"><span class="pav" style="background:' + pjc(p.color) + '">' + esc(p.name[0]) + '</span><b class="ell">' + esc(p.name) + (p.id === S.projId ? ' <span class="pill ac" style="height:16px;margin-left:4px">当前</span>' : '') + '</b><span class="mu ell">' + esc(p.desc || '—') + '</span><span class="mono">' + p.reqs + '</span><span class="mono">' + p.envs + '</span><span class="mu">' + p.updated + '</span>' + ib('more', 'noop', { cls: 'sm', sz: 14 }) + '</div>';
   }
   function homeEmpty() {
     return '<div class="home"><div class="home-main"><div class="home-h"><div class="grow"><h1>项目</h1><p>还没有项目。新建一个项目，把相关请求与环境放在一起。</p></div></div><div class="home-empty"><span class="ico">' + logo(44, 'glyph') + '</span><b>创建你的第一个项目</b><span>项目会保存请求、环境与历史记录，并拥有独立的主题色。</span><div class="new"><label class="inp" style="width:220px;height:30px">' + I('plus', 13) + '<input placeholder="输入项目名，回车新建"></label><button class="btn pri" style="height:30px">新建项目</button></div><button class="btn ghost sm" data-a="importOv" data-tab="file">' + I('upload', 12) + '或从 Postman / OpenAPI 导入</button></div></div></div>';
@@ -344,10 +359,10 @@
     const main = '<div class="home-main scroll"><div class="home-h"><div class="grow"><h1>项目</h1><p>选择项目继续工作。每个项目有自己的主题色，会应用到选中态、高亮和发送按钮。</p></div><label class="inp" style="width:210px;height:30px">' + I('plus', 13) + '<input data-in="newproj" placeholder="输入项目名，回车新建"></label><button class="btn pri" style="height:30px" data-a="newProj">新建项目</button></div>' +
       '<div class="home-bar"><label class="inp" style="width:200px">' + I('search', 13) + '<input data-in="homeQ" placeholder="搜索项目…" value="' + esc(S.homeQ) + '"></label><span class="mu">共 ' + list.length + ' 个项目</span><span class="sp"></span><div class="seg"><b class="' + (S.opt.home === 'grid' ? 'on' : '') + '" data-a="homeMode" data-v="grid" data-tip="卡片">' + I('grid', 13) + '</b><b class="' + (S.opt.home === 'list' ? 'on' : '') + '" data-a="homeMode" data-v="list" data-tip="列表">' + I('list', 13) + '</b></div>' + sel('排序：' + S.homeSort, 'noop') + '</div>' +
       (S.opt.home === 'grid' ? '<div class="pgrid">' + list.map(projCard).join('') + '</div>' : '<div class="plist"><div class="pr hd"><span></span><span>名称</span><span>描述</span><span>请求</span><span>环境</span><span>更新</span><span></span></div>' + list.map(projRow).join('') + '</div>') + '</div>';
-    const side = '<div class="home-side"><div class="hd"><span class="pav" style="background:' + p.color + '">' + esc(p.name[0]) + '</span><div><b style="font-size:14px">' + esc(p.name) + '</b><div class="mu" style="font-size:11px">' + p.reqs + ' 个请求 · ' + p.folders + ' 个文件夹</div></div></div>' +
+    const side = '<div class="home-side"><div class="hd"><span class="pav" style="background:' + pjc(p.color) + '">' + esc(p.name[0]) + '</span><div><b style="font-size:14px">' + esc(p.name) + '</b><div class="mu" style="font-size:11px">' + p.reqs + ' 个请求 · ' + p.folders + ' 个文件夹</div></div></div>' +
       '<div class="fld-l"><label>项目名称</label><label class="inp" style="height:28px"><input value="' + esc(p.name) + '"></label></div><div class="fld-l"><label>描述</label><label class="inp" style="height:28px"><input value="' + esc(p.desc) + '" placeholder="添加描述"></label></div>' +
-      '<div class="fld-l"><label>主题色</label><div class="swatches">' + M.PROJECT_COLORS.map((c) => '<i class="' + (c === p.color ? 'on' : '') + '" style="background:' + c + '" data-a="pcolor" data-c="' + c + '"></i>').join('') + '</div></div>' +
-      '<div class="fld-l"><label>实时预览</label><div class="livep" style="--ac:' + p.color + ';--ac-soft:color-mix(in oklab,' + p.color + ' 14%,transparent)"><div style="display:flex;gap:12px;border-bottom:1px solid var(--bd)"><span class="ut on" style="height:24px;padding:0 2px;color:' + p.color + '">Params</span><span class="ut" style="height:24px;padding:0 2px">Headers</span></div><div style="display:flex;gap:8px;align-items:center;height:24px;border-radius:6px;padding:0 8px;background:var(--ac-soft)"><span class="m m-GET">GET</span><span style="color:' + p.color + ';font-weight:600">示例请求</span></div><div style="display:flex;align-items:center"><span class="mu">发送按钮</span><span class="sp"></span><span class="btn pri sm" style="background:' + p.color + ';border-color:' + p.color + '">发送</span></div></div></div>' +
+      '<div class="fld-l"><label>主题色</label><div class="swatches">' + '<i class="auto ' + (!p.color ? 'on' : '') + '" style="background:var(--ac-base)" data-a="pcolor" data-c="" data-tip="跟随外观配色"></i>' + M.PROJECT_COLORS.map((c) => '<i class="' + (c === p.color ? 'on' : '') + '" style="background:' + pjc(c) + '" data-a="pcolor" data-c="' + c + '"></i>').join('') + '</div></div>' +
+      '<div class="fld-l"><label>实时预览</label><div class="livep" style="--ac:' + pjc(p.color) + ';--ac-soft:color-mix(in oklab,' + pjc(p.color) + ' 14%,transparent)"><div style="display:flex;gap:12px;border-bottom:1px solid var(--bd)"><span class="ut on" style="height:24px;padding:0 2px;color:' + pjc(p.color) + '">Params</span><span class="ut" style="height:24px;padding:0 2px">Headers</span></div><div style="display:flex;gap:8px;align-items:center;height:24px;border-radius:6px;padding:0 8px;background:var(--ac-soft)"><span class="m m-GET">GET</span><span style="color:' + pjc(p.color) + ';font-weight:600">示例请求</span></div><div style="display:flex;align-items:center"><span class="mu">发送按钮</span><span class="sp"></span><span class="btn pri sm" style="background:' + pjc(p.color) + ';border-color:' + pjc(p.color) + '">发送</span></div></div></div>' +
       '<span class="sp"></span><button class="btn pri" style="height:30px" data-a="openProj" data-id="' + p.id + '">打开项目</button><div style="display:flex;gap:6px"><button class="btn grow">' + I('pencil', 12) + '重命名</button><button class="btn grow">' + I('upload', 12) + '导出</button><button class="btn dng">' + I('trash', 12) + '</button></div></div>';
     return '<div class="home">' + main + side + '</div>';
   }

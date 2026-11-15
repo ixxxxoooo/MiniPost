@@ -85,7 +85,7 @@ func (a *app) authTab(c *ui.Context, t *tab) {
 							a.later(func() { au.Type = k })
 						}
 					}
-				}).Children(func() {
+				}, a.menuOpts()).Children(func() {
 				txt(c, a.authTypeLabel(au.Type), fsBase, p.fg, 0)
 				ui.Spacer(c)
 				icon(c, "arrowDown", 9, p.muted)
@@ -107,7 +107,7 @@ func (a *app) authTab(c *ui.Context, t *tab) {
 				if au.APIKeyLocation == "query" {
 					loc = 1
 				}
-				if a.kindPills(c, "akloc", &loc, []string{"Header", "Query Param"}, 10) {
+				if a.pillSeg(c, "akloc", &loc, []string{"Header", "Query Param"}, nil, segOpts{h: 22, padX: 11, fs: fsSmall + 0.5}) {
 					au.APIKeyLocation = []string{"header", "query"}[loc]
 				}
 			})
@@ -117,12 +117,28 @@ func (a *app) authTab(c *ui.Context, t *tab) {
 			})
 		}
 		if pv := authPreview(au); pv != "" {
-			ui.Row(c).FillWidth().Shrink(0).PaddingStart(authLabelW + 12).Gap(6).AlignItems(ui.Center).Children(func() {
-				icon(c, "info", 12, p.accent)
-				txt(c, a.t("将自动添加请求头", "Will add header"), fsSmall, p.muted, 0)
-				ui.Row(c).Height(20).PaddingX(8).Radius(5).Background(p.surface2).AlignItems(ui.Center).Children(func() {
-					txtMono(c, pv, fsSmall, p.fg2, 0)
+			// 预览行（设计稿 .prev）：标签列 + 内容底圆角条，锁图标 + 等宽预览文本 + 右侧“请求头/查询参数”小标
+			where := a.t("请求头", "Header")
+			if au.Type == client.AuthAPIKey && au.APIKeyLocation == "query" {
+				where = a.t("查询参数", "Query")
+			}
+			ui.Row(c).FillWidth().Shrink(0).Gap(12).AlignItems(ui.Center).Children(func() {
+				ui.Row(c).Width(authLabelW).Shrink(0).Children(func() { txt(c, a.t("预览", "Preview"), fsBase, p.fg2, 500) })
+				ui.Row(c).Grow(1).Basis(0).MinWidth(0).Padding(8, 10).Gap(8).Radius(radiusR).Background(p.surface2).Border(0.5, p.hair).AlignItems(ui.Center).Children(func() {
+					icon(c, "lock", 12, p.muted)
+					txtMono(c, pv, fsSmall+0.5, p.fg2, 0).Grow(1).Basis(0)
+					ui.Row(c).Height(16).PaddingX(6).Radius(4).Background(p.surface).Border(0.5, p.border).AlignItems(ui.Center).Children(func() {
+						txt(c, where, fsTiny, p.muted, 600)
+					})
 				})
+			})
+		}
+		if au.Type == client.AuthBearer {
+			// 提示框（设计稿 .tipbox）
+			ui.Row(c).FillWidth().Shrink(0).Padding(9, 11).Gap(8).Radius(radiusLg).Background(p.surface2).Border(0.5, p.hair).AlignItems(ui.Start).Children(func() {
+				icon(c, "info", 14, p.accent).Margin(1, 0, 0, 0)
+				ui.Text(c, a.t("支持在 Token 中使用 {{token}} 等环境变量；敏感值不会写入日志。", "Environment variables such as {{token}} work in the token; secrets are never written to logs.")).
+					FontSize(fsSmall + 0.5).TextColor(p.fg2).FixedLineHeight((fsSmall + 0.5) * 1.5).Grow(1).Basis(0).MinWidth(0)
 			})
 		}
 	})

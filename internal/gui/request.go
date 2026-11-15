@@ -175,7 +175,7 @@ func (a *app) urlBar(c *ui.Context, t *tab) {
 							a.later(func() { d.Method = mm })
 						}
 					}
-				})
+				}, a.menuOpts())
 			if m.Hovered() {
 				m = m.Background(mc.Alpha(0.13))
 			} else {
@@ -259,7 +259,7 @@ func (a *app) sendGroup(c *ui.Context, t *tab) {
 						a.sendTab(t)
 					})
 				}
-			})
+			}, a.menuOpts())
 		if arrow.Hovered() && !empty {
 			arrow = arrow.Background(ui.RGBA(255, 255, 255, 0.08))
 		}

@@ -146,6 +146,7 @@
 
 /* ---------- 由基础令牌派生的次级令牌 ---------- */
 [data-scheme] {
+  --ac-base: var(--ac);  /* 配色的原始强调色：项目主题色以它为基准做 OKLCH 适配，避免 --ac 被覆盖后自引用 */
   --ac-soft: color-mix(in oklab, var(--ac) 12%, transparent);
   --ac-soft2: color-mix(in oklab, var(--ac) 20%, transparent);
   --ac-line: color-mix(in oklab, var(--ac) 45%, transparent);

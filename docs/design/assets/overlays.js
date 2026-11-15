@@ -131,7 +131,7 @@
     return '<div class="dlg dsm"><div class="dlg-h"><h3>' + o.title + '</h3><span class="sp"></span>' + ib('x', 'closeOv', { sz: 13 }) + '</div><div class="dlg-b">' + o.body + '</div><div class="dlg-f">' + (o.note || '') + o.foot + '</div></div>';
   }
   const dlgs = {
-    save: () => dlgSmall({ title: '保存更改', body: '<div class="msg"><span class="ico warn">' + I('warn', 17) + '</span><div><b>请求“创建用户”有未保存的修改</b><span>关闭后这些修改将会丢失，是否先保存？</span></div></div><label class="chk" data-a="chk">' + cb(false) + '以后关闭标签时默认保存</label>', foot: '<button class="btn" data-a="dlgDiscard">不保存</button><button class="btn" data-a="closeOv">取消</button><button class="btn pri" data-a="dlgSave">保存并关闭</button>' }),
+    save: () => dlgSmall({ title: '保存更改', body: '<div class="msg"><span class="ico warn">' + I('warn', 17) + '</span><div><b>请求“创建用户”有未保存的修改</b><span>关闭后这些修改将会丢失，是否先保存？</span></div></div><label class="chk" data-a="chk">' + cb(false) + '关闭 Tab 时默认保存并关闭，不再询问</label><label class="chk" data-a="chk">' + cb(false) + '关闭 Tab 时默认丢弃并关闭，不再询问</label>', foot: '<button class="btn" data-a="dlgDiscard">不保存</button><button class="btn" data-a="closeOv">取消</button><button class="btn pri" data-a="dlgSave">保存并关闭</button>' }),
     delete: () => dlgSmall({ title: '删除“订单服务”？', body: '<div class="msg"><span class="ico err">' + I('trash', 17) + '</span><div><b>文件夹内的 3 个请求也会被删除</b><span>删除后可立即撤销（<span class="kbd">⌘Z</span>）。</span></div></div>', foot: '<button class="btn" data-a="closeOv">取消</button><button class="btn pri dng" data-a="dlgDelete">删除</button>' }),
     prompt: () => dlgSmall({ title: '重命名请求', body: '<div class="fld-l"><label>名称</label><label class="inp focus" style="height:30px;border-color:var(--ac);box-shadow:0 0 0 3px var(--ac-soft)"><input value="获取用户列表" id="pin"></label></div>', foot: '<button class="btn" data-a="closeOv">取消</button><button class="btn pri" data-a="closeOv">确定</button>' }),
     restore: () => dlgSmall({ title: '恢复备份？', body: '<div class="msg"><span class="ico warn">' + I('warn', 17) + '</span><div><b>将用 2026-11-15 10:42 的备份覆盖当前数据</b><span>建议恢复前先立即备份一次，恢复后应用会重新加载。</span></div></div>', foot: '<button class="btn" data-a="closeOv">取消</button><button class="btn" data-a="closeOv">先备份</button><button class="btn pri dng" data-a="closeOv">恢复</button>' }),
@@ -277,6 +277,7 @@
     },
     cancel() { clearInterval(S._tick); clearTimeout(S._st); const t = curTab(); t.resp = 'none'; full(); T('info', '', '已取消请求'); },
     save() { const t = curTab(); if (t) { t.dirty = false; full(); T('ok', '', '请求已保存'); } },
+    bodyType(el) { const t = curTab(); const rq = MPA.reqOf(t.id); const ty = el.dataset.v; const body = ty === 'form' || ty === 'urlenc' ? { type: ty, rows: rq.body.rows || [['', '', '', 1]] } : ty === 'raw' || ty === 'json' ? { type: ty, text: rq.body.text || (ty === 'json' ? '{\n  "name": "Alice"\n}' : '') } : { type: 'none' }; window.MP.reqs[t.id] = Object.assign({}, rq, { body }); full(); },
     beautify() { T('ok', '', 'JSON 已格式化'); },
     copyCurl() { S.pop = null; MPA.renderPop(); T('ok', '', '已复制 cURL 命令'); },
     copyResp() { T('ok', '', '已复制响应体'); },

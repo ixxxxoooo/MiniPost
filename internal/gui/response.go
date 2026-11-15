@@ -70,42 +70,32 @@ func (a *app) responsePane(c *ui.Context, t *tab) {
 			a.respStateBar(c, func() { a.sendingMeta(c, t) })
 			a.sendingSkeleton(c, t)
 		case rs.resp == nil && !rs.streamed:
-			a.respTitle(c)
-			ui.Row(c).Grow(1).Basis(0).FillWidth().AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-				empty := strings.TrimSpace(t.draft.URL) == ""
-				bg := p.surface2
-				if p.dark {
-					bg = ui.RGB(52, 52, 52)
-				}
-				col := p.fg2
-				if empty {
-					col = p.muted
-				}
-				if a.button(c, btnOpts{radius: 8, padX: 16, h: 36, gap: 8, bg: &bg, noHover: true, disabled: empty, key: "resp-empty"}, func(hover bool) {
-					cc := col
-					if hover {
-						cc = p.fg
-					}
-					icon(c, "clock", 15, cc)
-					txt(c, a.t("发送并获取成功响应", "Send + Get a successful response"), fsLarge, cc, 0)
-					ui.Row(c).Gap(4).MarginStart(4).Children(func() {
-						a.kbdSmall(c, "⌘")
-						a.kbdSmall(c, "Enter")
-					})
-				}) {
-					a.later(func() { a.sendTab(t) })
-				}
-			})
+			a.respStateBar(c, func() {})
+			a.respReady(c, t)
 		default:
 			a.responseBody(c, t)
 		}
 	})
 }
 
-// respTitle 是响应区没有内容时左上角的“响应”标题（32px 高）。
-func (a *app) respTitle(c *ui.Context) {
-	ui.Row(c).FillWidth().Height(32).Shrink(0).PaddingX(8).AlignItems(ui.Center).Children(func() {
-		txt(c, a.t("响应", "Response"), fsLarge, a.p.fg, 600)
+// respReady 是响应区还没发送过请求时的空态（设计稿 .empty-r）：徽标图形 + “准备就绪” + 说明 + 三个快捷键提示。
+func (a *app) respReady(c *ui.Context, t *tab) {
+	p := a.p
+	ui.Column(c).Grow(1).Basis(0).FillWidth().AlignItems(ui.Center).Justify(ui.Center).Gap(10).Children(func() {
+		icon(c, "plane", 40, p.accent).Shadow(0, 6, 16, -4, p.glowS)
+		txt(c, a.t("准备就绪", "Ready"), fsLarge, p.fg, 650)
+		txt(c, a.t("点击「发送」，响应会显示在这里", "Click Send and the response shows up here"), fsSmall, p.muted, 0)
+		ui.Row(c).Gap(14).Margin(4, 0, 0, 0).AlignItems(ui.Center).Children(func() {
+			hint := func(key, zh, en string) {
+				ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
+					a.kbdSmall(c, key)
+					txt(c, a.t(zh, en), fsSmall, p.muted, 0)
+				})
+			}
+			hint("⌘↵", "发送", "Send")
+			hint("⌘K", "快速打开", "Quick open")
+			hint("⌘I", "粘贴 cURL", "Paste cURL")
+		})
 	})
 }
 

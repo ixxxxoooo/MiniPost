@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
@@ -21,13 +22,15 @@ const (
 	colValue = 1.5
 	colDesc  = 1
 	colAct   = -28
+	colType  = -92 // form-data 的类型列
 )
 
 // 键值表的行高、表头高度与单元格字号（对照原型：行更高、字更大，读起来更松）。
 const (
 	kvRowH  = 28
-	kvHeadH = 26
+	kvHeadH = 28
 	kvFont  = 12
+	subBarH = 34 // 表格上方的子工具条高度
 )
 
 // kvOpts 描述键值表的列与自动请求头行。
@@ -38,13 +41,16 @@ type kvOpts struct {
 	noDesc bool
 	t      *tab   // 提供自动请求头显隐状态；nil 表示没有自动请求头
 	hint   string // 表格上方左侧的说明文字（没有自动请求头时显示）
+	lead   func() // 表格上方左侧的自定义内容（优先于 hint；Body 的类型分段控件）
 }
 
 // kvSubhead 绘制表格上方的一行：左侧是自动请求头折叠开关（或说明文字），右侧是“批量编辑”。
 func (a *app) kvSubhead(c *ui.Context, rows *[]*client.Row, o kvOpts, auto []client.AutoHeader) {
 	p := a.p
-	ui.Row(c).FillWidth().Height(29).Shrink(0).PaddingX(12).AlignItems(ui.Center).Gap(8).Children(func() {
-		if len(auto) > 0 && o.t != nil {
+	a.subBar(c, func() {
+		if o.lead != nil {
+			o.lead()
+		} else if len(auto) > 0 && o.t != nil {
 			name := "arrowRight"
 			if o.t.autoOpen {
 				name = "arrowDown"
@@ -70,7 +76,7 @@ func (a *app) kvSubhead(c *ui.Context, rows *[]*client.Row, o kvOpts, auto []cli
 		} else if o.hint != "" {
 			txt(c, o.hint, fsSmall, p.muted, 0)
 		}
-		ui.Spacer(c)
+	}, func() {
 		if a.button(c, btnOpts{h: 22, padX: 4, gap: 4, noHover: true, key: "bulk-" + o.id}, func(hover bool) {
 			col := p.accent
 			if hover {
@@ -81,6 +87,18 @@ func (a *app) kvSubhead(c *ui.Context, rows *[]*client.Row, o kvOpts, auto []cli
 		}) {
 			a.bulk[o.id] = serializeBulk(*rows)
 		}
+	})
+}
+
+// subBar 是 Params / Headers / Body 顶部共用的 34 高条带：浅底 + 底部发丝线，左侧放说明或分段控件，右侧放动作
+// （设计稿 .hint）。三个面板用同一个条带，切换子标签时表格的位置不会跳动。
+func (a *app) subBar(c *ui.Context, left, right func()) {
+	p := a.p
+	ui.Row(c).FillWidth().Height(subBarH).Shrink(0).PaddingX(12).AlignItems(ui.Center).Gap(8).
+		Background(p.surface2.Mix(p.surface, 0.62)).BorderWidth(0, 0, 1, 0).BorderColor(p.border.Alpha(0.7)).Children(func() {
+		left()
+		ui.Spacer(c)
+		right()
 	})
 }
 
@@ -127,9 +145,15 @@ func (a *app) kvCellInput(c *ui.Context, key string, v *string, ph string, mono 
 	return in
 }
 
-// kvHeaderCell 绘制表头单元：11px 半粗，次要色。
+// kvHeaderRow 是表头行：柔和底色 + 底边实线（所有表格共用，对应设计稿 .kv .hd）。
+func (a *app) kvHeaderRow(c *ui.Context, cells func()) {
+	p := a.p
+	ui.Row(c).FillWidth().Height(kvHeadH).Background(p.surface2.Mix(p.surface, 0.42)).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(cells)
+}
+
+// kvHeaderCell 绘制表头单元：11px 半粗、次要色、左对齐；与数据行一致，右侧有一条列间发丝线。
 func (a *app) kvHeaderCell(c *ui.Context, grow float32, label string, extra func()) {
-	a.cellBox(c, grow, kvHeadH).BorderWidth(0, 0, 1, 0).BorderColor(a.p.border).Children(func() {
+	a.cellBox(c, grow, kvHeadH).BorderWidth(0, 1, 0, 0).BorderColor(a.p.border.Alpha(0.7)).Children(func() {
 		ui.Row(c).FillWidth().PaddingX(8).AlignItems(ui.Center).Children(func() {
 			txtE(c, label, fsSmall, a.p.muted, 600).Grow(1)
 			if extra != nil {
@@ -141,7 +165,7 @@ func (a *app) kvHeaderCell(c *ui.Context, grow float32, label string, extra func
 
 // kvHeaderCellEnd 是最后一列的表头单元：没有右竖线。
 func (a *app) kvHeaderCellEnd(c *ui.Context, grow float32, label string) {
-	a.cellBox(c, grow, kvHeadH).BorderWidth(0, 0, 1, 0).BorderColor(a.p.border).Children(func() {
+	a.cellBox(c, grow, kvHeadH).Children(func() {
 		ui.Row(c).FillWidth().PaddingX(8).AlignItems(ui.Center).Children(func() {
 			txtE(c, label, fsSmall, a.p.muted, 600).Grow(1)
 		})
@@ -164,15 +188,14 @@ func (a *app) kvTableOpts(c *ui.Context, rows *[]*client.Row, o kvOpts) bool {
 	}
 	a.kvSubhead(c, rows, o, auto)
 	a.tableFrame(c, func() {
-		// 表头：底边实线 + 柔和底色
-		ui.Row(c).FillWidth().Background(p.surface2.Mix(p.surface, 0.42)).Children(func() {
+		a.kvHeaderRow(c, func() {
 			a.kvHeaderCell(c, colCheck, "", nil)
 			a.kvHeaderCell(c, colKey, o.keyPH, nil)
 			a.kvHeaderCell(c, colValue, o.valPH, nil)
 			if !o.noDesc {
 				a.kvHeaderCellEnd(c, colDesc, a.t("说明", "Description"))
 			}
-			a.cellBox(c, colAct, kvHeadH).BorderWidth(0, 0, 1, 0).BorderColor(p.border).Children(func() {})
+			a.kvHeaderCellEnd(c, colAct, "")
 		})
 		// 自动请求头（只读，可单独关闭）
 		if o.t != nil && o.t.autoOpen {
@@ -342,17 +365,13 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 	*rows = client.EnsureTrailingFormRow(*rows)
 	remove := -1
 	a.tableFrame(c, func() {
-		ui.Row(c).FillWidth().Children(func() {
+		a.kvHeaderRow(c, func() {
 			a.kvHeaderCell(c, colCheck, "", nil)
 			a.kvHeaderCell(c, colKey, a.t("键", "Key"), nil)
-			a.tableCell(c, -76, kvHeadH, func() {
-				ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
-					txt(c, a.t("类型", "Type"), fsSmall, p.fg2, 600)
-				})
-			})
+			a.kvHeaderCell(c, colType, a.t("类型", "Type"), nil)
 			a.kvHeaderCell(c, colValue, a.t("值", "Value"), nil)
 			a.kvHeaderCellEnd(c, colDesc, a.t("说明", "Description"))
-			a.tableCellEnd(c, colAct, kvHeadH, func() {})
+			a.kvHeaderCellEnd(c, colAct, "")
 		})
 		for i, r := range *rows {
 			i, r := i, r
@@ -373,37 +392,57 @@ func (a *app) formTable(c *ui.Context, rows *[]*client.FormRow) bool {
 					}
 					changed = in.Changed() || changed
 				})
-				a.tableCell(c, -76, kvRowH, func() {
-					ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
+				a.tableCell(c, colType, kvRowH, func() {
+					if last {
+						return // 末尾的空白占位行不显示类型
+					}
+					ui.Row(c).FillWidth().PaddingX(8).Children(func() {
 						label := a.t("文本", "Text")
 						if r.Type == "file" {
 							label = a.t("文件", "File")
 						}
-						ui.ButtonBase(c.Key("ty:" + r.ID)).Height(18).Radius(4).PaddingX(6).Gap(4).AlignItems(ui.Center).
-							PopoverMenuButton(func(m *ui.Menu) {
-								if m.Item(a.t("文本", "Text")).Checked(r.Type != "file").Chosen() {
-									a.later(func() { r.Type, r.Value, r.FilePath, r.FileName = "text", "", "", "" })
-								}
-								if m.Item(a.t("文件", "File")).Checked(r.Type == "file").Chosen() {
-									a.later(func() { r.Type, r.Value, r.FilePath, r.FileName = "file", "", "", "" })
-								}
-							}).Children(func() {
-							txt(c, label, fsTiny, p.muted, 0)
-							icon(c, "arrowDown", 8, p.muted)
+						// 设计稿 .tsel：20 高的小圆角下拉，浅底 + 0.5px 描边，文字 11px
+						ty := ui.ButtonBase(c.Key("ty:"+r.ID)).Height(20).Radius(6).PaddingStart(8).PaddingEnd(4).Gap(3).AlignItems(ui.Center).Background(p.surface2).Border(0.5, p.border)
+						if ty.Hovered() {
+							ty = ty.Background(p.press)
+						}
+						ty.Transition(transColors).PopoverMenuButton(func(m *ui.Menu) {
+							if m.Item(a.t("文本", "Text")).Checked(r.Type != "file").Chosen() {
+								a.later(func() { r.Type, r.Value, r.FilePath, r.FileName = "text", "", "", "" })
+							}
+							if m.Item(a.t("文件", "File")).Checked(r.Type == "file").Chosen() {
+								a.later(func() { r.Type, r.Value, r.FilePath, r.FileName = "file", "", "", "" })
+							}
+						}, a.menuOpts()).Children(func() {
+							txt(c, label, fsSmall, p.fg2, 550)
+							icon(c, "chevUD", 10, p.muted)
 						})
 					})
 				})
 				a.tableCell(c, colValue, kvRowH, func() {
 					if r.Type == "file" {
-						label, col := r.FileName, p.fg
-						if label == "" {
-							label, col = a.t("选择文件…", "Choose file…"), p.accent
+						if r.FileName == "" {
+							if a.button(c, btnOpts{h: 24, padX: 8, noHover: true, key: "file:" + r.ID}, func(bool) {
+								txtE(c, a.t("选择文件…", "Choose file…"), fsSmall, p.accent, 0)
+							}) {
+								a.pickFormFile(r)
+							}
+							return
 						}
-						if a.button(c, btnOpts{h: 24, padX: 8, noHover: true, key: "file:" + r.ID}, func(bool) {
-							txtE(c, label, fsSmall, col, 0)
-						}) {
-							a.pickFormFile(r)
-						}
+						// 设计稿 .fchip：已选文件显示为淡色胶囊（图片图标 + 加粗文件名 + 大小），点击重新选择
+						ui.Row(c).FillWidth().PaddingX(8).Children(func() {
+							chip := ui.ButtonBase(c.Key("file:" + r.ID)).Height(20).Radius(10).PaddingX(8).Gap(5).AlignItems(ui.Center).Background(p.acSoft).Tooltip(r.FilePath)
+							chip.Transition(transColors).Children(func() {
+								icon(c, "image", 12, p.accent)
+								txtE(c, r.FileName, fsSmall, p.accent, 650)
+								if fi, err := os.Stat(r.FilePath); err == nil {
+									txt(c, formatSizeShort(fi.Size()), fsTiny, p.muted, 0)
+								}
+							})
+							if chip.Clicked() {
+								a.pickFormFile(r)
+							}
+						})
 						return
 					}
 					changed = a.kvCellInput(c, "v:"+r.ID, &r.Value, a.t("值", "Value"), true, p.fg, dim, last).Changed() || changed
