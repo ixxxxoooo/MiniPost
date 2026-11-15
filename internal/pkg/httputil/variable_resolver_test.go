@@ -78,3 +78,16 @@ func TestResolveRequestInput_ResolvesAuthAndBody(t *testing.T) {
 		t.Fatalf("Auth 解析错误: %#v", got.Auth.Basic)
 	}
 }
+
+// 未设置当前值时，变量替换使用初始值；设置了当前值则以当前值为准。
+func TestResolveVariablesInitialValueFallback(t *testing.T) {
+	vars := []model.Variable{
+		{Key: "a", InitialValue: "init-a", Enabled: true},
+		{Key: "b", Value: "cur-b", InitialValue: "init-b", Enabled: true},
+		{Key: "c", InitialValue: "init-c", Enabled: false},
+	}
+	got := ResolveVariables("{{a}}/{{b}}/{{c}}", vars)
+	if got != "init-a/cur-b/{{c}}" {
+		t.Fatalf("得到 %q", got)
+	}
+}

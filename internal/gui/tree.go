@@ -54,6 +54,17 @@ func (t treeIndex) descendants(id string) []string {
 	return out
 }
 
+// requestCount 返回文件夹内（含子文件夹）的请求个数。
+func (t treeIndex) requestCount(id string) int {
+	n := 0
+	for _, k := range t.descendants(id)[1:] {
+		if node, ok := t.nodes[k]; ok && !node.folder {
+			n++
+		}
+	}
+	return n
+}
+
 // folders 返回全部文件夹 ID，按树的先序排列，并附带缩进层级，用于“移动到…”菜单。
 func (t treeIndex) folders() []folderEntry {
 	var out []folderEntry

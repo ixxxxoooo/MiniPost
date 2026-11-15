@@ -23,15 +23,15 @@ type envEdit struct {
 // fingerprint 生成忽略末尾空白行后的内容指纹。
 func (e *envEdit) fingerprint() string {
 	type row struct {
-		K, V   string
-		On, Sc bool
+		K, V, I, D string
+		On, Sc     bool
 	}
 	rows := []row{}
 	for _, v := range e.env.Variables {
-		if strings.TrimSpace(v.Key) == "" && v.Value == "" {
+		if isBlankVar(v) {
 			continue
 		}
-		rows = append(rows, row{strings.TrimSpace(v.Key), v.Value, v.Enabled, v.IsSecret})
+		rows = append(rows, row{strings.TrimSpace(v.Key), v.Value, v.InitialValue, v.Description, v.Enabled, v.IsSecret})
 	}
 	b, _ := json.Marshal(struct {
 		Name string
@@ -95,9 +95,14 @@ func (a *app) openEnvManagerFor(id string) {
 // ensureBlankVar 保证变量表末尾有一行空白行供输入。
 func ensureBlankVar(e *model.Environment) {
 	n := len(e.Variables)
-	if n == 0 || e.Variables[n-1].Key != "" || e.Variables[n-1].Value != "" {
+	if n == 0 || !isBlankVar(e.Variables[n-1]) {
 		e.Variables = append(e.Variables, model.Variable{ID: uuid.NewString(), Enabled: true})
 	}
+}
+
+// isBlankVar 判断变量行是否完全为空（没有名字、值和说明），用于末尾的“添加变量”占位行。
+func isBlankVar(v model.Variable) bool {
+	return strings.TrimSpace(v.Key) == "" && v.Value == "" && v.InitialValue == "" && v.Description == ""
 }
 
 // envPage 绘制环境编辑页（设计稿）：左侧是标题（环境名 + 当前使用）、说明与操作按钮、变量表，
@@ -115,7 +120,7 @@ func (a *app) envPage(c *ui.Context, t *tab) {
 			})
 			ui.Row(c).FillWidth().Height(30).Shrink(0).PaddingX(16).Gap(8).AlignItems(ui.Center).BorderWidth(1, 0, 0, 0).BorderColor(p.border).Children(func() {
 				icon(c, "info", 12, p.success)
-				txt(c, a.t("带锁的变量会在界面上遮罩，且不会写入日志。", "Locked variables are masked in the UI and never written to logs."), fsSmall, p.muted, 0)
+				txt(c, a.t("未设置当前值时使用初始值。带锁的变量会在界面上遮罩，且不会写入日志。", "When no current value is set the initial value is used. Locked variables are masked in the UI and never written to logs."), fsSmall, p.muted, 0)
 			})
 		})
 		a.envDynamicPanel(c, ed)
@@ -148,8 +153,13 @@ func (a *app) envHeader(c *ui.Context, t *tab) {
 					})
 				}
 			})
-			ui.Text(c, a.t("变量可在请求的任意位置写成 {{变量名}} 使用，切换环境后自动替换。", "Use variables anywhere in a request as {{name}}; they are replaced when you switch environments.")).
-				FontSize(fsBase).TextColor(p.fg2).Margin(0, 0, 0, 6)
+			ui.Row(c).Gap(4).AlignItems(ui.Center).Margin(0, 0, 0, 6).Children(func() {
+				txt(c, a.t("变量可在请求的任意位置写成", "Use variables anywhere in a request as"), fsBase, p.fg2, 0)
+				ui.Row(c).Height(18).PaddingX(6).Radius(4).Background(p.accent.Alpha(0.12)).AlignItems(ui.Center).Children(func() {
+					txtMono(c, a.t("{{变量名}}", "{{name}}"), fsSmall, p.accent, 0)
+				})
+				txt(c, a.t("使用，切换环境后自动替换。", "; they are replaced when you switch environments."), fsBase, p.fg2, 0)
+			})
 		})
 		border := p.btnBorder
 		if a.button(c, btnOpts{w: 26, h: 26, radius: radiusBtn, border: &border, key: "env-del", tip: a.t("删除环境", "Delete environment")}, func(bool) {
@@ -220,22 +230,26 @@ func (a *app) envDynamicPanel(c *ui.Context, ed *envEdit) {
 	})
 }
 
-// envTable 是变量表（设计稿）：启用勾选 | 变量名 | 值 | 密文锁 | 删除；行与行之间只有细横线，没有竖线。
+// envTable 是变量表（设计稿）：启用勾选 | 变量名 | 初始值 | 当前值 | 说明 | 密文锁 | 删除；行与行之间只有细横线，没有竖线。
 func (a *app) envTable(c *ui.Context, ed *envEdit) {
 	p := a.p
 	const colEnable, colAct = 44, 32
 	ui.Column(c).FillWidth().Children(func() {
 		ui.Row(c).FillWidth().Height(28).AlignItems(ui.Center).BorderWidth(1, 0, 1, 0).BorderColor(p.border).Children(func() {
 			ui.Box(c).Width(colEnable).Shrink(0)
-			ui.Row(c.Key("h-key")).Grow(1).Basis(0).Children(func() { txt(c, a.t("变量名", "Variable"), fsSmall, p.muted, 600) })
-			ui.Row(c.Key("h-val")).Grow(1.4).Basis(0).Children(func() { txt(c, a.t("值", "Value"), fsSmall, p.muted, 600) })
+			for i, h := range []struct {
+				zh, en string
+				grow   float32
+			}{{"变量名", "Variable", 1.1}, {"初始值", "Initial value", 1.2}, {"当前值", "Current value", 1.2}, {"说明", "Description", 0.9}} {
+				ui.Row(c.Key("h" + itoa(i))).Grow(h.grow).Basis(0).PaddingX(4).Children(func() { txt(c, a.t(h.zh, h.en), fsSmall, p.muted, 0) })
+			}
 			ui.Box(c).Width(colAct * 2).Shrink(0)
 		})
 		remove := -1
 		vars := ed.env.Variables
 		for i := range vars {
 			v := &vars[i]
-			last := i == len(vars)-1 && v.Key == "" && v.Value == ""
+			last := i == len(vars)-1 && isBlankVar(*v)
 			row := ui.Row(c.Key(v.ID)).FillWidth().Height(32).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(p.border)
 			hover := row.Hovered() && !last
 			if hover {
@@ -247,26 +261,36 @@ func (a *app) envTable(c *ui.Context, ed *envEdit) {
 						a.checkbox(c, "en", &v.Enabled, false)
 					}
 				})
-				ph := a.t("变量名", "Variable")
-				if last {
-					ph = a.t("添加变量", "Add variable")
-				}
 				col := p.fg
 				if !v.Enabled && !last {
 					col = p.muted
 				}
-				ui.TextInputBase(c.Key("k"), &v.Key).Placeholder(ph).PlaceholderColor(p.muted).Font(monoFont).FontSize(fsBase).TextColor(col).Grow(1).Basis(0).Height(32).PaddingX(4)
-				vp := a.t("值", "Value")
+				cell := func(key string, val *string, ph string, grow float32, mono, mask bool) {
+					in := ui.TextInputBase(c.Key(key), val).Placeholder(ph).PlaceholderColor(p.muted).FontSize(fsBase).TextColor(col).Grow(grow).Basis(0).Height(32).PaddingX(4)
+					if mono {
+						in = in.Font(monoFont)
+					}
+					if last && key != "k" {
+						in.Disabled(true).Opacity(0.5)
+					}
+					if mask {
+						in.Password()
+					}
+				}
+				kph := a.t("变量名", "Variable")
 				if last {
-					vp = ""
+					kph = a.t("添加变量", "Add variable")
 				}
-				in := ui.TextInputBase(c.Key("v"), &v.Value).Placeholder(vp).PlaceholderColor(p.muted).Font(monoFont).FontSize(fsBase).TextColor(col).Grow(1.4).Basis(0).Height(32).PaddingX(4)
-				if last {
-					in.Disabled(true).Opacity(0.5)
+				cell("k", &v.Key, kph, 1.1, true, false)
+				ph := func(s string) string {
+					if last {
+						return ""
+					}
+					return s
 				}
-				if v.IsSecret {
-					in.Password()
-				}
+				cell("i", &v.InitialValue, ph(a.t("初始值", "Initial value")), 1.2, true, false)
+				cell("v", &v.Value, ph(a.t("当前值", "Current value")), 1.2, true, v.IsSecret)
+				cell("d", &v.Description, ph(a.t("说明", "Description")), 0.9, false, false)
 				ui.Row(c).Width(colAct).Shrink(0).Justify(ui.Center).Children(func() {
 					if last {
 						return
@@ -313,7 +337,7 @@ func (a *app) saveEnvTab(t *tab) bool {
 	}
 	vars := make([]model.Variable, 0, len(d.Variables))
 	for _, v := range d.Variables {
-		if v.Key == "" && v.Value == "" {
+		if isBlankVar(v) {
 			continue
 		}
 		v.Key = strings.TrimSpace(v.Key)

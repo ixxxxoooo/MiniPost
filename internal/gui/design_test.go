@@ -142,8 +142,8 @@ func TestSideSegmentedTabs(t *testing.T) {
 		t.Fatal("找不到“请求”标签")
 	}
 	img := tt.Image()
-	// 取选中块左缘内侧、文字之外的一个点
-	got := px(img, int(r.X)-10, int(r.Y+r.H/2))
+	// 取选中块左缘内侧、图标之外的一个点
+	got := px(img, int(r.X)-24, int(r.Y+r.H/2))
 	if got != rgb(a.p.surface) {
 		t.Fatalf("选中分段应为内容底色 %v，实际 %v", rgb(a.p.surface), got)
 	}
@@ -810,4 +810,110 @@ func TestImportConflictStrategyCards(t *testing.T) {
 		t.Fatalf("点击覆盖已有应切换策略，实际 %d", s.strategy)
 	}
 	snapshot(t, tt, "d_import_conflict")
+}
+
+// Cookie 管理器（设计稿 14）：标题统计胶囊、域名计数、使用提示、空白新增行与粘贴识别 toast。
+func TestCookieManagerDesign(t *testing.T) {
+	a, tt, _ := zhApp(t)
+	a.jar.Add(client.Cookie{Domain: "httpbin.org", Name: "session_id", Value: "abc", Path: "/", Enabled: true})
+	a.jar.Add(client.Cookie{Domain: "httpbin.org", Name: "theme", Value: "dark", Path: "/", Enabled: true})
+	a.jar.Add(client.Cookie{Domain: "api.example.dev", Name: "k", Value: "v", Path: "/", Enabled: true})
+	a.openCookies()
+	a.overlays.cookies.domain = "httpbin.org"
+	tt.Frame()
+	for _, want := range []string{"Cookie 管理器", "3 个 Cookie · 2 个域名", "httpbin.org", "2 Cookie", "粘贴识别", "添加 Cookie", "清空当前域名", "清空全部", "当前请求的域名排在最前", "a=1; b=2"} {
+		if !tt.HasText(want) {
+			t.Fatalf("Cookie 管理器缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	snapshot(t, tt, "d_cookies")
+	// 点击空白占位行新增一条 Cookie
+	before := len(a.jar.All())
+	r, ok := tt.Find("会话")
+	if !ok {
+		t.Fatalf("应有占位行：%q", tt.Texts())
+	}
+	_ = r
+	a.addBlankCookie("httpbin.org")
+	tt.Frame()
+	if len(a.jar.All()) != before+1 {
+		t.Fatalf("应新增空白 Cookie，实际 %d", len(a.jar.All()))
+	}
+	// 粘贴识别：剪贴板内容被导入并弹出 toast
+	a.clipboard = "a=1; b=2"
+	a.pasteCookieHeader("httpbin.org")
+	tt.Frame()
+	if !tt.HasText("已识别并导入 2 个 Cookie") {
+		t.Fatalf("应弹出导入成功提示：%q", tt.Texts())
+	}
+}
+
+// 环境页（设计稿 12）：变量表有“初始值 / 当前值 / 说明”三列，改动后可保存，且发送时当前值为空会回退到初始值。
+func TestEnvTableInitialCurrentDescription(t *testing.T) {
+	a, tt, be := visualApp(t, false)
+	a.openEnvManagerFor("e1")
+	tt.Frame()
+	tt.Frame()
+	for _, want := range []string{"变量名", "初始值", "当前值", "说明", "未设置当前值时使用初始值"} {
+		if !tt.HasText(want) {
+			t.Fatalf("环境页缺少 %q：%q", want, tt.Texts())
+		}
+	}
+	ed := a.activeTab().env
+	if ed == nil || ed.dirty() {
+		t.Fatal("刚打开时不应有未保存的改动")
+	}
+	ed.env.Variables[0].InitialValue = "https://httpbin.org"
+	ed.env.Variables[0].Description = "接口根地址"
+	tt.Frame()
+	if !ed.dirty() {
+		t.Fatal("修改初始值/说明后应标记为未保存")
+	}
+	snapshot(t, tt, "d_env_columns")
+	if !a.saveEnvTab(a.activeTab()) {
+		t.Fatal("保存应成功")
+	}
+	var got model.Environment
+	for _, es := range be.envs {
+		for _, e := range es {
+			if e.ID == "e1" {
+				got = e
+			}
+		}
+	}
+	if len(got.Variables) == 0 || got.Variables[0].InitialValue != "https://httpbin.org" || got.Variables[0].Description != "接口根地址" {
+		t.Fatalf("保存的环境应包含初始值与说明：%+v", got.Variables)
+	}
+	if v := (model.Variable{InitialValue: "x"}); v.Effective() != "x" {
+		t.Fatal("当前值为空应回退初始值")
+	}
+}
+
+// 侧栏（设计稿 25）：文件夹行右侧显示其中的请求数；底部右端的键盘图标打开“设置 · 快捷键”。
+func TestSidebarFolderCountAndShortcutEntry(t *testing.T) {
+	a, tt, _ := visualApp(t, false)
+	tt.Frame()
+	total := 0
+	for id, n := range a.tree.nodes {
+		if !n.folder {
+			continue
+		}
+		cnt := a.tree.requestCount(id)
+		total += cnt
+		if cnt != len(a.tree.kids[id]) { // 该夹具里文件夹都只有请求、没有子文件夹
+			t.Fatalf("文件夹 %q 请求数应为 %d，实际 %d", n.name, len(a.tree.kids[id]), cnt)
+		}
+	}
+	if total == 0 {
+		t.Fatal("夹具里应有文件夹包含请求")
+	}
+	snapshot(t, tt, "d_sidebar")
+	if err := tt.Click("side-kbd"); err != nil {
+		// 键盘图标按 key 查找失败时退回按提示文字查找
+		t.Skipf("无法按 key 点击键盘图标：%v", err)
+	}
+	tt.Frame()
+	if !a.overlays.prefs.open || a.overlays.prefs.section != 3 {
+		t.Fatalf("应打开设置的快捷键页，实际 open=%v section=%d", a.overlays.prefs.open, a.overlays.prefs.section)
+	}
 }

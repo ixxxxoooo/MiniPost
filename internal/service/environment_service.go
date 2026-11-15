@@ -48,7 +48,7 @@ func (s *EnvironmentService) ResolveVariables(input string, variables []model.Va
 	for _, v := range variables {
 		if v.Enabled && v.Key != "" {
 			placeholder := "{{" + v.Key + "}}"
-			result = strings.ReplaceAll(result, placeholder, v.Value)
+			result = strings.ReplaceAll(result, placeholder, v.Effective())
 		}
 	}
 	return result

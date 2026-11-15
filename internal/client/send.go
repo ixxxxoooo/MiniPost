@@ -167,7 +167,7 @@ func ActiveVars(env *model.Environment) []Var {
 	var out []Var
 	for _, v := range env.Variables {
 		if v.Enabled && v.Key != "" {
-			out = append(out, Var{Key: v.Key, Value: v.Value})
+			out = append(out, Var{Key: v.Key, Value: v.Effective()})
 		}
 	}
 	return out

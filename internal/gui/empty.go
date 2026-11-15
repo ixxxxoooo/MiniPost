@@ -25,12 +25,12 @@ func (a *app) emptyState(c *ui.Context) {
 					txt(c, a.t("一个简洁、快速的 API 调试工具", "A simple and fast API debugging tool"), fsBase, p.muted, 0)
 				})
 				ui.Box(c).Height(20)
-				// 快捷入口：一张圆角卡片，行与行之间用细线分隔
-				ui.Column(c).FillWidth().Radius(radiusCard).Border(1, p.border).Clip().Children(func() {
-					a.emptyAction(c, "add", a.t("新建请求", "New request"), "⌘ N", false, func() { a.newRequest("") })
-					a.emptyAction(c, "fileImport", a.t("导入 Postman / OpenAPI / cURL", "Import Postman / OpenAPI / cURL"), "⌘ O", true, func() { a.importFromFile() })
-					a.emptyAction(c, "commandLine", a.t("粘贴 cURL 命令", "Paste a cURL command"), "⌘ I", true, a.openCurlDialog)
-					a.emptyAction(c, "search", a.t("快速打开请求、环境、命令", "Quick open requests, environments, commands"), "⌘ K", true, a.openQuick)
+				// 快捷入口：每个入口是一张独立的圆角卡片，卡片之间留 8px 间距
+				ui.Column(c).FillWidth().Gap(8).Children(func() {
+					a.emptyAction(c, "add", a.t("新建请求", "New request"), "⌘ N", func() { a.newRequest("") })
+					a.emptyAction(c, "fileImport", a.t("导入 Postman / OpenAPI / cURL", "Import Postman / OpenAPI / cURL"), "⌘ O", func() { a.importFromFile() })
+					a.emptyAction(c, "commandLine", a.t("粘贴 cURL 命令", "Paste a cURL command"), "⌘ I", a.openCurlDialog)
+					a.emptyAction(c, "search", a.t("快速打开请求、环境、命令", "Quick open requests, environments, commands"), "⌘ K", a.openQuick)
 				})
 				a.emptyRecent(c)
 				ui.Box(c).Height(20)
@@ -45,13 +45,10 @@ func (a *app) emptyState(c *ui.Context) {
 	})
 }
 
-// emptyAction 是欢迎页里的一行入口：左侧图标方块与说明，右侧快捷键。top 为真时顶部画分隔线。
-func (a *app) emptyAction(c *ui.Context, iconName, label, keys string, top bool, fn func()) {
+// emptyAction 是欢迎页里的一个入口卡片：左侧图标方块与说明，右侧快捷键。
+func (a *app) emptyAction(c *ui.Context, iconName, label, keys string, fn func()) {
 	p := a.p
-	b := ui.ButtonBase(c.Key("empty:" + keys)).FillWidth().Height(36).PaddingX(10).Gap(10).AlignItems(ui.Center).Justify(ui.Start)
-	if top {
-		b = b.BorderWidth(1, 0, 0, 0).BorderColor(p.border)
-	}
+	b := ui.ButtonBase(c.Key("empty:"+keys)).FillWidth().Height(36).PaddingX(10).Gap(10).Radius(radiusCard).Border(1, p.border).AlignItems(ui.Center).Justify(ui.Start)
 	if b.Hovered() {
 		b = b.Background(p.hover)
 	}
@@ -86,7 +83,7 @@ func (a *app) emptyRecent(c *ui.Context) {
 	for _, e := range recent {
 		e := e
 		name := firstNonEmpty(e.Name, e.URL)
-		row := ui.ButtonBase(c.Key("recent:" + e.ID)).FillWidth().Height(28).PaddingX(8).Gap(8).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start)
+		row := ui.ButtonBase(c.Key("recent:" + e.ID)).FillWidth().Height(26).PaddingX(8).Gap(8).Radius(radiusBtn).AlignItems(ui.Center).Justify(ui.Start)
 		if row.Hovered() {
 			row = row.Background(p.hover)
 		}

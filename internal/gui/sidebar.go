@@ -54,9 +54,18 @@ func (a *app) treeCounts() (reqs, folders int) {
 func (a *app) sideFooter(c *ui.Context) {
 	p := a.p
 	reqs, folders := a.treeCounts()
-	ui.Row(c.Key("sidefooter")).FillWidth().Height(24).Shrink(0).PaddingX(12).Gap(6).AlignItems(ui.Center).Children(func() {
-		icon(c, "database", 11, p.muted)
-		txt(c, a.t(fmt.Sprintf("%d 个请求 · %d 个文件夹", reqs, folders), fmt.Sprintf("%d requests · %d folders", reqs, folders)), fsSmall, p.muted, 0)
+	ui.Row(c.Key("sidefooter")).FillWidth().Height(26).Shrink(0).PaddingX(12).Gap(6).AlignItems(ui.Center).Children(func() {
+		icon(c, "cube", 11, p.accent)
+		txt(c, a.t(fmt.Sprintf("%d 个请求 · %d 个文件夹", reqs, folders), fmt.Sprintf("%d requests · %d folders", reqs, folders)), fsSmall, p.muted, 0).Grow(1)
+		// 右端的键盘图标：点击打开“设置 · 快捷键”
+		if a.button(c, btnOpts{w: 20, h: 20, radius: 5, key: "side-kbd", tip: a.t("快捷键", "Keyboard shortcuts")}, func(bool) {
+			icon(c, "keyboard", 12, p.accent)
+		}) {
+			a.later(func() {
+				a.openPrefs()
+				a.overlays.prefs.section = 3
+			})
+		}
 	})
 }
 
@@ -65,7 +74,7 @@ func (a *app) sideFooter(c *ui.Context) {
 func (a *app) sideTabs(c *ui.Context) {
 	p := a.p
 	items := []struct{ icon, zh, en string }{
-		{"commandLine", "请求", "Requests"},
+		{"cube", "请求", "Requests"},
 		{"clock", "历史", "History"},
 		{"globe", "环境", "Environments"},
 	}
@@ -121,10 +130,10 @@ func (a *app) searchRow(c *ui.Context) {
 
 // rootMenu 是“新建”菜单，也是集合空白处的右键菜单。
 func (a *app) rootMenu(m *ui.Menu) {
-	if m.Item(a.t("添加请求", "Add request")).Chosen() {
+	if m.Item(a.t("新建请求", "New request")).Shortcut(ui.Cmd, ui.KeyN).Chosen() {
 		a.later(func() { a.newRequest("") })
 	}
-	if m.Item(a.t("添加文件夹", "Add folder")).Chosen() {
+	if m.Item(a.t("新建文件夹", "New folder")).Shortcut(ui.Cmd|ui.Shift, ui.KeyN).Chosen() {
 		a.later(func() { a.newFolder("") })
 	}
 }
@@ -259,6 +268,12 @@ func (a *app) treeNode(c *ui.Context, id string, depth int) {
 		}
 		icon(c, fi, 14, p.muted)
 		txtE(c, n.name, fsV2xs, p.fg, 0).PaddingStart(2).Grow(1)
+		if !hover {
+			// 文件夹右侧的请求数（含子文件夹里的）；悬停时让位给操作按钮
+			if cnt := a.tree.requestCount(id); cnt > 0 {
+				txt(c, itoa(cnt), fsTiny, p.muted, 0).Shrink(0)
+			}
+		}
 		if hover {
 			if a.miniIcon(c, "add", a.t("新建请求", "New request")) {
 				a.later(func() { a.newRequest(id) })
@@ -351,10 +366,10 @@ func (a *app) nodeMenu(m *ui.Menu, id string) {
 	}
 	a.selectNode(id)
 	if n.folder {
-		if m.Item(a.t("添加请求", "Add request")).Chosen() {
+		if m.Item(a.t("新建请求", "New request")).Shortcut(ui.Cmd, ui.KeyN).Chosen() {
 			a.later(func() { a.newRequest(id) })
 		}
-		if m.Item(a.t("添加文件夹", "Add folder")).Chosen() {
+		if m.Item(a.t("新建文件夹", "New folder")).Shortcut(ui.Cmd|ui.Shift, ui.KeyN).Chosen() {
 			a.later(func() { a.newFolder(id) })
 		}
 		open := a.side.outline.Open.Has(id)
@@ -370,10 +385,10 @@ func (a *app) nodeMenu(m *ui.Menu, id string) {
 		}
 		m.Separator()
 	} else {
-		if m.Item(a.t("打开", "Open")).Chosen() {
+		if m.Item(a.t("在新标签页打开", "Open in new tab")).Chosen() {
 			a.later(func() { a.openRequest(id) })
 		}
-		if m.Item(a.t("复制 cURL", "Copy as cURL")).Chosen() {
+		if m.Item(a.t("复制为 cURL", "Copy as cURL")).Shortcut(ui.Cmd|ui.Shift, ui.KeyC).Chosen() {
 			a.later(func() { a.copyCurlOf(id) })
 		}
 		if m.Item(a.t("导出 cURL…", "Export cURL…")).Chosen() {

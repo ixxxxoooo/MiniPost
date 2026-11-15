@@ -13,7 +13,7 @@ func ResolveVariables(input string, variables []model.Variable) string {
 	for _, v := range variables {
 		if v.Enabled && v.Key != "" {
 			placeholder := "{{" + v.Key + "}}"
-			result = strings.ReplaceAll(result, placeholder, v.Value)
+			result = strings.ReplaceAll(result, placeholder, v.Effective())
 		}
 	}
 	return resolveDynamicVars(result)

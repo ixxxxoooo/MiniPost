@@ -203,7 +203,7 @@ func (a *app) tabMenu(m *ui.Menu, i int) {
 	}
 	if t.env == nil {
 		id := t.draft.ID
-		if m.Item(a.t("复制 cURL", "Copy as cURL")).Chosen() {
+		if m.Item(a.t("复制为 cURL", "Copy as cURL")).Shortcut(ui.Cmd|ui.Shift, ui.KeyC).Chosen() {
 			a.later(func() { a.copyCurlOf(id) })
 		}
 		if m.Item(a.t("复制地址", "Copy URL")).Disabled(t.draft.URL == "").Chosen() {
@@ -214,17 +214,7 @@ func (a *app) tabMenu(m *ui.Menu, i int) {
 		}
 	}
 	m.Separator()
-	if m.Item(a.t("关闭", "Close")).Shortcut(ui.Cmd, ui.KeyW).Chosen() {
-		a.later(func() { a.closeTab(a.tabIndex(t)) })
-	}
-	if m.Item(a.t("关闭右侧", "Close to the right")).Disabled(i >= len(a.tabs)-1).Chosen() {
-		a.later(func() {
-			if k := a.tabIndex(t); k >= 0 {
-				a.closeTabs(append([]*tab(nil), a.tabs[k+1:]...))
-			}
-		})
-	}
-	if m.Item(a.t("关闭其他", "Close others")).Disabled(len(a.tabs) <= 1).Chosen() {
+	if m.Item(a.t("关闭其他标签", "Close other tabs")).Disabled(len(a.tabs) <= 1).Chosen() {
 		a.later(func() {
 			var rest []*tab
 			for _, x := range a.tabs {
@@ -234,6 +224,16 @@ func (a *app) tabMenu(m *ui.Menu, i int) {
 			}
 			a.closeTabs(rest)
 		})
+	}
+	if m.Item(a.t("关闭右侧标签", "Close tabs to the right")).Disabled(i >= len(a.tabs)-1).Chosen() {
+		a.later(func() {
+			if k := a.tabIndex(t); k >= 0 {
+				a.closeTabs(append([]*tab(nil), a.tabs[k+1:]...))
+			}
+		})
+	}
+	if m.Item(a.t("关闭", "Close")).Shortcut(ui.Cmd, ui.KeyW).Chosen() {
+		a.later(func() { a.closeTab(a.tabIndex(t)) })
 	}
 	if m.Item(a.t("关闭全部", "Close all")).Chosen() {
 		a.later(func() { a.closeTabs(append([]*tab(nil), a.tabs...)) })

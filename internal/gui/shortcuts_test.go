@@ -84,12 +84,12 @@ func TestRequestNodeMenuHasCurl(t *testing.T) {
 		t.Fatal(err)
 	}
 	menu := strings.Join(tt.Menu(), "|")
-	for _, want := range []string{"打开", "复制 cURL", "导出 cURL…", "重命名", "删除"} {
+	for _, want := range []string{"在新标签页打开", "复制为 cURL", "导出 cURL…", "重命名", "删除"} {
 		if !strings.Contains(menu, want) {
 			t.Fatalf("菜单缺少 %q: %s", want, menu)
 		}
 	}
-	if err := tt.ChooseMenuItem("复制 cURL"); err != nil {
+	if err := tt.ChooseMenuItem("复制为 cURL"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -117,12 +117,12 @@ func TestTabMenuItemsAndCloseRight(t *testing.T) {
 	x, y := a.set.SidebarWidth+90, float32(sizeToolbar+sizeTabStrip/2)
 	tt.RightClickAt(x, y)
 	menu := strings.Join(tt.Menu(), "|")
-	for _, want := range []string{"保存", "复制 cURL", "关闭右侧", "关闭其他", "关闭全部"} {
+	for _, want := range []string{"保存", "复制为 cURL", "关闭右侧标签", "关闭其他标签", "关闭全部"} {
 		if !strings.Contains(menu, want) {
 			t.Fatalf("标签菜单缺少 %q: %s", want, menu)
 		}
 	}
-	if err := tt.ChooseMenuItem("关闭右侧"); err != nil {
+	if err := tt.ChooseMenuItem("关闭右侧标签"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

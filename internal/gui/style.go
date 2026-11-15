@@ -770,6 +770,16 @@ func (a *app) stdDialog(c *ui.Context, open *bool, w float32, head, body, foot f
 	})
 }
 
+// compactDialog 是设计稿的紧凑提示框（确认删除、保存更改）：无分隔线，正文区 20px 内边距，按钮行在底部。
+func (a *app) compactDialog(c *ui.Context, open *bool, w float32, body, foot func()) {
+	a.dialog(c, open, w, 0, 12, func() {
+		ui.Column(c).FillWidth().Padding(20, 20, 16, 20).Children(func() {
+			ui.Column(c).FillWidth().Children(body)
+			ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Margin(18, 0, 0, 0).Children(foot)
+		})
+	})
+}
+
 // dlgTitle 是对话框标题行：16px 粗体标题，closable 时右侧带关闭按钮。
 func (a *app) dlgTitle(c *ui.Context, open *bool, title string, closable bool) {
 	p := a.p
