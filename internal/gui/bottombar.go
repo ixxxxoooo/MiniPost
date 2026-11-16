@@ -22,7 +22,7 @@ func (a *app) bottomArea(c *ui.Context) {
 	})
 }
 
-// bottomBar 绘制底栏：左侧 Console 与 Cookies，右侧布局切换与侧栏开关。
+// bottomBar 绘制底栏：左侧 Console 与 Cookies，右侧布局切换。
 func (a *app) bottomBar(c *ui.Context) {
 	p := a.p
 	// 方案 C：状态栏透明、无上边线，直接坐在内容卡片的底部。
@@ -64,19 +64,6 @@ func (a *app) bottomBar(c *ui.Context) {
 					}
 					a.saveSettings()
 				})
-			}
-			sideTip := a.t("收起侧边栏", "Collapse sidebar")
-			if a.set.SidebarCollapsed {
-				sideTip = a.t("展开侧边栏", "Expand sidebar")
-			}
-			if a.button(c, btnOpts{h: 20, radius: 5, padX: 7, tip: sideTip, key: "sidebar-glyph"}, func(hover bool) {
-				col := p.fg2
-				if hover {
-					col = p.fg
-				}
-				icon(c, "sidebar", 13, col)
-			}) {
-				a.later(a.toggleSidebar)
 			}
 		})
 	})
