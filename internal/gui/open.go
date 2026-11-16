@@ -38,6 +38,8 @@ func Open(be Backend) *mygo.Window {
 	a.win = win
 	// 关闭窗口或退出前保存标签会话（含未保存的修改），下次启动时恢复。
 	win.OnClose(func(*mygo.CloseEvent) { a.persistSession() })
+	// 被第三方软件（如 Manico 的 Option+A）激活时，最小化或隐藏的主窗口要自动还原。
+	watchActivation(win)
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		a.persistSession()
 		a.stopUpdater()
